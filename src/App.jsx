@@ -1,7 +1,8 @@
 import MainPage from './components/MainPage';
+import CedarGroveAnalytics from './components/AnalyticsDashboard';
 
 function App() {
-  return <MainPage />;
+  return <CedarGroveAnalytics />;
 }
 
 export default App;

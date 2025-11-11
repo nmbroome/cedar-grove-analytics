@@ -878,60 +878,79 @@ const CedarGroveAnalytics = () => {
               </span>
             </div>
 
-            {/* KPI Cards - Single Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Avg Utilization */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 text-sm">Avg Utilization</span>
+{/* KPI Cards */}
+            <div className="flex justify-between gap-3 w-full">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm font-medium">Avg Utilization</span>
                   <Activity className="w-5 h-5 text-blue-500" />
                 </div>
-                <div className="text-3xl font-bold text-gray-900">{avgUtilization}%</div>
-                <div className="flex items-center mt-2 text-sm text-green-600">
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-4xl font-bold text-gray-900">{avgUtilization}%</div>
+                </div>
+                <div className="flex items-center justify-center text-sm text-green-600">
                   <TrendingUp className="w-4 h-4 mr-1" />
-                  <span>+5% from last period</span>
+                  <span>+5%</span>
                 </div>
               </div>
 
-              {/* Time Breakdown */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 text-sm">Time Breakdown</span>
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm font-medium">Time Split</span>
                   <DollarSign className="w-5 h-5 text-purple-500" />
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-3xl font-bold text-blue-600">
-                    {Math.round((filteredData.totalBillable / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
-                  </div>
-                  <div className="text-lg text-gray-400">/</div>
-                  <div className="text-3xl font-bold text-green-600">
-                    {Math.round((filteredData.totalOps / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex items-baseline gap-1.5">
+                    <div className="text-3xl font-bold text-blue-600">
+                      {Math.round((filteredData.totalBillable / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
+                    </div>
+                    <div className="text-xl text-gray-400">/</div>
+                    <div className="text-3xl font-bold text-green-600">
+                      {Math.round((filteredData.totalOps / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
+                    </div>
                   </div>
                 </div>
-                <div className="text-sm text-gray-600 mt-2">Billable / Ops</div>
+                <div className="text-sm text-gray-600 text-center">Billable / Ops</div>
               </div>
 
-              {/* Total Billable */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 text-sm">Total Billable</span>
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm font-medium">Total Billable</span>
                   <Clock className="w-5 h-5 text-green-500" />
                 </div>
-                <div className="text-3xl font-bold text-gray-900">{filteredData.totalBillable}h</div>
-                <div className="text-sm text-gray-600 mt-2">
-                  Target: {totalBillableTarget}h ({Math.round((filteredData.totalBillable / totalBillableTarget) * 100)}%)
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-4xl font-bold text-gray-900">{filteredData.totalBillable}h</div>
+                </div>
+                <div className="text-sm text-gray-600 text-center leading-tight">
+                  {Math.round((filteredData.totalBillable / totalBillableTarget) * 100)}% of target
                 </div>
               </div>
 
-              {/* Total Ops */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 text-sm">Total Ops</span>
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm font-medium">Total Ops</span>
                   <Users className="w-5 h-5 text-orange-500" />
                 </div>
-                <div className="text-3xl font-bold text-gray-900">{filteredData.totalOps}h</div>
-                <div className="text-sm text-gray-600 mt-2">
-                  Target: {totalOpsTarget}h ({Math.round((filteredData.totalOps / totalOpsTarget) * 100)}%)
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-4xl font-bold text-gray-900">{filteredData.totalOps}h</div>
+                </div>
+                <div className="text-sm text-gray-600 text-center leading-tight">
+                  {Math.round((filteredData.totalOps / totalOpsTarget) * 100)}% of target
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm font-medium">Billable Ratio</span>
+                  <TrendingUp className="w-5 h-5 text-indigo-500" />
+                </div>
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-4xl font-bold text-gray-900">
+                    {(filteredData.totalBillable / filteredData.totalOps).toFixed(1)}:1
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600 text-center leading-tight">
+                  Billable to Ops
                 </div>
               </div>
             </div>
@@ -944,11 +963,22 @@ const CedarGroveAnalytics = () => {
                   Utilization Trend - {getDateRangeLabel()}
                 </h3>
                 <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={sampleMonthlyTrend}>
+                <LineChart
+                  data={sampleMonthlyTrend}
+                  margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
+                >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
+                    <YAxis
+                      domain={[0, 120]}
+                      allowDecimals={false}
+                      tickCount={7}
+                      ticks={[0, 20, 40, 60, 80, 100, 120]}
+                      tickFormatter={(value) => `${value}%`}
+                      interval={0}
+                      allowDataOverflow={true}
+                    />
+                    <Tooltip formatter={(value) => `${value}%`} />
                     <Line type="monotone" dataKey="utilization" stroke="#0088FE" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
