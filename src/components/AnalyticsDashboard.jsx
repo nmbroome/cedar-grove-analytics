@@ -989,22 +989,30 @@ const CedarGroveAnalytics = () => {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   Ops Time Distribution - {getDateRangeLabel()}
                 </h3>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={filteredData.ops}
                       dataKey="percentage"
                       nameKey="category"
-                      cx="50%"
+                      cx="35%"          // shift pie left to make room for legend
                       cy="50%"
                       outerRadius={80}
-                      label={renderCustomLabel}
+                      label={({ hours, percentage }) => `${hours}h (${percentage}%)`}
                     >
                       {filteredData.ops.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
+                    <Legend
+                      layout="vertical"
+                      verticalAlign="middle"
+                      align="right"
+                      wrapperStyle={{
+                        paddingLeft: 20,
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1064,59 +1072,78 @@ const CedarGroveAnalytics = () => {
                     </th>
                   </tr>
                 </thead>
+
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredData.attorneys.map((attorney, idx) => {
                     const utilization = calculateUtilization(attorney);
                     const billableUtil = calculateBillableUtilization(attorney);
                     const opsUtil = calculateOpsUtilization(attorney);
                     const total = attorney.billable + attorney.ops;
+
+                    const getUtilColor = (val) => {
+                      if (val > 105) return 'text-red-600';
+                      if (val < 75) return 'text-red-600';
+                      if (val < 85) return 'text-yellow-600';
+                      return 'text-green-600';
+                    };
+
+                    const getBadgeColor = (val) => {
+                      if (val > 105) return 'bg-red-100 text-red-800';
+                      if (val < 75) return 'bg-red-100 text-red-800';
+                      if (val < 85) return 'bg-yellow-100 text-yellow-800';
+                      return 'bg-green-100 text-green-800';
+                    };
+
                     return (
-                      <tr 
-                        key={idx} 
+                      <tr
+                        key={idx}
                         className="hover:bg-blue-50 cursor-pointer transition-colors"
                         onClick={() => setSelectedAttorney(attorney.name)}
                       >
+                        {/* Attorney Name */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                           {attorney.name} ({attorney.role})
                         </td>
+
+                        {/* Billable */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex flex-col">
-                            <span className="font-medium">{attorney.billable}h / {attorney.billableTarget}h</span>
-                            <span className={`text-xs ${
-                              billableUtil >= 100 ? 'text-green-600' : 
-                              billableUtil >= 80 ? 'text-yellow-600' : 'text-red-600'
-                            }`}>
+                            <span className="font-medium">
+                              {attorney.billable}h / {attorney.billableTarget}h
+                            </span>
+                            <span className={`text-xs ${getUtilColor(billableUtil)}`}>
                               {billableUtil}% utilization
                             </span>
                           </div>
                         </td>
+
+                        {/* Ops */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex flex-col">
-                            <span className="font-medium">{attorney.ops}h / {attorney.opsTarget}h</span>
-                            <span className={`text-xs ${
-                              opsUtil >= 100 ? 'text-green-600' : 
-                              opsUtil >= 80 ? 'text-yellow-600' : 'text-red-600'
-                            }`}>
+                            <span className="font-medium">
+                              {attorney.ops}h / {attorney.opsTarget}h
+                            </span>
+                            <span className={`text-xs ${getUtilColor(opsUtil)}`}>
                               {opsUtil}% utilization
                             </span>
                           </div>
                         </td>
+
+                        {/* Total */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {total}h
                         </td>
+
+                        {/* Overall Utilization */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              utilization >= 100
-                                ? 'bg-green-100 text-green-800'
-                                : utilization >= 80
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getBadgeColor(utilization)}`}
                           >
                             {utilization}%
                           </span>
                         </td>
+
+                        {/* Top 5 Transactions */}
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div className="flex flex-wrap gap-1">
                             {attorney.topTransactions.map((txn, tIdx) => (
@@ -1459,7 +1486,7 @@ const CedarGroveAnalytics = () => {
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {client.status}
+                          {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
