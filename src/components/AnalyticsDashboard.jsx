@@ -1,261 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search } from 'lucide-react';
-
-// Sample data - replace with Firebase data later
-const sampleAttorneyData = [
-  { 
-    name: 'Michael Ohta', 
-    billable: 95, 
-    ops: 48, 
-    target: 150,
-    billableTarget: 100,
-    opsTarget: 50,
-    role: 'Associate',
-    topTransactions: ['Formation', 'Equity Issuance', 'Contract Review', 'Board Consent', 'Consultant Onboarding']
-  },
-  { 
-    name: 'Colin van Loon', 
-    billable: 88, 
-    ops: 52, 
-    target: 150,
-    billableTarget: 100,
-    opsTarget: 50,
-    role: 'Associate',
-    topTransactions: ['Equity Issuance', 'Formation', 'Consultant Onboarding', 'Contract Review', 'Board Consent']
-  },
-  { 
-    name: 'Sam McClure', 
-    billable: 102, 
-    ops: 45, 
-    target: 150,
-    billableTarget: 100,
-    opsTarget: 50,
-    role: 'Associate',
-    topTransactions: ['Formation', 'Contract Review', 'Equity Issuance', 'Board Consent', 'Consultant Onboarding']
-  },
-  { 
-    name: 'David Popkin', 
-    billable: 85, 
-    ops: 92, 
-    target: 180,
-    billableTarget: 90,
-    opsTarget: 90,
-    role: 'Partner',
-    topTransactions: ['Contract Review', 'Formation', 'Equity Issuance', 'Board Consent', 'IP Assignment']
-  },
-  { 
-    name: 'Nick Agate', 
-    billable: 78, 
-    ops: 95, 
-    target: 180,
-    billableTarget: 90,
-    opsTarget: 90,
-    role: 'Partner',
-    topTransactions: ['Equity Issuance', 'Formation', 'Board Consent', 'Contract Review', 'Consultant Onboarding']
-  },
-];
-
-const sampleTransactionData = [
-  { type: 'Formation', avgHours: 12.5, count: 15, totalHours: 187.5 },
-  { type: 'Equity Issuance', avgHours: 8.2, count: 22, totalHours: 180.4 },
-  { type: 'Consultant Onboarding', avgHours: 4.5, count: 18, totalHours: 81 },
-  { type: 'Board Consent', avgHours: 2.8, count: 28, totalHours: 78.4 },
-  { type: 'Contract Review', avgHours: 6.5, count: 12, totalHours: 78 },
-];
-
-const sampleOpsData = [
-  { category: 'Business Development', hours: 45, percentage: 28 },
-  { category: 'Team Meeting', hours: 38, percentage: 24 },
-  { category: 'Admin', hours: 32, percentage: 20 },
-  { category: 'Training', hours: 25, percentage: 15 },
-  { category: 'Other', hours: 21, percentage: 13 },
-];
-
-const sampleMonthlyTrend = [
-  { month: 'Jul', utilization: 92 },
-  { month: 'Aug', utilization: 88 },
-  { month: 'Sep', utilization: 95 },
-  { month: 'Oct', utilization: 103 },
-  { month: 'Nov', utilization: 98 },
-];
-
-// Client data
-const sampleClientData = [
-  { 
-    name: 'Acme Corp', 
-    monthlyHours: 45, 
-    annualHours: 520, 
-    uniqueTransactions: 8, 
-    avgHoursPerTransaction: 6.5,
-    lastActivity: '2025-10-15',
-    status: 'active',
-    stage: 'Growth'
-  },
-  { 
-    name: 'TechStart Inc', 
-    monthlyHours: 32, 
-    annualHours: 384, 
-    uniqueTransactions: 5, 
-    avgHoursPerTransaction: 7.7,
-    lastActivity: '2025-11-01',
-    status: 'active',
-    stage: 'Seed'
-  },
-  { 
-    name: 'Innovate Labs', 
-    monthlyHours: 28, 
-    annualHours: 336, 
-    uniqueTransactions: 6, 
-    avgHoursPerTransaction: 5.6,
-    lastActivity: '2025-10-28',
-    status: 'active',
-    stage: 'Series A'
-  },
-  { 
-    name: 'GrowthCo', 
-    monthlyHours: 22, 
-    annualHours: 264, 
-    uniqueTransactions: 4, 
-    avgHoursPerTransaction: 6.6,
-    lastActivity: '2025-09-12',
-    status: 'active',
-    stage: 'Series B'
-  },
-  { 
-    name: 'Legacy Systems', 
-    monthlyHours: 0, 
-    annualHours: 156, 
-    uniqueTransactions: 3, 
-    avgHoursPerTransaction: 8.2,
-    lastActivity: '2025-03-22',
-    status: 'inactive',
-    stage: 'Growth'
-  },
-  { 
-    name: 'BuildRight LLC', 
-    monthlyHours: 18, 
-    annualHours: 216, 
-    uniqueTransactions: 7, 
-    avgHoursPerTransaction: 3.9,
-    lastActivity: '2025-10-30',
-    status: 'active',
-    stage: 'Pre-Seed'
-  },
-  { 
-    name: 'DataFlow Systems', 
-    monthlyHours: 0, 
-    annualHours: 92, 
-    uniqueTransactions: 2, 
-    avgHoursPerTransaction: 7.7,
-    lastActivity: '2025-04-08',
-    status: 'inactive',
-    stage: 'Seed'
-  },
-];
-
-// Individual client detail data
-const sampleClientDetails = {
-  'Acme Corp': {
-    monthlyHours: 45,
-    annualHours: 520,
-    status: 'active',
-    transactionBreakdown: [
-      { type: 'Formation', hours: 156, percentage: 30 },
-      { type: 'Equity Issuance', hours: 130, percentage: 25 },
-      { type: 'Contract Review', hours: 104, percentage: 20 },
-      { type: 'Board Consent', hours: 78, percentage: 15 },
-      { type: 'Other', hours: 52, percentage: 10 },
-    ],
-    attorneyBreakdown: [
-      { name: 'Michael Ohta', hours: 145 },
-      { name: 'Sam McClure', hours: 132 },
-      { name: 'Colin van Loon', hours: 118 },
-      { name: 'David Popkin', hours: 85 },
-      { name: 'Nick Agate', hours: 40 },
-    ],
-    monthlyTrend: [
-      { month: 'Jul', hours: 48 },
-      { month: 'Aug', hours: 42 },
-      { month: 'Sep', hours: 46 },
-      { month: 'Oct', hours: 44 },
-      { month: 'Nov', hours: 45 },
-    ],
-  },
-};
-
-// Attorney detail data (monthly breakdown)
-const sampleAttorneyDetails = {
-  'Michael Ohta': {
-    monthlyData: [
-      { month: 'Jul', billable: 98, ops: 45, utilization: 95 },
-      { month: 'Aug', billable: 92, ops: 48, utilization: 93 },
-      { month: 'Sep', billable: 95, ops: 50, utilization: 97 },
-      { month: 'Oct', billable: 100, ops: 47, utilization: 98 },
-      { month: 'Nov', billable: 95, ops: 48, utilization: 95 },
-    ],
-    transactionBreakdown: [
-      { type: 'Formation', hours: 42, percentage: 44 },
-      { type: 'Equity Issuance', hours: 28, percentage: 29 },
-      { type: 'Contract Review', hours: 15, percentage: 16 },
-      { type: 'Board Consent', hours: 7, percentage: 7 },
-      { type: 'Other', hours: 3, percentage: 3 },
-    ],
-    opsBreakdown: [
-      { category: 'Business Development', hours: 15, percentage: 31 },
-      { category: 'Team Meeting', hours: 12, percentage: 25 },
-      { category: 'Admin', hours: 10, percentage: 21 },
-      { category: 'Training', hours: 8, percentage: 17 },
-      { category: 'Other', hours: 3, percentage: 6 },
-    ],
-    topClients: [
-      { name: 'Acme Corp', hours: 28 },
-      { name: 'TechStart Inc', hours: 22 },
-      { name: 'Innovate Labs', hours: 18 },
-      { name: 'GrowthCo', hours: 14 },
-      { name: 'BuildRight LLC', hours: 13 },
-    ],
-  },
-};
-
-// Transaction trends over time by attorney
-const sampleTransactionTrends = {
-  'Formation': [
-    { month: 'Jul', 'Michael Ohta': 14, 'Colin van Loon': 11, 'Sam McClure': 13, 'David Popkin': 10, 'Nick Agate': 9 },
-    { month: 'Aug', 'Michael Ohta': 12, 'Colin van Loon': 13, 'Sam McClure': 12, 'David Popkin': 11, 'Nick Agate': 10 },
-    { month: 'Sep', 'Michael Ohta': 13, 'Colin van Loon': 12, 'Sam McClure': 11, 'David Popkin': 12, 'Nick Agate': 11 },
-    { month: 'Oct', 'Michael Ohta': 11, 'Colin van Loon': 10, 'Sam McClure': 13, 'David Popkin': 13, 'Nick Agate': 12 },
-    { month: 'Nov', 'Michael Ohta': 12, 'Colin van Loon': 11, 'Sam McClure': 12, 'David Popkin': 11, 'Nick Agate': 10 },
-  ],
-  'Equity Issuance': [
-    { month: 'Jul', 'Michael Ohta': 9, 'Colin van Loon': 10, 'Sam McClure': 8, 'David Popkin': 7, 'Nick Agate': 9 },
-    { month: 'Aug', 'Michael Ohta': 8, 'Colin van Loon': 9, 'Sam McClure': 7, 'David Popkin': 8, 'Nick Agate': 10 },
-    { month: 'Sep', 'Michael Ohta': 7, 'Colin van Loon': 8, 'Sam McClure': 9, 'David Popkin': 9, 'Nick Agate': 8 },
-    { month: 'Oct', 'Michael Ohta': 8, 'Colin van Loon': 7, 'Sam McClure': 8, 'David Popkin': 8, 'Nick Agate': 7 },
-    { month: 'Nov', 'Michael Ohta': 9, 'Colin van Loon': 8, 'Sam McClure': 7, 'David Popkin': 7, 'Nick Agate': 8 },
-  ],
-  'Consultant Onboarding': [
-    { month: 'Jul', 'Michael Ohta': 5, 'Colin van Loon': 4, 'Sam McClure': 4, 'David Popkin': 3, 'Nick Agate': 5 },
-    { month: 'Aug', 'Michael Ohta': 4, 'Colin van Loon': 5, 'Sam McClure': 5, 'David Popkin': 4, 'Nick Agate': 4 },
-    { month: 'Sep', 'Michael Ohta': 5, 'Colin van Loon': 4, 'Sam McClure': 4, 'David Popkin': 5, 'Nick Agate': 4 },
-    { month: 'Oct', 'Michael Ohta': 4, 'Colin van Loon': 4, 'Sam McClure': 5, 'David Popkin': 4, 'Nick Agate': 5 },
-    { month: 'Nov', 'Michael Ohta': 5, 'Colin van Loon': 5, 'Sam McClure': 4, 'David Popkin': 4, 'Nick Agate': 4 },
-  ],
-  'Board Consent': [
-    { month: 'Jul', 'Michael Ohta': 3, 'Colin van Loon': 3, 'Sam McClure': 2, 'David Popkin': 3, 'Nick Agate': 3 },
-    { month: 'Aug', 'Michael Ohta': 2, 'Colin van Loon': 3, 'Sam McClure': 3, 'David Popkin': 2, 'Nick Agate': 3 },
-    { month: 'Sep', 'Michael Ohta': 3, 'Colin van Loon': 2, 'Sam McClure': 3, 'David Popkin': 3, 'Nick Agate': 2 },
-    { month: 'Oct', 'Michael Ohta': 3, 'Colin van Loon': 3, 'Sam McClure': 2, 'David Popkin': 3, 'Nick Agate': 3 },
-    { month: 'Nov', 'Michael Ohta': 2, 'Colin van Loon': 3, 'Sam McClure': 3, 'David Popkin': 2, 'Nick Agate': 3 },
-  ],
-  'Contract Review': [
-    { month: 'Jul', 'Michael Ohta': 7, 'Colin van Loon': 6, 'Sam McClure': 7, 'David Popkin': 8, 'Nick Agate': 6 },
-    { month: 'Aug', 'Michael Ohta': 6, 'Colin van Loon': 7, 'Sam McClure': 6, 'David Popkin': 7, 'Nick Agate': 7 },
-    { month: 'Sep', 'Michael Ohta': 7, 'Colin van Loon': 6, 'Sam McClure': 7, 'David Popkin': 6, 'Nick Agate': 7 },
-    { month: 'Oct', 'Michael Ohta': 6, 'Colin van Loon': 7, 'Sam McClure': 6, 'David Popkin': 7, 'Nick Agate': 6 },
-    { month: 'Nov', 'Michael Ohta': 7, 'Colin van Loon': 6, 'Sam McClure': 7, 'David Popkin': 7, 'Nick Agate': 6 },
-  ],
-};
+import { useAllTimeEntries, useAttorneys } from '../hooks/useFirestoreData';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -271,6 +17,318 @@ const CedarGroveAnalytics = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
+  // Fetch data from Firebase
+  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
+  const { attorneys: firebaseAttorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
+
+  const loading = entriesLoading || attorneysLoading;
+  const error = entriesError || attorneysError;
+
+  // Helper function to convert month name to number
+  const getMonthNumber = (monthName) => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    return months.findIndex(m => m.toLowerCase() === monthName?.toLowerCase()) + 1 || 1;
+  };
+
+  // Create attorney name map
+  const attorneyMap = useMemo(() => {
+    const map = {};
+    firebaseAttorneys.forEach(attorney => {
+      map[attorney.id] = attorney.name || attorney.id;
+    });
+    return map;
+  }, [firebaseAttorneys]);
+
+  // Process data based on date range
+  const filteredEntries = useMemo(() => {
+    if (!allEntries) return [];
+
+    const now = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+
+    switch (dateRange) {
+      case 'last-week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'last-month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'last-quarter':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case 'year-to-date':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      case 'custom':
+        if (customDateStart && customDateEnd) {
+          startDate = new Date(customDateStart);
+          endDate = new Date(customDateEnd);
+        }
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 1);
+    }
+
+    return allEntries.filter(entry => {
+      // Create a date from year and month
+      const entryDate = new Date(entry.year, getMonthNumber(entry.month) - 1);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
+  }, [allEntries, dateRange, customDateStart, customDateEnd]);
+
+  // Process attorney data
+  const attorneyData = useMemo(() => {
+    const attorneyStats = {};
+
+    filteredEntries.forEach(entry => {
+      // Attorney ID is the document name (e.g., "Ohta")
+      const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+      
+      if (!attorneyStats[attorneyName]) {
+        attorneyStats[attorneyName] = {
+          name: attorneyName,
+          billable: 0,
+          ops: 0,
+          target: 150, // Default target
+          billableTarget: 100,
+          opsTarget: 50,
+          role: 'Attorney',
+          transactions: {},
+          clients: {}
+        };
+      }
+
+      // Get hours - use 'hours' field (primary hours)
+      const primaryHours = parseFloat(entry.hours) || 0;
+      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
+      const totalHours = primaryHours + secondaryHours;
+
+      // Get category - use billingCategory as primary
+      const category = entry.billingCategory || entry.category || 'Other';
+      
+      // Get client - prefer 'client' field, fallback to 'company'
+      const client = entry.client || entry.company || 'Unknown';
+
+      // Determine if billable or ops based on the 'ops' field or category
+      // If 'ops' field exists and is not empty/null, it's ops time
+      if (entry.ops && entry.ops !== '' && entry.ops !== 'null') {
+        // This is ops time
+        attorneyStats[attorneyName].ops += totalHours;
+      } else {
+        // This is billable time
+        attorneyStats[attorneyName].billable += totalHours;
+      }
+
+      // Track transaction types (by billingCategory)
+      if (!attorneyStats[attorneyName].transactions[category]) {
+        attorneyStats[attorneyName].transactions[category] = 0;
+      }
+      attorneyStats[attorneyName].transactions[category] += totalHours;
+
+      // Track clients
+      if (!attorneyStats[attorneyName].clients[client]) {
+        attorneyStats[attorneyName].clients[client] = 0;
+      }
+      attorneyStats[attorneyName].clients[client] += totalHours;
+    });
+
+    // Convert to array and add top transactions
+    return Object.values(attorneyStats).map(attorney => ({
+      ...attorney,
+      topTransactions: Object.entries(attorney.transactions)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name]) => name)
+    }));
+  }, [filteredEntries, attorneyMap]);
+
+  // Process transaction data
+  const transactionData = useMemo(() => {
+    const transactionStats = {};
+
+    filteredEntries.forEach(entry => {
+      const category = entry.billingCategory || entry.category || 'Other';
+      const primaryHours = parseFloat(entry.hours) || 0;
+      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
+      const totalHours = primaryHours + secondaryHours;
+
+      if (!transactionStats[category]) {
+        transactionStats[category] = {
+          type: category,
+          totalHours: 0,
+          count: 0
+        };
+      }
+
+      transactionStats[category].totalHours += totalHours;
+      transactionStats[category].count += 1;
+    });
+
+    return Object.values(transactionStats).map(stat => ({
+      ...stat,
+      avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0
+    })).sort((a, b) => b.totalHours - a.totalHours);
+  }, [filteredEntries]);
+
+  // Process client data
+  const clientData = useMemo(() => {
+    const clientStats = {};
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+    filteredEntries.forEach(entry => {
+      const clientName = entry.client || entry.company || 'Unknown';
+      const primaryHours = parseFloat(entry.hours) || 0;
+      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
+      const totalHours = primaryHours + secondaryHours;
+      const category = entry.billingCategory || entry.category || 'Other';
+      
+      // Use the 'date' field if available, otherwise construct from year/month
+      let entryDate;
+      if (entry.date && entry.date.toDate) {
+        entryDate = entry.date.toDate(); // Firestore Timestamp
+      } else if (entry.date) {
+        entryDate = new Date(entry.date);
+      } else {
+        entryDate = new Date(entry.year, getMonthNumber(entry.month) - 1);
+      }
+
+      if (!clientStats[clientName]) {
+        clientStats[clientName] = {
+          name: clientName,
+          monthlyHours: 0,
+          annualHours: 0,
+          uniqueTransactions: new Set(),
+          transactionHours: 0,
+          transactionCount: 0,
+          lastActivity: entryDate,
+          stage: 'Unknown'
+        };
+      }
+
+      clientStats[clientName].annualHours += totalHours;
+      clientStats[clientName].monthlyHours += totalHours;
+      clientStats[clientName].uniqueTransactions.add(category);
+      clientStats[clientName].transactionCount += 1;
+      clientStats[clientName].transactionHours += totalHours;
+
+      if (entryDate > clientStats[clientName].lastActivity) {
+        clientStats[clientName].lastActivity = entryDate;
+      }
+    });
+
+    return Object.values(clientStats).map(client => ({
+      name: client.name,
+      monthlyHours: Math.round(client.monthlyHours / 12), // Approximate
+      annualHours: Math.round(client.annualHours),
+      uniqueTransactions: client.uniqueTransactions.size,
+      avgHoursPerTransaction: client.transactionCount > 0 
+        ? (client.transactionHours / client.transactionCount).toFixed(1) 
+        : 0,
+      lastActivity: client.lastActivity.toISOString().split('T')[0],
+      status: client.lastActivity >= sixMonthsAgo ? 'active' : 'inactive',
+      stage: client.stage
+    }));
+  }, [filteredEntries]);
+
+  // Process ops data
+  const opsData = useMemo(() => {
+    const opsStats = {};
+    let totalOpsHours = 0;
+
+    filteredEntries.forEach(entry => {
+      // Check if this is an ops entry by looking at the 'ops' field
+      const isOps = entry.ops && entry.ops !== '' && entry.ops !== 'null';
+      
+      if (isOps) {
+        const category = entry.ops || 'Other Ops'; // Use the ops field as the category
+        const primaryHours = parseFloat(entry.hours) || 0;
+        const secondaryHours = parseFloat(entry.secondaryHours) || 0;
+        const totalHours = primaryHours + secondaryHours;
+        
+        if (!opsStats[category]) {
+          opsStats[category] = 0;
+        }
+        opsStats[category] += totalHours;
+        totalOpsHours += totalHours;
+      }
+    });
+
+    return Object.entries(opsStats).map(([category, hours]) => ({
+      category,
+      hours: Math.round(hours * 10) / 10, // Round to 1 decimal
+      percentage: totalOpsHours > 0 ? Math.round((hours / totalOpsHours) * 100) : 0
+    })).sort((a, b) => b.hours - a.hours);
+  }, [filteredEntries]);
+
+  // Calculate utilization
+  const calculateUtilization = (attorney) => {
+    const total = attorney.billable + attorney.ops;
+    return Math.round((total / attorney.target) * 100);
+  };
+
+  const calculateBillableUtilization = (attorney) => {
+    return Math.round((attorney.billable / attorney.billableTarget) * 100);
+  };
+
+  const calculateOpsUtilization = (attorney) => {
+    return Math.round((attorney.ops / attorney.opsTarget) * 100);
+  };
+
+  const avgUtilization = attorneyData.length > 0
+    ? Math.round(attorneyData.reduce((acc, att) => acc + calculateUtilization(att), 0) / attorneyData.length)
+    : 0;
+
+  const totalBillable = attorneyData.reduce((acc, att) => acc + att.billable, 0);
+  const totalOps = attorneyData.reduce((acc, att) => acc + att.ops, 0);
+  const totalBillableTarget = attorneyData.reduce((acc, att) => acc + att.billableTarget, 0);
+  const totalOpsTarget = attorneyData.reduce((acc, att) => acc + att.opsTarget, 0);
+
+  // Loading and error states
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="mt-4 text-xl text-gray-700">Loading analytics data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-red-600 text-xl mb-4">Error loading data</div>
+          <div className="text-gray-600 mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (filteredEntries.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-gray-900 text-xl mb-4">No data available</div>
+          <div className="text-gray-600 mb-4">
+            No time entries found for the selected date range. Try adjusting your filters.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -280,7 +338,7 @@ const CedarGroveAnalytics = () => {
   };
 
   const getSortedClients = () => {
-    let filtered = filteredData.clients.filter(client =>
+    let filtered = clientData.filter(client =>
       client.name.toLowerCase().includes(clientSearch.toLowerCase())
     );
 
@@ -310,74 +368,6 @@ const CedarGroveAnalytics = () => {
       'year-to-date': 'Year to Date',
     };
     return labels[dateRange] || 'Last Month';
-  };
-
-  // Filter data based on date range - in a real app, this would query Firebase
-  const getFilteredData = () => {
-    // For now, we'll apply a simple multiplier to simulate date filtering
-    // In production, this would filter actual date-stamped records
-    const multipliers = {
-      'last-week': 0.25,
-      'last-month': 1.0,
-      'last-quarter': 3.0,
-      'year-to-date': 10.0,
-      'custom': 1.0,
-    };
-    const mult = multipliers[dateRange] || 1.0;
-    
-    return {
-      attorneys: sampleAttorneyData.map(a => ({
-        ...a,
-        billable: Math.round(a.billable * mult),
-        ops: Math.round(a.ops * mult),
-        target: Math.round(a.target * mult),
-        billableTarget: Math.round(a.billableTarget * mult),
-        opsTarget: Math.round(a.opsTarget * mult),
-      })),
-      transactions: sampleTransactionData.map(t => ({
-        ...t,
-        totalHours: Math.round(t.totalHours * mult * 10) / 10,
-        count: Math.round(t.count * mult),
-      })),
-      clients: sampleClientData.map(c => ({
-        ...c,
-        monthlyHours: Math.round(c.monthlyHours * mult),
-      })),
-      ops: sampleOpsData.map(o => ({
-        ...o,
-        hours: Math.round(o.hours * mult),
-      })),
-      totalBillable: Math.round(sampleAttorneyData.reduce((acc, att) => acc + att.billable, 0) * mult),
-      totalOps: Math.round(sampleAttorneyData.reduce((acc, att) => acc + att.ops, 0) * mult),
-    };
-  };
-
-  const filteredData = getFilteredData();
-
-  const calculateUtilization = (attorney) => {
-    const total = attorney.billable + attorney.ops;
-    return Math.round((total / attorney.target) * 100);
-  };
-
-  const calculateBillableUtilization = (attorney) => {
-    return Math.round((attorney.billable / attorney.billableTarget) * 100);
-  };
-
-  const calculateOpsUtilization = (attorney) => {
-    return Math.round((attorney.ops / attorney.opsTarget) * 100);
-  };
-
-  const avgUtilization = Math.round(
-    filteredData.attorneys.reduce((acc, att) => acc + calculateUtilization(att), 0) / filteredData.attorneys.length
-  );
-
-  const totalBillable = filteredData.attorneys.reduce((acc, att) => acc + att.billable, 0);
-  const totalOps = filteredData.attorneys.reduce((acc, att) => acc + att.ops, 0);
-  const totalBillableTarget = filteredData.attorneys.reduce((acc, att) => acc + att.billableTarget, 0);
-  const totalOpsTarget = filteredData.attorneys.reduce((acc, att) => acc + att.opsTarget, 0);
-
-  const calculateBillableRatio = (attorney) => {
-    return (attorney.billable / attorney.ops).toFixed(1);
   };
 
   const renderCustomLabel = ({ hours, percentage }) => {
@@ -466,419 +456,34 @@ const CedarGroveAnalytics = () => {
 
         {/* Navigation Tabs */}
         <div className="mb-6 flex gap-2 border-b border-gray-200">
-          {selectedTransaction ? (
+          {['overview', 'attorneys', 'transactions', 'ops', 'clients'].map((view) => (
             <button
-              onClick={() => setSelectedTransaction(null)}
-              className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900 flex items-center gap-2"
+              key={view}
+              onClick={() => setSelectedView(view)}
+              className={`px-4 py-2 font-medium capitalize transition-colors ${
+                selectedView === view
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              ← Back to Transactions
+              {view}
             </button>
-          ) : selectedAttorney ? (
-            <button
-              onClick={() => setSelectedAttorney(null)}
-              className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900 flex items-center gap-2"
-            >
-              ← Back to Attorneys
-            </button>
-          ) : selectedClient ? (
-            <button
-              onClick={() => setSelectedClient(null)}
-              className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900 flex items-center gap-2"
-            >
-              ← Back to Clients
-            </button>
-          ) : (
-            <>
-              {['overview', 'attorneys', 'transactions', 'ops', 'clients'].map((view) => (
-                <button
-                  key={view}
-                  onClick={() => setSelectedView(view)}
-                  className={`px-4 py-2 font-medium capitalize transition-colors ${
-                    selectedView === view
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {view}
-                </button>
-              ))}
-            </>
-          )}
+          ))}
         </div>
 
-        {/* Client Detail View */}
-        {selectedClient && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedClient}</h2>
-              <p className="text-gray-600">Complete client engagement breakdown</p>
-            </div>
-
-            {/* Client KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <span className="text-gray-600 text-sm">Status</span>
-                <div className="mt-2">
-                  <span className={`inline-flex px-3 py-1 text-lg font-semibold rounded-full ${
-                    sampleClientDetails[selectedClient]?.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {sampleClientDetails[selectedClient]?.status || 'Active'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <span className="text-gray-600 text-sm">Monthly Hours</span>
-                <div className="text-3xl font-bold text-blue-600 mt-2">
-                  {sampleClientDetails[selectedClient]?.monthlyHours || 45}h
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <span className="text-gray-600 text-sm">Annual Hours</span>
-                <div className="text-3xl font-bold text-gray-900 mt-2">
-                  {sampleClientDetails[selectedClient]?.annualHours || 520}h
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <span className="text-gray-600 text-sm">Avg Hours/Transaction</span>
-                <div className="text-3xl font-bold text-purple-600 mt-2">6.5h</div>
-              </div>
-            </div>
-
-            {/* Monthly Trend */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Hours Trend Over Time</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sampleClientDetails[selectedClient]?.monthlyTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="hours" stroke="#0088FE" strokeWidth={2} name="Hours" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Transaction and Attorney Breakdown */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Transaction Breakdown */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Time by Transaction Type</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={sampleClientDetails[selectedClient]?.transactionBreakdown}
-                      dataKey="percentage"
-                      nameKey="type"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={renderCustomLabel}
-                    >
-                      {sampleClientDetails[selectedClient]?.transactionBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Attorney Breakdown */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Time by Attorney</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={sampleClientDetails[selectedClient]?.attorneyBreakdown}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-15} textAnchor="end" height={80} />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="hours" fill="#0088FE" name="Hours" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Attorney Detail View */}
-        {selectedAttorney && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedAttorney}</h2>
-              <p className="text-gray-600">Individual performance and workload breakdown</p>
-            </div>
-
-            {/* Attorney KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {sampleAttorneyDetails[selectedAttorney]?.monthlyData.slice(-1).map((current) => {
-                const attorney = sampleAttorneyData.find(a => a.name === selectedAttorney);
-                const utilization = calculateUtilization(attorney);
-                return (
-                  <React.Fragment key="kpis">
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <span className="text-gray-600 text-sm">Current Month Utilization</span>
-                      <div className="text-3xl font-bold text-gray-900 mt-2">{utilization}%</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <span className="text-gray-600 text-sm">Billable Hours</span>
-                      <div className="text-3xl font-bold text-blue-600 mt-2">{attorney.billable}h</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <span className="text-gray-600 text-sm">Ops Hours</span>
-                      <div className="text-3xl font-bold text-green-600 mt-2">{attorney.ops}h</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <span className="text-gray-600 text-sm">Total Hours</span>
-                      <div className="text-3xl font-bold text-gray-900 mt-2">{attorney.billable + attorney.ops}h</div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-
-            {/* Monthly Trend */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Hours Trend</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sampleAttorneyDetails[selectedAttorney]?.monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="billable" stroke="#0088FE" strokeWidth={2} name="Billable" />
-                  <Line type="monotone" dataKey="ops" stroke="#00C49F" strokeWidth={2} name="Ops" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Transaction and Ops Breakdown */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Billable Transaction Breakdown */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Billable Time by Transaction Type</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={sampleAttorneyDetails[selectedAttorney]?.transactionBreakdown}
-                      dataKey="percentage"
-                      nameKey="type"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={renderCustomLabel}
-                    >
-                      {sampleAttorneyDetails[selectedAttorney]?.transactionBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Ops Breakdown */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ops Time by Category</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={sampleAttorneyDetails[selectedAttorney]?.opsBreakdown}
-                      dataKey="percentage"
-                      nameKey="category"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={renderCustomLabel}
-                    >
-                      {sampleAttorneyDetails[selectedAttorney]?.opsBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Top Clients */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Clients by Hours</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={sampleAttorneyDetails[selectedAttorney]?.topClients}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="hours" fill="#0088FE" name="Hours" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Detailed Monthly Table */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Month
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Billable
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ops
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Utilization
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sampleAttorneyDetails[selectedAttorney]?.monthlyData.map((month, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {month.month}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {month.billable}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {month.ops}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {month.billable + month.ops}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            month.utilization >= 100
-                              ? 'bg-green-100 text-green-800'
-                              : month.utilization >= 80
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {month.utilization}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Transaction Detail View */}
-        {selectedTransaction && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedTransaction}</h2>
-              <p className="text-gray-600">Average time trend by attorney</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Hours Trend Over Time
-              </h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={sampleTransactionTrends[selectedTransaction]}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  {filteredData.attorneys.map((attorney, idx) => (
-                    <Line
-                      key={attorney.name}
-                      type="monotone"
-                      dataKey={attorney.name}
-                      stroke={COLORS[idx % COLORS.length]}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Attorney
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      July
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      August
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      September
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      October
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      November
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Average
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.attorneys.map((attorney, idx) => {
-                    const trends = sampleTransactionTrends[selectedTransaction];
-                    const values = trends.map(t => t[attorney.name]);
-                    const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
-                    return (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {attorney.name}
-                        </td>
-                        {values.map((val, vIdx) => (
-                          <td key={vIdx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {val}h
-                          </td>
-                        ))}
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {avg}h
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {/* Overview View */}
-        {!selectedTransaction && !selectedAttorney && !selectedClient && selectedView === 'overview' && (
+        {selectedView === 'overview' && (
           <div className="space-y-6">
             {/* Date Range Indicator */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-700">
                 Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                <span className="ml-2 text-blue-600">({filteredEntries.length} entries)</span>
               </span>
             </div>
 
-{/* KPI Cards */}
+            {/* KPI Cards */}
             <div className="flex justify-between gap-3 w-full">
               <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
                 <div className="flex items-center justify-between mb-1">
@@ -888,9 +493,8 @@ const CedarGroveAnalytics = () => {
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-4xl font-bold text-gray-900">{avgUtilization}%</div>
                 </div>
-                <div className="flex items-center justify-center text-sm text-green-600">
-                  <TrendingUp className="w-4 h-4 mr-1" />
-                  <span>+5%</span>
+                <div className="flex items-center justify-center text-sm text-gray-600">
+                  {attorneyData.length} attorneys
                 </div>
               </div>
 
@@ -902,11 +506,11 @@ const CedarGroveAnalytics = () => {
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex items-baseline gap-1.5">
                     <div className="text-3xl font-bold text-blue-600">
-                      {Math.round((filteredData.totalBillable / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
+                      {Math.round((totalBillable / (totalBillable + totalOps)) * 100)}%
                     </div>
                     <div className="text-xl text-gray-400">/</div>
                     <div className="text-3xl font-bold text-green-600">
-                      {Math.round((filteredData.totalOps / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
+                      {Math.round((totalOps / (totalBillable + totalOps)) * 100)}%
                     </div>
                   </div>
                 </div>
@@ -919,10 +523,10 @@ const CedarGroveAnalytics = () => {
                   <Clock className="w-5 h-5 text-green-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <div className="text-4xl font-bold text-gray-900">{filteredData.totalBillable}h</div>
+                  <div className="text-4xl font-bold text-gray-900">{Math.round(totalBillable)}h</div>
                 </div>
                 <div className="text-sm text-gray-600 text-center leading-tight">
-                  {Math.round((filteredData.totalBillable / totalBillableTarget) * 100)}% of target
+                  {totalBillableTarget > 0 ? Math.round((totalBillable / totalBillableTarget) * 100) : 0}% of target
                 </div>
               </div>
 
@@ -932,10 +536,10 @@ const CedarGroveAnalytics = () => {
                   <Users className="w-5 h-5 text-orange-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <div className="text-4xl font-bold text-gray-900">{filteredData.totalOps}h</div>
+                  <div className="text-4xl font-bold text-gray-900">{Math.round(totalOps)}h</div>
                 </div>
                 <div className="text-sm text-gray-600 text-center leading-tight">
-                  {Math.round((filteredData.totalOps / totalOpsTarget) * 100)}% of target
+                  {totalOpsTarget > 0 ? Math.round((totalOps / totalOpsTarget) * 100) : 0}% of target
                 </div>
               </div>
 
@@ -946,75 +550,12 @@ const CedarGroveAnalytics = () => {
                 </div>
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-4xl font-bold text-gray-900">
-                    {(filteredData.totalBillable / filteredData.totalOps).toFixed(1)}:1
+                    {totalOps > 0 ? (totalBillable / totalOps).toFixed(1) : '0'}:1
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 text-center leading-tight">
                   Billable to Ops
                 </div>
-              </div>
-            </div>
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Utilization Trend */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Utilization Trend - {getDateRangeLabel()}
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                <LineChart
-                  data={sampleMonthlyTrend}
-                  margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
-                >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis
-                      domain={[0, 120]}
-                      allowDecimals={false}
-                      tickCount={7}
-                      ticks={[0, 20, 40, 60, 80, 100, 120]}
-                      tickFormatter={(value) => `${value}%`}
-                      interval={0}
-                      allowDataOverflow={true}
-                    />
-                    <Tooltip formatter={(value) => `${value}%`} />
-                    <Line type="monotone" dataKey="utilization" stroke="#0088FE" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Ops Distribution */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Ops Time Distribution - {getDateRangeLabel()}
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={filteredData.ops}
-                      dataKey="percentage"
-                      nameKey="category"
-                      cx="35%"          // shift pie left to make room for legend
-                      cy="50%"
-                      outerRadius={80}
-                      label={({ hours, percentage }) => `${hours}h (${percentage}%)`}
-                    >
-                      {filteredData.ops.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend
-                      layout="vertical"
-                      verticalAlign="middle"
-                      align="right"
-                      wrapperStyle={{
-                        paddingLeft: 20,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
               </div>
             </div>
 
@@ -1024,7 +565,7 @@ const CedarGroveAnalytics = () => {
                 Top Transaction Types by Time - {getDateRangeLabel()}
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={filteredData.transactions}>
+                <BarChart data={transactionData.slice(0, 10)}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="type" angle={-15} textAnchor="end" height={80} />
                   <YAxis />
@@ -1038,9 +579,8 @@ const CedarGroveAnalytics = () => {
         )}
 
         {/* Attorneys View */}
-        {!selectedTransaction && !selectedAttorney && !selectedClient && selectedView === 'attorneys' && (
+        {selectedView === 'attorneys' && (
           <div className="space-y-6">
-            {/* Date Range Indicator */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-700">
@@ -1056,104 +596,59 @@ const CedarGroveAnalytics = () => {
                       Attorney
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Billable (Target)
+                      Billable Hours
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ops (Target)
+                      Ops Hours
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Overall Utilization
+                      Utilization
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Top 5 Transaction Types
+                      Top Transactions
                     </th>
                   </tr>
                 </thead>
-
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.attorneys.map((attorney, idx) => {
+                  {attorneyData.map((attorney, idx) => {
                     const utilization = calculateUtilization(attorney);
-                    const billableUtil = calculateBillableUtilization(attorney);
-                    const opsUtil = calculateOpsUtilization(attorney);
                     const total = attorney.billable + attorney.ops;
-
-                    const getUtilColor = (val) => {
-                      if (val > 105) return 'text-red-600';
-                      if (val < 75) return 'text-red-600';
-                      if (val < 85) return 'text-yellow-600';
-                      return 'text-green-600';
-                    };
-
-                    const getBadgeColor = (val) => {
-                      if (val > 105) return 'bg-red-100 text-red-800';
-                      if (val < 75) return 'bg-red-100 text-red-800';
-                      if (val < 85) return 'bg-yellow-100 text-yellow-800';
-                      return 'bg-green-100 text-green-800';
-                    };
-
                     return (
-                      <tr
-                        key={idx}
-                        className="hover:bg-blue-50 cursor-pointer transition-colors"
-                        onClick={() => setSelectedAttorney(attorney.name)}
-                      >
-                        {/* Attorney Name */}
+                      <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
-                          {attorney.name} ({attorney.role})
+                          {attorney.name}
                         </td>
-
-                        {/* Billable */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {attorney.billable}h / {attorney.billableTarget}h
-                            </span>
-                            <span className={`text-xs ${getUtilColor(billableUtil)}`}>
-                              {billableUtil}% utilization
-                            </span>
-                          </div>
+                          {Math.round(attorney.billable)}h
                         </td>
-
-                        {/* Ops */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {attorney.ops}h / {attorney.opsTarget}h
-                            </span>
-                            <span className={`text-xs ${getUtilColor(opsUtil)}`}>
-                              {opsUtil}% utilization
-                            </span>
-                          </div>
+                          {Math.round(attorney.ops)}h
                         </td>
-
-                        {/* Total */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {total}h
+                          {Math.round(total)}h
                         </td>
-
-                        {/* Overall Utilization */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getBadgeColor(utilization)}`}
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              utilization >= 100
+                                ? 'bg-green-100 text-green-800'
+                                : utilization >= 80
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
                           >
                             {utilization}%
                           </span>
                         </td>
-
-                        {/* Top 5 Transactions */}
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div className="flex flex-wrap gap-1">
                             {attorney.topTransactions.map((txn, tIdx) => (
                               <span
                                 key={tIdx}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedTransaction(txn);
-                                }}
-                                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer transition-colors"
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800"
                               >
                                 {tIdx + 1}. {txn}
                               </span>
@@ -1173,7 +668,7 @@ const CedarGroveAnalytics = () => {
                 Billable vs Ops Time by Attorney
               </h3>
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={filteredData.attorneys}>
+                <BarChart data={attorneyData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                   <YAxis />
@@ -1188,9 +683,8 @@ const CedarGroveAnalytics = () => {
         )}
 
         {/* Transactions View */}
-        {!selectedTransaction && !selectedAttorney && !selectedClient && selectedView === 'transactions' && (
+        {selectedView === 'transactions' && (
           <div className="space-y-6">
-            {/* Date Range Indicator */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-700">
@@ -1215,19 +709,16 @@ const CedarGroveAnalytics = () => {
                       Total Hours
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      % of Billable
+                      % of Total
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.transactions.map((txn, idx) => {
-                    const percentage = ((txn.totalHours / filteredData.totalBillable) * 100).toFixed(1);
+                  {transactionData.map((txn, idx) => {
+                    const totalHours = transactionData.reduce((sum, t) => sum + t.totalHours, 0);
+                    const percentage = totalHours > 0 ? ((txn.totalHours / totalHours) * 100).toFixed(1) : 0;
                     return (
-                      <tr 
-                        key={idx} 
-                        className="hover:bg-blue-50 cursor-pointer transition-colors"
-                        onClick={() => setSelectedTransaction(txn.type)}
-                      >
+                      <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                           {txn.type}
                         </td>
@@ -1238,7 +729,7 @@ const CedarGroveAnalytics = () => {
                           {txn.count}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {txn.totalHours}h
+                          {Math.round(txn.totalHours)}h
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {percentage}%
@@ -1256,7 +747,7 @@ const CedarGroveAnalytics = () => {
                 Average Time per Transaction Type
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={filteredData.transactions} layout="vertical">
+                <BarChart data={transactionData.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="type" type="category" width={150} />
@@ -1269,9 +760,8 @@ const CedarGroveAnalytics = () => {
         )}
 
         {/* Ops View */}
-        {!selectedTransaction && !selectedAttorney && !selectedClient && selectedView === 'ops' && (
+        {selectedView === 'ops' && opsData.length > 0 && (
           <div className="space-y-6">
-            {/* Date Range Indicator */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-700">
@@ -1292,13 +782,10 @@ const CedarGroveAnalytics = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       % of Total Ops
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Trend
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.ops.map((ops, idx) => (
+                  {opsData.map((ops, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {ops.category}
@@ -1308,12 +795,6 @@ const CedarGroveAnalytics = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {ops.percentage}%
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className="flex items-center text-green-600">
-                          <TrendingDown className="w-4 h-4 mr-1" />
-                          <span>-3%</span>
-                        </span>
                       </td>
                     </tr>
                   ))}
@@ -1329,7 +810,7 @@ const CedarGroveAnalytics = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={filteredData.ops}
+                    data={opsData}
                     dataKey="percentage"
                     nameKey="category"
                     cx="50%"
@@ -1337,7 +818,7 @@ const CedarGroveAnalytics = () => {
                     outerRadius={100}
                     label={renderCustomLabel}
                   >
-                    {filteredData.ops.map((entry, index) => (
+                    {opsData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -1346,29 +827,12 @@ const CedarGroveAnalytics = () => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Ops by Attorney */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Ops Hours by Attorney
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={filteredData.attorneys}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="ops" fill="#00C49F" name="Ops Hours" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
           </div>
         )}
 
         {/* Clients View */}
-        {!selectedTransaction && !selectedAttorney && !selectedClient && selectedView === 'clients' && (
+        {selectedView === 'clients' && (
           <div className="space-y-6">
-            {/* Date Range Indicator */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-700">
@@ -1383,19 +847,16 @@ const CedarGroveAnalytics = () => {
                   <div>
                     <span className="text-gray-600 text-sm">Active Clients</span>
                     <div className="text-3xl font-bold text-green-600 mt-2">
-                      {filteredData.clients.filter(c => c.status === 'active').length}
+                      {clientData.filter(c => c.status === 'active').length}
                     </div>
                   </div>
                   <div className="text-gray-300 text-4xl font-light mx-4">/</div>
                   <div>
                     <span className="text-gray-600 text-sm">Inactive Clients</span>
                     <div className="text-3xl font-bold text-red-600 mt-2">
-                      {filteredData.clients.filter(c => c.status === 'inactive').length}
+                      {clientData.filter(c => c.status === 'inactive').length}
                     </div>
                   </div>
-                </div>
-                <div className="text-sm text-gray-600 mt-3">
-                  Last 6 months activity threshold
                 </div>
               </div>
 
@@ -1431,18 +892,6 @@ const CedarGroveAnalytics = () => {
                       Status {sortConfig.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('stage')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    >
-                      Stage {sortConfig.key === 'stage' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th 
-                      onClick={() => handleSort('monthlyHours')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    >
-                      Monthly Hours {sortConfig.key === 'monthlyHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th 
                       onClick={() => handleSort('annualHours')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
@@ -1455,12 +904,6 @@ const CedarGroveAnalytics = () => {
                       Unique Transactions {sortConfig.key === 'uniqueTransactions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('avgHoursPerTransaction')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    >
-                      Avg Hours/Transaction {sortConfig.key === 'avgHoursPerTransaction' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th 
                       onClick={() => handleSort('lastActivity')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
@@ -1470,11 +913,7 @@ const CedarGroveAnalytics = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {getSortedClients().map((client, idx) => (
-                    <tr 
-                      key={idx} 
-                      className="hover:bg-blue-50 cursor-pointer transition-colors"
-                      onClick={() => setSelectedClient(client.name)}
-                    >
+                    <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                         {client.name}
                       </td>
@@ -1486,25 +925,14 @@ const CedarGroveAnalytics = () => {
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
+                          {client.status}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
-                          {client.stage}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {client.monthlyHours}h
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {client.annualHours}h
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {client.uniqueTransactions}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {client.avgHoursPerTransaction}h
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(client.lastActivity).toLocaleDateString()}
@@ -1517,13 +945,12 @@ const CedarGroveAnalytics = () => {
 
             {/* Client Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Time Spent per Client */}
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   Annual Hours by Client
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={filteredData.clients}>
+                  <BarChart data={clientData.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />
@@ -1533,37 +960,20 @@ const CedarGroveAnalytics = () => {
                 </ResponsiveContainer>
               </div>
 
-              {/* Average Hours per Transaction */}
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Avg Hours per Transaction by Client
+                  Service Breadth (Unique Transaction Types)
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={filteredData.clients}>
+                  <BarChart data={clientData.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="avgHoursPerTransaction" fill="#FFBB28" name="Avg Hours/Transaction" />
+                    <Bar dataKey="uniqueTransactions" fill="#00C49F" name="Unique Transaction Types" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-
-            {/* Service Breadth */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Service Breadth (Unique Transaction Types)
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={filteredData.clients}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="uniqueTransactions" fill="#00C49F" name="Unique Transaction Types" />
-                </BarChart>
-              </ResponsiveContainer>
             </div>
           </div>
         )}
