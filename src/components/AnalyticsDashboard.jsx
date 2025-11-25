@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search } from 'lucide-react';
-import { useAllTimeEntries, useAttorneys } from '../hooks/useFirestoreData';
+import { useAllTimeEntries, useAttorneys, useClients } from '../hooks/useFirestoreData';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -95,13 +95,15 @@ const CedarGroveAnalytics = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
+  const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
 
   // Fetch data from Firebase
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   const { attorneys: firebaseAttorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
+  const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
 
-  const loading = entriesLoading || attorneysLoading;
-  const error = entriesError || attorneysError;
+  const loading = entriesLoading || attorneysLoading || clientsLoading;
+  const error = entriesError || attorneysError || clientsError;
 
   // Helper function to convert month name to number
   const getMonthNumber = (monthName) => {
@@ -247,7 +249,15 @@ const CedarGroveAnalytics = () => {
   const transactionData = useMemo(() => {
     const transactionStats = {};
 
-    filteredEntries.forEach(entry => {
+    // Filter entries by attorney if one is selected
+    const entriesToProcess = transactionAttorneyFilter === 'all' 
+      ? filteredEntries 
+      : filteredEntries.filter(entry => {
+          const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+          return attorneyName === transactionAttorneyFilter;
+        });
+
+    entriesToProcess.forEach(entry => {
       const category = entry.billingCategory || entry.category || 'Other';
       const billableHours = entry.billableHours || 0;
       const earnings = entry.billablesEarnings || 0;
@@ -274,15 +284,13 @@ const CedarGroveAnalytics = () => {
       avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0,
       avgEarnings: stat.count > 0 ? (stat.totalEarnings / stat.count).toFixed(2) : 0
     })).sort((a, b) => b.totalHours - a.totalHours);
-  }, [filteredEntries]);
+  }, [filteredEntries, transactionAttorneyFilter, attorneyMap]);
 
-  // Process client data - updated to use new field names
+  // Process client data - uses Firebase clients collection as master list
   const clientData = useMemo(() => {
-    const clientStats = {};
-    const now = new Date();
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(now.getMonth() - 6);
-
+    // Build a map of time entry stats by client name
+    const entryStats = {};
+    
     filteredEntries.forEach(entry => {
       const clientName = entry.client || 'Unknown';
       const billableHours = entry.billableHours || 0;
@@ -292,46 +300,91 @@ const CedarGroveAnalytics = () => {
       const earnings = entry.billablesEarnings || 0;
       const entryDate = getEntryDate(entry);
 
-      if (!clientStats[clientName]) {
-        clientStats[clientName] = {
-          name: clientName,
-          monthlyHours: 0,
-          annualHours: 0,
+      if (!entryStats[clientName]) {
+        entryStats[clientName] = {
+          totalHours: 0,
           totalEarnings: 0,
           uniqueTransactions: new Set(),
-          transactionHours: 0,
           transactionCount: 0,
           lastActivity: entryDate,
-          stage: 'Unknown'
         };
       }
 
-      clientStats[clientName].annualHours += totalHours;
-      clientStats[clientName].monthlyHours += totalHours;
-      clientStats[clientName].totalEarnings += earnings;
-      clientStats[clientName].uniqueTransactions.add(category);
-      clientStats[clientName].transactionCount += 1;
-      clientStats[clientName].transactionHours += totalHours;
+      entryStats[clientName].totalHours += totalHours;
+      entryStats[clientName].totalEarnings += earnings;
+      entryStats[clientName].uniqueTransactions.add(category);
+      entryStats[clientName].transactionCount += 1;
 
-      if (entryDate > clientStats[clientName].lastActivity) {
-        clientStats[clientName].lastActivity = entryDate;
+      if (entryDate > entryStats[clientName].lastActivity) {
+        entryStats[clientName].lastActivity = entryDate;
       }
     });
 
-    return Object.values(clientStats).map(client => ({
-      name: client.name,
-      monthlyHours: Math.round(client.monthlyHours / 12),
-      annualHours: Math.round(client.annualHours),
-      totalEarnings: client.totalEarnings.toFixed(2),
-      uniqueTransactions: client.uniqueTransactions.size,
-      avgHoursPerTransaction: client.transactionCount > 0 
-        ? (client.transactionHours / client.transactionCount).toFixed(1) 
-        : 0,
-      lastActivity: client.lastActivity.toISOString().split('T')[0],
-      status: client.lastActivity >= sixMonthsAgo ? 'active' : 'inactive',
-      stage: client.stage
-    }));
-  }, [filteredEntries]);
+    // Use Firebase clients as master list, merge with entry stats
+    // Only include clients with status "Active" or "Quiet"
+    const activeStatuses = ['Active', 'Quiet'];
+    const inactiveStatuses = ['Terminated', 'Dissolved'];
+    
+    return firebaseClients
+      .filter(client => {
+        const status = client.status || '';
+        // Include Active, Quiet clients (or clients without a status for backward compatibility)
+        return activeStatuses.includes(status) || (!inactiveStatuses.includes(status) && status !== '');
+      })
+      .map(client => {
+        const clientName = client.clientName || client.id;
+        const stats = entryStats[clientName] || {
+          totalHours: 0,
+          totalEarnings: 0,
+          uniqueTransactions: new Set(),
+          transactionCount: 0,
+          lastActivity: null,
+        };
+
+        // Determine display status based on Firebase status field
+        const fbStatus = client.status || '';
+        let displayStatus = 'active';
+        if (fbStatus === 'Quiet') {
+          displayStatus = 'quiet';
+        } else if (inactiveStatuses.includes(fbStatus)) {
+          displayStatus = 'inactive';
+        }
+
+        return {
+          name: clientName,
+          totalHours: Math.round(stats.totalHours * 10) / 10,
+          totalEarnings: stats.totalEarnings,
+          uniqueTransactions: stats.uniqueTransactions.size,
+          avgHoursPerTransaction: stats.transactionCount > 0 
+            ? (stats.totalHours / stats.transactionCount).toFixed(1) 
+            : 0,
+          lastActivity: stats.lastActivity 
+            ? stats.lastActivity.toISOString().split('T')[0] 
+            : 'No activity',
+          status: displayStatus,
+          fbStatus: fbStatus,
+          location: client.location || '',
+          clientType: client.clientType || '',
+          channel: client.channel || '',
+          contactEmail: client.contactEmail || '',
+          website: client.website || '',
+        };
+      })
+      .sort((a, b) => b.totalHours - a.totalHours);
+  }, [filteredEntries, firebaseClients]);
+
+  // Count clients by status from Firebase
+  const clientCounts = useMemo(() => {
+    const activeStatuses = ['Active', 'Quiet'];
+    const inactiveStatuses = ['Terminated', 'Dissolved'];
+    
+    const active = firebaseClients.filter(c => c.status === 'Active').length;
+    const quiet = firebaseClients.filter(c => c.status === 'Quiet').length;
+    const terminated = firebaseClients.filter(c => inactiveStatuses.includes(c.status)).length;
+    const total = active + quiet; // Only count Active and Quiet as "clients"
+    
+    return { active, quiet, terminated, total };
+  }, [firebaseClients]);
 
   // Process ops data - updated to use new field names (opsHours, opsCategory)
   const opsData = useMemo(() => {
@@ -782,11 +835,30 @@ const CedarGroveAnalytics = () => {
         {/* Transactions View */}
         {selectedView === 'transactions' && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-700">
+                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                </span>
+              </div>
+              
+              {/* Attorney Filter */}
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-gray-600" />
+                <select
+                  value={transactionAttorneyFilter}
+                  onChange={(e) => setTransactionAttorneyFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="all">All Attorneys</option>
+                  {attorneyData.map(attorney => (
+                    <option key={attorney.name} value={attorney.name}>
+                      {attorney.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -958,16 +1030,21 @@ const CedarGroveAnalytics = () => {
                   <div>
                     <span className="text-gray-600 text-sm">Active Clients</span>
                     <div className="text-3xl font-bold text-green-600 mt-2">
-                      {clientData.filter(c => c.status === 'active').length}
+                      {clientData.filter(c => c.totalHours > 0).length}
                     </div>
+                    <span className="text-gray-400 text-xs">with transactions in period</span>
                   </div>
                   <div className="text-gray-300 text-4xl font-light mx-4">/</div>
                   <div>
                     <span className="text-gray-600 text-sm">Inactive Clients</span>
                     <div className="text-3xl font-bold text-red-600 mt-2">
-                      {clientData.filter(c => c.status === 'inactive').length}
+                      {clientData.filter(c => c.totalHours === 0).length}
                     </div>
+                    <span className="text-gray-400 text-xs">no transactions in period</span>
                   </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <span className="text-gray-500 text-sm">Total: {clientCounts.total} clients (Active + Quiet)</span>
                 </div>
               </div>
 
@@ -997,28 +1074,28 @@ const CedarGroveAnalytics = () => {
                       Client Name {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('status')}
+                      onClick={() => handleSort('fbStatus')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Status {sortConfig.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Status {sortConfig.key === 'fbStatus' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('annualHours')}
+                      onClick={() => handleSort('location')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Total Hours {sortConfig.key === 'annualHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Location {sortConfig.key === 'location' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => handleSort('totalHours')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Total Hours {sortConfig.key === 'totalHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleSort('totalEarnings')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Earnings {sortConfig.key === 'totalEarnings' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th 
-                      onClick={() => handleSort('uniqueTransactions')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    >
-                      Transaction Types {sortConfig.key === 'uniqueTransactions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleSort('lastActivity')}
@@ -1037,25 +1114,27 @@ const CedarGroveAnalytics = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            client.status === 'active'
+                            client.totalHours > 0
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {client.status}
+                          {client.totalHours > 0 ? 'active' : 'inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {client.annualHours}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
-                        {formatCurrency(parseFloat(client.totalEarnings))}
+                        {client.location || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {client.uniqueTransactions}
+                        {formatHours(client.totalHours)}h
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                        {formatCurrency(client.totalEarnings)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(client.lastActivity).toLocaleDateString()}
+                        {client.lastActivity !== 'No activity' 
+                          ? new Date(client.lastActivity).toLocaleDateString() 
+                          : 'No activity'}
                       </td>
                     </tr>
                   ))}
@@ -1070,12 +1149,12 @@ const CedarGroveAnalytics = () => {
                   Hours by Client
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={clientData.slice(0, 10)}>
+                  <BarChart data={clientData.filter(c => c.totalHours > 0).slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="annualHours" fill="#0088FE" name="Total Hours" />
+                    <Bar dataKey="totalHours" fill="#0088FE" name="Total Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1085,7 +1164,7 @@ const CedarGroveAnalytics = () => {
                   Service Breadth (Unique Transaction Types)
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={clientData.slice(0, 10)}>
+                  <BarChart data={clientData.filter(c => c.uniqueTransactions > 0).slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />

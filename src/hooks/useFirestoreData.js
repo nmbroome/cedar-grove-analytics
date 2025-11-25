@@ -143,6 +143,38 @@ export const useAttorneys = () => {
 };
 
 /**
+ * Fetch all clients from the clients collection
+ */
+export const useClients = () => {
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setLoading(true);
+        const querySnapshot = await getDocs(collection(db, 'clients'));
+        const clientList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setClients(clientList);
+      } catch (err) {
+        console.error('Error fetching clients:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
+  return { clients, loading, error };
+};
+
+/**
  * Fetch entries for a specific attorney
  */
 export const useAttorneyEntries = (attorneyId) => {
