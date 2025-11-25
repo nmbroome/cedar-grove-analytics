@@ -3,6 +3,51 @@ import { collection, getDocs, collectionGroup, query, where } from 'firebase/fir
 import { db } from '../firebase/config';
 
 /**
+ * Normalize entry data to handle both old and new field names
+ * New format:
+ * - billableHours (was: hours)
+ * - opsHours (was: secondaryHours)
+ * - billableDate, opsDate (new timestamp fields)
+ * - billablesEarnings (new)
+ * - opsCategory (new)
+ */
+const normalizeEntry = (entryData, attorneyId) => {
+  // Handle billable hours - prefer new field name, fallback to old
+  const billableHours = parseFloat(entryData.billableHours) || parseFloat(entryData.hours) || 0;
+  
+  // Handle ops hours - prefer new field name, fallback to old
+  const opsHours = parseFloat(entryData.opsHours) || parseFloat(entryData.secondaryHours) || 0;
+  
+  // Total hours combines both
+  const totalHours = billableHours + opsHours;
+
+  // Determine if this entry has ops work
+  const hasOps = opsHours > 0 || (entryData.ops && entryData.ops !== '' && entryData.ops !== 'null');
+
+  return {
+    ...entryData,
+    attorneyId,
+    // Normalized hour fields
+    billableHours,
+    opsHours,
+    totalHours,
+    hasOps,
+    // Keep legacy field names for backward compatibility
+    hours: billableHours,
+    secondaryHours: opsHours,
+    // Ensure other fields have defaults
+    billablesEarnings: parseFloat(entryData.billablesEarnings) || 0,
+    billingCategory: entryData.billingCategory || entryData.category || 'Other',
+    opsCategory: entryData.opsCategory || '',
+    client: entryData.client || entryData.company || 'Unknown',
+    ops: entryData.ops || '',
+    notes: entryData.notes || '',
+    month: entryData.month || '',
+    year: entryData.year || new Date().getFullYear(),
+  };
+};
+
+/**
  * Fetch all time entries across all attorneys
  * Uses collectionGroup to query the nested 'entries' subcollections
  */
@@ -46,8 +91,7 @@ export const useAllTimeEntries = (filters = {}) => {
           
           entries.push({
             id: doc.id,
-            attorneyId: attorneyId,
-            ...entryData
+            ...normalizeEntry(entryData, attorneyId)
           });
         });
 
@@ -120,8 +164,7 @@ export const useAttorneyEntries = (attorneyId) => {
         
         const entries = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          attorneyId: attorneyId,
-          ...doc.data()
+          ...normalizeEntry(doc.data(), attorneyId)
         }));
 
         setData(entries);

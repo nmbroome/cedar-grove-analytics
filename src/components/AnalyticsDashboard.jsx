@@ -5,6 +5,87 @@ import { useAllTimeEntries, useAttorneys } from '../hooks/useFirestoreData';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+// Format currency - omit .00 decimals
+const formatCurrency = (amount) => {
+  const rounded = Math.round(amount * 100) / 100;
+  if (rounded === Math.floor(rounded)) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(rounded);
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+// Format hours - round to .1, omit .0 decimals
+const formatHours = (hours) => {
+  const rounded = Math.round(hours * 10) / 10;
+  if (rounded === Math.floor(rounded)) {
+    return Math.floor(rounded).toString();
+  }
+  return rounded.toFixed(1);
+};
+
+// Custom tooltip formatter for charts - shows only the hovered item
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <p className="font-medium text-gray-900 mb-1">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} style={{ color: entry.color }} className="text-sm">
+            {entry.name}: {entry.name.toLowerCase().includes('earning') ? formatCurrency(entry.value) : `${formatHours(entry.value)}h`}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// Tooltip that shows only a single bar value (for charts with multiple bar series)
+// Uses the activePayload to filter which bar is actually being hovered
+// Tooltip that shows total hours by default, or specific bar when directly hovered
+const PerBarTooltip = ({ active, payload, label, hoveredDataKey }) => {
+  if (active && payload && payload.length > 0) {
+    // If hovering a specific bar, show only that bar's value
+    if (hoveredDataKey) {
+      const filteredPayload = payload.filter(p => p.dataKey === hoveredDataKey);
+      if (filteredPayload.length === 0) return null;
+      
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-gray-900 mb-1">{label}</p>
+          {filteredPayload.map((entry, index) => (
+            <p key={index} style={{ color: entry.color }} className="text-sm">
+              {entry.name}: {formatHours(entry.value)}h
+            </p>
+          ))}
+        </div>
+      );
+    }
+    
+    // Otherwise show total hours
+    const totalHours = payload.reduce((sum, entry) => sum + (entry.value || 0), 0);
+    return (
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <p className="font-medium text-gray-900 mb-1">{label}</p>
+        <p className="text-sm text-gray-700">
+          Total Hours: <span className="font-semibold">{formatHours(totalHours)}h</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 const CedarGroveAnalytics = () => {
   const [selectedView, setSelectedView] = useState('overview');
   const [selectedAttorney, setSelectedAttorney] = useState(null);
@@ -16,6 +97,7 @@ const CedarGroveAnalytics = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [hoveredBarKey, setHoveredBarKey] = useState(null);
 
   // Fetch data from Firebase
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
@@ -29,6 +111,33 @@ const CedarGroveAnalytics = () => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'];
     return months.findIndex(m => m.toLowerCase() === monthName?.toLowerCase()) + 1 || 1;
+  };
+
+  // Helper function to get date from entry (handles billableDate, opsDate, or year/month)
+  const getEntryDate = (entry) => {
+    // Try billableDate first (new format)
+    if (entry.billableDate?.toDate) {
+      return entry.billableDate.toDate();
+    }
+    if (entry.billableDate) {
+      return new Date(entry.billableDate);
+    }
+    // Try opsDate
+    if (entry.opsDate?.toDate) {
+      return entry.opsDate.toDate();
+    }
+    if (entry.opsDate) {
+      return new Date(entry.opsDate);
+    }
+    // Try date field
+    if (entry.date?.toDate) {
+      return entry.date.toDate();
+    }
+    if (entry.date) {
+      return new Date(entry.date);
+    }
+    // Fallback to year/month
+    return new Date(entry.year, getMonthNumber(entry.month) - 1);
   };
 
   // Create attorney name map
@@ -72,18 +181,16 @@ const CedarGroveAnalytics = () => {
     }
 
     return allEntries.filter(entry => {
-      // Create a date from year and month
-      const entryDate = new Date(entry.year, getMonthNumber(entry.month) - 1);
+      const entryDate = getEntryDate(entry);
       return entryDate >= startDate && entryDate <= endDate;
     });
   }, [allEntries, dateRange, customDateStart, customDateEnd]);
 
-  // Process attorney data
+  // Process attorney data - updated to use new field names
   const attorneyData = useMemo(() => {
     const attorneyStats = {};
 
     filteredEntries.forEach(entry => {
-      // Attorney ID is the document name (e.g., "Ohta")
       const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
       
       if (!attorneyStats[attorneyName]) {
@@ -91,7 +198,8 @@ const CedarGroveAnalytics = () => {
           name: attorneyName,
           billable: 0,
           ops: 0,
-          target: 150, // Default target
+          earnings: 0,
+          target: 150,
           billableTarget: 100,
           opsTarget: 50,
           role: 'Attorney',
@@ -100,38 +208,37 @@ const CedarGroveAnalytics = () => {
         };
       }
 
-      // Get hours - use 'hours' field (primary hours)
-      const primaryHours = parseFloat(entry.hours) || 0;
-      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
-      const totalHours = primaryHours + secondaryHours;
+      // Use normalized field names from useFirestoreData
+      const billableHours = entry.billableHours || 0;
+      const opsHours = entry.opsHours || 0;
+      const earnings = entry.billablesEarnings || 0;
 
-      // Get category - use billingCategory as primary
-      const category = entry.billingCategory || entry.category || 'Other';
+      // Add billable hours
+      attorneyStats[attorneyName].billable += billableHours;
       
-      // Get client - prefer 'client' field, fallback to 'company'
-      const client = entry.client || entry.company || 'Unknown';
+      // Add ops hours
+      attorneyStats[attorneyName].ops += opsHours;
+      
+      // Add earnings
+      attorneyStats[attorneyName].earnings += earnings;
 
-      // Determine if billable or ops based on the 'ops' field or category
-      // If 'ops' field exists and is not empty/null, it's ops time
-      if (entry.ops && entry.ops !== '' && entry.ops !== 'null') {
-        // This is ops time
-        attorneyStats[attorneyName].ops += totalHours;
-      } else {
-        // This is billable time
-        attorneyStats[attorneyName].billable += totalHours;
-      }
+      // Get category for transaction tracking
+      const category = entry.billingCategory || entry.category || 'Other';
+      const client = entry.client || 'Unknown';
 
       // Track transaction types (by billingCategory)
-      if (!attorneyStats[attorneyName].transactions[category]) {
-        attorneyStats[attorneyName].transactions[category] = 0;
+      if (billableHours > 0) {
+        if (!attorneyStats[attorneyName].transactions[category]) {
+          attorneyStats[attorneyName].transactions[category] = 0;
+        }
+        attorneyStats[attorneyName].transactions[category] += billableHours;
       }
-      attorneyStats[attorneyName].transactions[category] += totalHours;
 
       // Track clients
       if (!attorneyStats[attorneyName].clients[client]) {
         attorneyStats[attorneyName].clients[client] = 0;
       }
-      attorneyStats[attorneyName].clients[client] += totalHours;
+      attorneyStats[attorneyName].clients[client] += billableHours + opsHours;
     });
 
     // Convert to array and add top transactions
@@ -144,35 +251,40 @@ const CedarGroveAnalytics = () => {
     }));
   }, [filteredEntries, attorneyMap]);
 
-  // Process transaction data
+  // Process transaction data - updated to use new field names
   const transactionData = useMemo(() => {
     const transactionStats = {};
 
     filteredEntries.forEach(entry => {
       const category = entry.billingCategory || entry.category || 'Other';
-      const primaryHours = parseFloat(entry.hours) || 0;
-      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
-      const totalHours = primaryHours + secondaryHours;
+      const billableHours = entry.billableHours || 0;
+      const earnings = entry.billablesEarnings || 0;
 
-      if (!transactionStats[category]) {
-        transactionStats[category] = {
-          type: category,
-          totalHours: 0,
-          count: 0
-        };
+      // Only count entries with billable hours for transaction stats
+      if (billableHours > 0) {
+        if (!transactionStats[category]) {
+          transactionStats[category] = {
+            type: category,
+            totalHours: 0,
+            totalEarnings: 0,
+            count: 0
+          };
+        }
+
+        transactionStats[category].totalHours += billableHours;
+        transactionStats[category].totalEarnings += earnings;
+        transactionStats[category].count += 1;
       }
-
-      transactionStats[category].totalHours += totalHours;
-      transactionStats[category].count += 1;
     });
 
     return Object.values(transactionStats).map(stat => ({
       ...stat,
-      avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0
+      avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0,
+      avgEarnings: stat.count > 0 ? (stat.totalEarnings / stat.count).toFixed(2) : 0
     })).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredEntries]);
 
-  // Process client data
+  // Process client data - updated to use new field names
   const clientData = useMemo(() => {
     const clientStats = {};
     const now = new Date();
@@ -180,27 +292,20 @@ const CedarGroveAnalytics = () => {
     sixMonthsAgo.setMonth(now.getMonth() - 6);
 
     filteredEntries.forEach(entry => {
-      const clientName = entry.client || entry.company || 'Unknown';
-      const primaryHours = parseFloat(entry.hours) || 0;
-      const secondaryHours = parseFloat(entry.secondaryHours) || 0;
-      const totalHours = primaryHours + secondaryHours;
+      const clientName = entry.client || 'Unknown';
+      const billableHours = entry.billableHours || 0;
+      const opsHours = entry.opsHours || 0;
+      const totalHours = billableHours + opsHours;
       const category = entry.billingCategory || entry.category || 'Other';
-      
-      // Use the 'date' field if available, otherwise construct from year/month
-      let entryDate;
-      if (entry.date && entry.date.toDate) {
-        entryDate = entry.date.toDate(); // Firestore Timestamp
-      } else if (entry.date) {
-        entryDate = new Date(entry.date);
-      } else {
-        entryDate = new Date(entry.year, getMonthNumber(entry.month) - 1);
-      }
+      const earnings = entry.billablesEarnings || 0;
+      const entryDate = getEntryDate(entry);
 
       if (!clientStats[clientName]) {
         clientStats[clientName] = {
           name: clientName,
           monthlyHours: 0,
           annualHours: 0,
+          totalEarnings: 0,
           uniqueTransactions: new Set(),
           transactionHours: 0,
           transactionCount: 0,
@@ -211,6 +316,7 @@ const CedarGroveAnalytics = () => {
 
       clientStats[clientName].annualHours += totalHours;
       clientStats[clientName].monthlyHours += totalHours;
+      clientStats[clientName].totalEarnings += earnings;
       clientStats[clientName].uniqueTransactions.add(category);
       clientStats[clientName].transactionCount += 1;
       clientStats[clientName].transactionHours += totalHours;
@@ -222,8 +328,9 @@ const CedarGroveAnalytics = () => {
 
     return Object.values(clientStats).map(client => ({
       name: client.name,
-      monthlyHours: Math.round(client.monthlyHours / 12), // Approximate
+      monthlyHours: Math.round(client.monthlyHours / 12),
       annualHours: Math.round(client.annualHours),
+      totalEarnings: client.totalEarnings.toFixed(2),
       uniqueTransactions: client.uniqueTransactions.size,
       avgHoursPerTransaction: client.transactionCount > 0 
         ? (client.transactionHours / client.transactionCount).toFixed(1) 
@@ -234,32 +341,29 @@ const CedarGroveAnalytics = () => {
     }));
   }, [filteredEntries]);
 
-  // Process ops data
+  // Process ops data - updated to use new field names (opsHours, opsCategory)
   const opsData = useMemo(() => {
     const opsStats = {};
     let totalOpsHours = 0;
 
     filteredEntries.forEach(entry => {
-      // Check if this is an ops entry by looking at the 'ops' field
-      const isOps = entry.ops && entry.ops !== '' && entry.ops !== 'null';
+      const opsHours = entry.opsHours || 0;
       
-      if (isOps) {
-        const category = entry.ops || 'Other Ops'; // Use the ops field as the category
-        const primaryHours = parseFloat(entry.hours) || 0;
-        const secondaryHours = parseFloat(entry.secondaryHours) || 0;
-        const totalHours = primaryHours + secondaryHours;
+      if (opsHours > 0) {
+        // Use opsCategory if available, fallback to ops field, then 'Other Ops'
+        const category = entry.opsCategory || entry.ops || 'Other Ops';
         
         if (!opsStats[category]) {
           opsStats[category] = 0;
         }
-        opsStats[category] += totalHours;
-        totalOpsHours += totalHours;
+        opsStats[category] += opsHours;
+        totalOpsHours += opsHours;
       }
     });
 
     return Object.entries(opsStats).map(([category, hours]) => ({
       category,
-      hours: Math.round(hours * 10) / 10, // Round to 1 decimal
+      hours: Math.round(hours * 10) / 10,
       percentage: totalOpsHours > 0 ? Math.round((hours / totalOpsHours) * 100) : 0
     })).sort((a, b) => b.hours - a.hours);
   }, [filteredEntries]);
@@ -284,6 +388,7 @@ const CedarGroveAnalytics = () => {
 
   const totalBillable = attorneyData.reduce((acc, att) => acc + att.billable, 0);
   const totalOps = attorneyData.reduce((acc, att) => acc + att.ops, 0);
+  const totalEarnings = attorneyData.reduce((acc, att) => acc + att.earnings, 0);
   const totalBillableTarget = attorneyData.reduce((acc, att) => acc + att.billableTarget, 0);
   const totalOpsTarget = attorneyData.reduce((acc, att) => acc + att.opsTarget, 0);
 
@@ -484,8 +589,8 @@ const CedarGroveAnalytics = () => {
             </div>
 
             {/* KPI Cards */}
-            <div className="flex justify-between gap-3 w-full">
-              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-gray-600 text-sm font-medium">Avg Utilization</span>
                   <Activity className="w-5 h-5 text-blue-500" />
@@ -493,68 +598,66 @@ const CedarGroveAnalytics = () => {
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-4xl font-bold text-gray-900">{avgUtilization}%</div>
                 </div>
-                <div className="flex items-center justify-center text-sm text-gray-600">
+                <div className="text-sm text-gray-600 text-center">
                   {attorneyData.length} attorneys
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-gray-600 text-sm font-medium">Time Split</span>
-                  <DollarSign className="w-5 h-5 text-purple-500" />
+                  <Clock className="w-5 h-5 text-purple-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex items-baseline gap-1.5">
                     <div className="text-3xl font-bold text-blue-600">
-                      {Math.round((totalBillable / (totalBillable + totalOps)) * 100)}%
+                      {totalBillable + totalOps > 0 ? Math.round((totalBillable / (totalBillable + totalOps)) * 100) : 0}%
                     </div>
                     <div className="text-xl text-gray-400">/</div>
                     <div className="text-3xl font-bold text-green-600">
-                      {Math.round((totalOps / (totalBillable + totalOps)) * 100)}%
+                      {totalBillable + totalOps > 0 ? Math.round((totalOps / (totalBillable + totalOps)) * 100) : 0}%
                     </div>
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 text-center">Billable / Ops</div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-gray-600 text-sm font-medium">Total Billable</span>
                   <Clock className="w-5 h-5 text-green-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <div className="text-4xl font-bold text-gray-900">{Math.round(totalBillable)}h</div>
+                  <div className="text-4xl font-bold text-gray-900">{formatHours(totalBillable)}h</div>
                 </div>
-                <div className="text-sm text-gray-600 text-center leading-tight">
+                <div className="text-sm text-gray-600 text-center">
                   {totalBillableTarget > 0 ? Math.round((totalBillable / totalBillableTarget) * 100) : 0}% of target
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-gray-600 text-sm font-medium">Total Ops</span>
                   <Users className="w-5 h-5 text-orange-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <div className="text-4xl font-bold text-gray-900">{Math.round(totalOps)}h</div>
+                  <div className="text-4xl font-bold text-gray-900">{formatHours(totalOps)}h</div>
                 </div>
-                <div className="text-sm text-gray-600 text-center leading-tight">
+                <div className="text-sm text-gray-600 text-center">
                   {totalOpsTarget > 0 ? Math.round((totalOps / totalOpsTarget) * 100) : 0}% of target
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between flex-1">
+              <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-600 text-sm font-medium">Billable Ratio</span>
-                  <TrendingUp className="w-5 h-5 text-indigo-500" />
+                  <span className="text-gray-600 text-sm font-medium">Total Earnings</span>
+                  <DollarSign className="w-5 h-5 text-emerald-500" />
                 </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <div className="text-4xl font-bold text-gray-900">
-                    {totalOps > 0 ? (totalBillable / totalOps).toFixed(1) : '0'}:1
-                  </div>
+                  <div className="text-3xl font-bold text-gray-900">{formatCurrency(totalEarnings)}</div>
                 </div>
-                <div className="text-sm text-gray-600 text-center leading-tight">
-                  Billable to Ops
+                <div className="text-sm text-gray-600 text-center">
+                  Billable earnings
                 </div>
               </div>
             </div>
@@ -569,9 +672,42 @@ const CedarGroveAnalytics = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="type" angle={-15} textAnchor="end" height={80} />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   <Bar dataKey="totalHours" fill="#0088FE" name="Total Hours" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Billable vs Ops Time by Attorney */}
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Billable vs Ops Time by Attorney - {getDateRangeLabel()}
+              </h3>
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={attorneyData} barGap={0} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
+                  <YAxis />
+                  <Tooltip 
+                    content={<PerBarTooltip hoveredDataKey={hoveredBarKey} />}
+                    cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  />
+                  <Legend />
+                  <Bar 
+                    dataKey="billable" 
+                    fill="#0088FE" 
+                    name="Billable Hours"
+                    onMouseEnter={() => setHoveredBarKey('billable')}
+                    onMouseLeave={() => setHoveredBarKey(null)}
+                  />
+                  <Bar 
+                    dataKey="ops" 
+                    fill="#00C49F" 
+                    name="Ops Hours"
+                    onMouseEnter={() => setHoveredBarKey('ops')}
+                    onMouseLeave={() => setHoveredBarKey(null)}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -605,6 +741,9 @@ const CedarGroveAnalytics = () => {
                       Total
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Earnings
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Utilization
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -622,13 +761,16 @@ const CedarGroveAnalytics = () => {
                           {attorney.name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {Math.round(attorney.billable)}h
+                          {formatHours(attorney.billable)}h
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {Math.round(attorney.ops)}h
+                          {formatHours(attorney.ops)}h
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {Math.round(total)}h
+                          {formatHours(total)}h
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                          {formatCurrency(attorney.earnings)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span
@@ -668,14 +810,29 @@ const CedarGroveAnalytics = () => {
                 Billable vs Ops Time by Attorney
               </h3>
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={attorneyData}>
+                <BarChart data={attorneyData} barGap={0} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip 
+                    content={<PerBarTooltip hoveredDataKey={hoveredBarKey} />}
+                    cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  />
                   <Legend />
-                  <Bar dataKey="billable" fill="#0088FE" name="Billable Hours" />
-                  <Bar dataKey="ops" fill="#00C49F" name="Ops Hours" />
+                  <Bar 
+                    dataKey="billable" 
+                    fill="#0088FE" 
+                    name="Billable Hours"
+                    onMouseEnter={() => setHoveredBarKey('billable')}
+                    onMouseLeave={() => setHoveredBarKey(null)}
+                  />
+                  <Bar 
+                    dataKey="ops" 
+                    fill="#00C49F" 
+                    name="Ops Hours"
+                    onMouseEnter={() => setHoveredBarKey('ops')}
+                    onMouseLeave={() => setHoveredBarKey(null)}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -709,6 +866,9 @@ const CedarGroveAnalytics = () => {
                       Total Hours
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Earnings
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       % of Total
                     </th>
                   </tr>
@@ -729,7 +889,10 @@ const CedarGroveAnalytics = () => {
                           {txn.count}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {Math.round(txn.totalHours)}h
+                          {formatHours(txn.totalHours)}h
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                          {formatCurrency(txn.totalEarnings)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {percentage}%
@@ -751,7 +914,7 @@ const CedarGroveAnalytics = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="type" type="category" width={150} />
-                  <Tooltip />
+                  <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="avgHours" fill="#FFBB28" name="Avg Hours" />
                 </BarChart>
               </ResponsiveContainer>
@@ -760,7 +923,7 @@ const CedarGroveAnalytics = () => {
         )}
 
         {/* Ops View */}
-        {selectedView === 'ops' && opsData.length > 0 && (
+        {selectedView === 'ops' && (
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
@@ -769,64 +932,72 @@ const CedarGroveAnalytics = () => {
               </span>
             </div>
 
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ops Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Hours
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      % of Total Ops
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {opsData.map((ops, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {ops.category}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {ops.hours}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {ops.percentage}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {opsData.length > 0 ? (
+              <>
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ops Category
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Total Hours
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          % of Total Ops
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {opsData.map((ops, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {ops.category}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {ops.hours}h
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {ops.percentage}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            {/* Ops Distribution Chart */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Ops Time Distribution
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={opsData}
-                    dataKey="percentage"
-                    nameKey="category"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={renderCustomLabel}
-                  >
-                    {opsData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                {/* Ops Distribution Chart */}
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Ops Time Distribution
+                  </h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={opsData}
+                        dataKey="percentage"
+                        nameKey="category"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label={renderCustomLabel}
+                      >
+                        {opsData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white p-8 rounded-lg shadow text-center">
+                <div className="text-gray-500">No ops data available for the selected date range.</div>
+              </div>
+            )}
           </div>
         )}
 
@@ -895,13 +1066,19 @@ const CedarGroveAnalytics = () => {
                       onClick={() => handleSort('annualHours')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Annual Hours {sortConfig.key === 'annualHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Total Hours {sortConfig.key === 'annualHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => handleSort('totalEarnings')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Earnings {sortConfig.key === 'totalEarnings' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleSort('uniqueTransactions')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Unique Transactions {sortConfig.key === 'uniqueTransactions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Transaction Types {sortConfig.key === 'uniqueTransactions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleSort('lastActivity')}
@@ -931,6 +1108,9 @@ const CedarGroveAnalytics = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {client.annualHours}h
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                        {formatCurrency(parseFloat(client.totalEarnings))}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {client.uniqueTransactions}
                       </td>
@@ -947,15 +1127,15 @@ const CedarGroveAnalytics = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Annual Hours by Client
+                  Hours by Client
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={clientData.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="annualHours" fill="#0088FE" name="Annual Hours" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="annualHours" fill="#0088FE" name="Total Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -969,7 +1149,7 @@ const CedarGroveAnalytics = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="uniqueTransactions" fill="#00C49F" name="Unique Transaction Types" />
                   </BarChart>
                 </ResponsiveContainer>

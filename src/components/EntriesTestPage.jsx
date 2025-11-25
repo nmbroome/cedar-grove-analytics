@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAllTimeEntries, useAttorneys } from '../hooks/useFirestoreData';
-import { Search, Download, Filter, Calendar } from 'lucide-react';
+import { Search, Download, Filter, Calendar, DollarSign } from 'lucide-react';
 
 function EntriesTestPage() {
   const { data: allEntries, loading: entriesLoading, error } = useAllTimeEntries();
@@ -8,7 +8,7 @@ function EntriesTestPage() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAttorney, setSelectedAttorney] = useState('all');
-  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'billableDate', direction: 'desc' });
 
   const loading = entriesLoading || attorneysLoading;
 
@@ -41,7 +41,11 @@ function EntriesTestPage() {
       grouped[attorneyName].push({
         ...entry,
         attorneyName,
-        totalHours: (parseFloat(entry.hours) || 0) + (parseFloat(entry.secondaryHours) || 0)
+        // Use normalized fields from hook
+        billableHours: entry.billableHours || 0,
+        opsHours: entry.opsHours || 0,
+        totalHours: entry.totalHours || (entry.billableHours || 0) + (entry.opsHours || 0),
+        billablesEarnings: entry.billablesEarnings || 0
       });
     });
 
@@ -53,7 +57,6 @@ function EntriesTestPage() {
     let entries = [];
 
     if (selectedAttorney === 'all') {
-      // Flatten all entries
       entries = Object.values(entriesByAttorney).flat();
     } else {
       entries = entriesByAttorney[selectedAttorney] || [];
@@ -69,6 +72,7 @@ function EntriesTestPage() {
           entry.billingCategory?.toLowerCase().includes(searchLower) ||
           entry.category?.toLowerCase().includes(searchLower) ||
           entry.ops?.toLowerCase().includes(searchLower) ||
+          entry.opsCategory?.toLowerCase().includes(searchLower) ||
           entry.notes?.toLowerCase().includes(searchLower)
         );
       });
@@ -80,14 +84,27 @@ function EntriesTestPage() {
         let aVal = a[sortConfig.key];
         let bVal = b[sortConfig.key];
 
-        // Handle date objects
-        if (sortConfig.key === 'date') {
-          aVal = a.date?.toDate ? a.date.toDate() : new Date(a.year, getMonthNumber(a.month) - 1);
-          bVal = b.date?.toDate ? b.date.toDate() : new Date(b.year, getMonthNumber(b.month) - 1);
+        // Handle date objects - use billableDate or opsDate
+        if (sortConfig.key === 'billableDate' || sortConfig.key === 'opsDate') {
+          if (a[sortConfig.key]?.toDate) {
+            aVal = a[sortConfig.key].toDate();
+          } else if (a[sortConfig.key]) {
+            aVal = new Date(a[sortConfig.key]);
+          } else {
+            aVal = new Date(a.year, getMonthNumber(a.month) - 1);
+          }
+          
+          if (b[sortConfig.key]?.toDate) {
+            bVal = b[sortConfig.key].toDate();
+          } else if (b[sortConfig.key]) {
+            bVal = new Date(b[sortConfig.key]);
+          } else {
+            bVal = new Date(b.year, getMonthNumber(b.month) - 1);
+          }
         }
 
         // Handle numbers
-        if (sortConfig.key === 'totalHours' || sortConfig.key === 'hours' || sortConfig.key === 'secondaryHours') {
+        if (['totalHours', 'billableHours', 'opsHours', 'billablesEarnings'].includes(sortConfig.key)) {
           aVal = parseFloat(aVal) || 0;
           bVal = parseFloat(bVal) || 0;
         }
@@ -112,38 +129,60 @@ function EntriesTestPage() {
     }));
   };
 
+  const formatDate = (entry) => {
+    // Try billableDate first
+    if (entry.billableDate?.toDate) {
+      return entry.billableDate.toDate().toLocaleDateString();
+    }
+    if (entry.billableDate) {
+      return new Date(entry.billableDate).toLocaleDateString();
+    }
+    // Fallback to month/year
+    return `${entry.month} ${entry.year}`;
+  };
+
+  const formatOpsDate = (entry) => {
+    if (entry.opsDate?.toDate) {
+      return entry.opsDate.toDate().toLocaleDateString();
+    }
+    if (entry.opsDate) {
+      return new Date(entry.opsDate).toLocaleDateString();
+    }
+    return '-';
+  };
+
   const exportToCSV = () => {
     const headers = [
       'Attorney',
       'Client',
-      'Company',
-      'Primary Hours',
-      'Secondary Hours',
+      'Billable Hours',
+      'Ops Hours',
       'Total Hours',
+      'Billables Earnings',
       'Billing Category',
-      'Category',
+      'Ops Category',
       'Ops',
       'Month',
       'Year',
-      'Date',
-      'Flat Fee',
+      'Billable Date',
+      'Ops Date',
       'Notes'
     ];
 
     const rows = filteredEntries.map(entry => [
       entry.attorneyName,
       entry.client || '',
-      entry.company || '',
-      entry.hours || 0,
-      entry.secondaryHours || 0,
+      entry.billableHours || 0,
+      entry.opsHours || 0,
       entry.totalHours,
+      entry.billablesEarnings || 0,
       entry.billingCategory || '',
-      entry.category || '',
+      entry.opsCategory || '',
       entry.ops || '',
       entry.month || '',
       entry.year || '',
-      entry.date ? new Date(entry.date.toDate()).toLocaleDateString() : '',
-      entry.flatFee || '',
+      formatDate(entry),
+      formatOpsDate(entry),
       entry.notes || ''
     ]);
 
@@ -160,28 +199,25 @@ function EntriesTestPage() {
     a.click();
   };
 
-  // Calculate summary stats
+  // Calculate summary stats - updated for new fields
   const summaryStats = useMemo(() => {
     const stats = {
       totalEntries: filteredEntries.length,
       totalHours: 0,
       totalBillableHours: 0,
       totalOpsHours: 0,
+      totalEarnings: 0,
       uniqueClients: new Set(),
       uniqueCategories: new Set()
     };
 
     filteredEntries.forEach(entry => {
-      stats.totalHours += entry.totalHours;
-      
-      if (entry.ops && entry.ops !== '' && entry.ops !== 'null') {
-        stats.totalOpsHours += entry.totalHours;
-      } else {
-        stats.totalBillableHours += entry.totalHours;
-      }
+      stats.totalBillableHours += entry.billableHours || 0;
+      stats.totalOpsHours += entry.opsHours || 0;
+      stats.totalHours += entry.totalHours || 0;
+      stats.totalEarnings += entry.billablesEarnings || 0;
 
       if (entry.client) stats.uniqueClients.add(entry.client);
-      if (entry.company) stats.uniqueClients.add(entry.company);
       if (entry.billingCategory) stats.uniqueCategories.add(entry.billingCategory);
     });
 
@@ -191,6 +227,32 @@ function EntriesTestPage() {
       uniqueCategories: stats.uniqueCategories.size
     };
   }, [filteredEntries]);
+
+  const formatCurrency = (amount) => {
+    const rounded = Math.round(amount * 100) / 100;
+    if (rounded === Math.floor(rounded)) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(rounded);
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const formatHours = (hours) => {
+    const rounded = Math.round(hours * 10) / 10;
+    if (rounded === Math.floor(rounded)) {
+      return Math.floor(rounded).toString();
+    }
+    return rounded.toFixed(1);
+  };
 
   if (loading) {
     return (
@@ -230,7 +292,7 @@ function EntriesTestPage() {
           <div className="flex items-center justify-between mb-2">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Time Entries Test View</h1>
-              <p className="text-gray-600 mt-1">View and export all time entries by attorney</p>
+              <p className="text-gray-600 mt-1">View and export all time entries by attorney (Updated for new data format)</p>
             </div>
             <button
               onClick={exportToCSV}
@@ -242,8 +304,8 @@ function EntriesTestPage() {
           </div>
         </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {/* Summary Stats - Updated for new fields */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600">Total Entries</div>
             <div className="text-2xl font-bold text-gray-900 mt-1">
@@ -253,19 +315,25 @@ function EntriesTestPage() {
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600">Total Hours</div>
             <div className="text-2xl font-bold text-blue-600 mt-1">
-              {summaryStats.totalHours.toFixed(1)}h
+              {formatHours(summaryStats.totalHours)}h
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600">Billable Hours</div>
             <div className="text-2xl font-bold text-green-600 mt-1">
-              {summaryStats.totalBillableHours.toFixed(1)}h
+              {formatHours(summaryStats.totalBillableHours)}h
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600">Ops Hours</div>
             <div className="text-2xl font-bold text-orange-600 mt-1">
-              {summaryStats.totalOpsHours.toFixed(1)}h
+              {formatHours(summaryStats.totalOpsHours)}h
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-600">Total Earnings</div>
+            <div className="text-2xl font-bold text-emerald-600 mt-1">
+              {formatCurrency(summaryStats.totalEarnings)}
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
@@ -316,7 +384,7 @@ function EntriesTestPage() {
           </div>
         </div>
 
-        {/* Entries Table */}
+        {/* Entries Table - Updated for new fields */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -342,22 +410,16 @@ function EntriesTestPage() {
                     Client {sortConfig.key === 'client' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    onClick={() => handleSort('company')}
+                    onClick={() => handleSort('billableHours')}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   >
-                    Company {sortConfig.key === 'company' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    Billable {sortConfig.key === 'billableHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    onClick={() => handleSort('hours')}
+                    onClick={() => handleSort('opsHours')}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   >
-                    Hours {sortConfig.key === 'hours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th 
-                    onClick={() => handleSort('secondaryHours')}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  >
-                    Secondary {sortConfig.key === 'secondaryHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    Ops {sortConfig.key === 'opsHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
                     onClick={() => handleSort('totalHours')}
@@ -366,22 +428,28 @@ function EntriesTestPage() {
                     Total {sortConfig.key === 'totalHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
+                    onClick={() => handleSort('billablesEarnings')}
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  >
+                    Earnings {sortConfig.key === 'billablesEarnings' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th 
                     onClick={() => handleSort('billingCategory')}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   >
                     Category {sortConfig.key === 'billingCategory' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    onClick={() => handleSort('ops')}
+                    onClick={() => handleSort('opsCategory')}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   >
-                    Ops {sortConfig.key === 'ops' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    Ops Cat {sortConfig.key === 'opsCategory' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    onClick={() => handleSort('month')}
+                    onClick={() => handleSort('billableDate')}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   >
-                    Date {sortConfig.key === 'month' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    Date {sortConfig.key === 'billableDate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Notes
@@ -404,36 +472,40 @@ function EntriesTestPage() {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {entry.client || '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {entry.company || '-'}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600 font-medium">
+                        {entry.billableHours > 0 ? `${formatHours(entry.billableHours)}h` : '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {entry.hours || 0}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-orange-600 font-medium">
+                        {entry.opsHours > 0 ? `${formatHours(entry.opsHours)}h` : '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {entry.secondaryHours || 0}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {formatHours(entry.totalHours)}h
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-blue-600">
-                        {entry.totalHours.toFixed(1)}h
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        <span className="inline-flex px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                          {entry.billingCategory || entry.category || '-'}
-                        </span>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600 font-medium">
+                        {entry.billablesEarnings > 0 ? formatCurrency(entry.billablesEarnings) : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {entry.ops ? (
+                        {entry.billingCategory ? (
+                          <span className="inline-flex px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                            {entry.billingCategory}
+                          </span>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {entry.opsCategory ? (
                           <span className="inline-flex px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-800">
+                            {entry.opsCategory}
+                          </span>
+                        ) : entry.ops ? (
+                          <span className="inline-flex px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
                             {entry.ops}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                        ) : '-'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {entry.month} {entry.year}
+                          {formatDate(entry)}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
@@ -447,17 +519,16 @@ function EntriesTestPage() {
           </div>
         </div>
 
-        {/* Attorney Breakdown */}
+        {/* Attorney Breakdown - Updated for new fields */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Entries by Attorney</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {attorneyList.map(attorney => {
               const entries = entriesByAttorney[attorney];
               const totalHours = entries.reduce((sum, e) => sum + e.totalHours, 0);
-              const billableHours = entries.filter(e => !e.ops || e.ops === '' || e.ops === 'null')
-                .reduce((sum, e) => sum + e.totalHours, 0);
-              const opsHours = entries.filter(e => e.ops && e.ops !== '' && e.ops !== 'null')
-                .reduce((sum, e) => sum + e.totalHours, 0);
+              const billableHours = entries.reduce((sum, e) => sum + (e.billableHours || 0), 0);
+              const opsHours = entries.reduce((sum, e) => sum + (e.opsHours || 0), 0);
+              const totalEarnings = entries.reduce((sum, e) => sum + (e.billablesEarnings || 0), 0);
 
               return (
                 <div 
@@ -477,15 +548,19 @@ function EntriesTestPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Total Hours:</span>
-                      <span className="font-medium text-blue-600">{totalHours.toFixed(1)}h</span>
+                      <span className="font-medium text-blue-600">{formatHours(totalHours)}h</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Billable:</span>
-                      <span className="font-medium text-green-600">{billableHours.toFixed(1)}h</span>
+                      <span className="font-medium text-green-600">{formatHours(billableHours)}h</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Ops:</span>
-                      <span className="font-medium text-orange-600">{opsHours.toFixed(1)}h</span>
+                      <span className="font-medium text-orange-600">{formatHours(opsHours)}h</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-1 mt-1">
+                      <span className="text-gray-600">Earnings:</span>
+                      <span className="font-medium text-emerald-600">{formatCurrency(totalEarnings)}</span>
                     </div>
                   </div>
                 </div>
