@@ -91,10 +91,7 @@ const CedarGroveAnalytics = () => {
   const [selectedAttorney, setSelectedAttorney] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [dateRange, setDateRange] = useState('last-month');
-  const [customDateStart, setCustomDateStart] = useState('');
-  const [customDateEnd, setCustomDateEnd] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateRange, setDateRange] = useState('current-month');
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
@@ -158,33 +155,28 @@ const CedarGroveAnalytics = () => {
     let endDate = new Date();
 
     switch (dateRange) {
-      case 'last-week':
-        startDate.setDate(now.getDate() - 7);
+      case 'current-week':
+        // Start of current week (Sunday)
+        const dayOfWeek = now.getDay();
+        startDate.setDate(now.getDate() - dayOfWeek);
+        startDate.setHours(0, 0, 0, 0);
         break;
-      case 'last-month':
-        startDate.setMonth(now.getMonth() - 1);
+      case 'current-month':
+        // Start of current month
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
-      case 'last-quarter':
-        startDate.setMonth(now.getMonth() - 3);
-        break;
-      case 'year-to-date':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      case 'custom':
-        if (customDateStart && customDateEnd) {
-          startDate = new Date(customDateStart);
-          endDate = new Date(customDateEnd);
-        }
+      case 'trailing-60':
+        startDate.setDate(now.getDate() - 60);
         break;
       default:
-        startDate.setMonth(now.getMonth() - 1);
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
     return allEntries.filter(entry => {
       const entryDate = getEntryDate(entry);
       return entryDate >= startDate && entryDate <= endDate;
     });
-  }, [allEntries, dateRange, customDateStart, customDateEnd]);
+  }, [allEntries, dateRange]);
 
   // Process attorney data - updated to use new field names
   const attorneyData = useMemo(() => {
@@ -463,16 +455,12 @@ const CedarGroveAnalytics = () => {
   };
 
   const getDateRangeLabel = () => {
-    if (dateRange === 'custom') {
-      return `${customDateStart} to ${customDateEnd}`;
-    }
     const labels = {
-      'last-week': 'Last Week',
-      'last-month': 'Last Month',
-      'last-quarter': 'Last Quarter',
-      'year-to-date': 'Year to Date',
+      'current-week': 'Current Week',
+      'current-month': 'Current Month',
+      'trailing-60': 'Trailing 60 Days',
     };
-    return labels[dateRange] || 'Last Month';
+    return labels[dateRange] || 'Current Month';
   };
 
   const renderCustomLabel = ({ hours, percentage }) => {
@@ -489,73 +477,25 @@ const CedarGroveAnalytics = () => {
             <p className="text-gray-600">Attorney time allocation and efficiency insights</p>
           </div>
           
-          {/* Date Range Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Calendar className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">{getDateRangeLabel()}</span>
-            </button>
-
-            {showDatePicker && (
-              <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-50 p-4">
-                <div className="space-y-2">
-                  {[
-                    { value: 'last-week', label: 'Last Week' },
-                    { value: 'last-month', label: 'Last Month' },
-                    { value: 'last-quarter', label: 'Last Quarter' },
-                    { value: 'year-to-date', label: 'Year to Date' },
-                  ].map(option => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        setDateRange(option.value);
-                        setShowDatePicker(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded hover:bg-gray-100 transition-colors ${
-                        dateRange === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                  
-                  <div className="border-t border-gray-200 pt-2 mt-2">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Custom Range</p>
-                    <div className="space-y-2">
-                      <input
-                        type="date"
-                        value={customDateStart}
-                        onChange={(e) => setCustomDateStart(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="Start date"
-                      />
-                      <input
-                        type="date"
-                        value={customDateEnd}
-                        onChange={(e) => setCustomDateEnd(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="End date"
-                      />
-                      <button
-                        onClick={() => {
-                          if (customDateStart && customDateEnd) {
-                            setDateRange('custom');
-                            setShowDatePicker(false);
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-                        disabled={!customDateStart || !customDateEnd}
-                      >
-                        Apply Custom Range
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* Date Range Selector - Horizontal Buttons */}
+          <div className="flex items-center gap-2">
+            {[
+              { value: 'current-week', label: 'Current Week' },
+              { value: 'current-month', label: 'Current Month' },
+              { value: 'trailing-60', label: 'Trailing 60 Days' },
+            ].map(option => (
+              <button
+                key={option.value}
+                onClick={() => setDateRange(option.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  dateRange === option.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
 
