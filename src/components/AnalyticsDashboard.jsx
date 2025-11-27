@@ -96,6 +96,10 @@ const CedarGroveAnalytics = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
+  const [attorneySortConfig, setAttorneySortConfig] = useState({ key: 'name', direction: 'asc' });
+  const [transactionSortConfig, setTransactionSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
+  const [opsSortConfig, setOpsSortConfig] = useState({ key: 'hours', direction: 'desc' });
+  const [clientSortConfig, setClientSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
 
   // Fetch data from Firebase
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
@@ -487,22 +491,231 @@ const CedarGroveAnalytics = () => {
     setSortConfig({ key, direction });
   };
 
+  const handleAttorneySort = (key) => {
+    let direction = 'desc'; // Default to high-to-low for metrics
+    if (key === 'name') {
+      direction = 'asc'; // Default to A-Z for name
+    }
+    if (attorneySortConfig.key === key) {
+      // Toggle direction if clicking same column
+      direction = attorneySortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+    setAttorneySortConfig({ key, direction });
+  };
+
+  const handleTransactionSort = (key) => {
+    let direction = 'desc'; // Default to high-to-low for metrics
+    if (key === 'type') {
+      direction = 'asc'; // Default to A-Z for type name
+    }
+    if (transactionSortConfig.key === key) {
+      // Toggle direction if clicking same column
+      direction = transactionSortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+    setTransactionSortConfig({ key, direction });
+  };
+
+  const getSortedAttorneys = () => {
+    const attorneys = [...attorneyData];
+    
+    attorneys.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (attorneySortConfig.key) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'billable':
+          aVal = a.billable;
+          bVal = b.billable;
+          break;
+        case 'ops':
+          aVal = a.ops;
+          bVal = b.ops;
+          break;
+        case 'total':
+          aVal = a.billable + a.ops;
+          bVal = b.billable + b.ops;
+          break;
+        case 'earnings':
+          aVal = a.earnings;
+          bVal = b.earnings;
+          break;
+        case 'utilization':
+          aVal = calculateUtilization(a);
+          bVal = calculateUtilization(b);
+          break;
+        default:
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+      }
+      
+      if (aVal < bVal) {
+        return attorneySortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aVal > bVal) {
+        return attorneySortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+    
+    return attorneys;
+  };
+
+  const getSortedTransactions = () => {
+    const transactions = [...transactionData];
+    const totalHours = transactions.reduce((sum, t) => sum + t.totalHours, 0);
+    
+    transactions.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (transactionSortConfig.key) {
+        case 'type':
+          aVal = a.type.toLowerCase();
+          bVal = b.type.toLowerCase();
+          break;
+        case 'avgHours':
+          aVal = parseFloat(a.avgHours);
+          bVal = parseFloat(b.avgHours);
+          break;
+        case 'count':
+          aVal = a.count;
+          bVal = b.count;
+          break;
+        case 'totalHours':
+          aVal = a.totalHours;
+          bVal = b.totalHours;
+          break;
+        case 'totalEarnings':
+          aVal = a.totalEarnings;
+          bVal = b.totalEarnings;
+          break;
+        case 'percentage':
+          aVal = totalHours > 0 ? (a.totalHours / totalHours) : 0;
+          bVal = totalHours > 0 ? (b.totalHours / totalHours) : 0;
+          break;
+        default:
+          aVal = a.totalHours;
+          bVal = b.totalHours;
+      }
+      
+      if (aVal < bVal) {
+        return transactionSortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aVal > bVal) {
+        return transactionSortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+    
+    return transactions;
+  };
+
+  const handleOpsSort = (key) => {
+    let direction = 'desc'; // Default to high-to-low for metrics
+    if (key === 'category') {
+      direction = 'asc'; // Default to A-Z for category name
+    }
+    if (opsSortConfig.key === key) {
+      direction = opsSortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+    setOpsSortConfig({ key, direction });
+  };
+
+  const getSortedOps = () => {
+    const ops = [...opsData];
+    
+    ops.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (opsSortConfig.key) {
+        case 'category':
+          aVal = a.category.toLowerCase();
+          bVal = b.category.toLowerCase();
+          break;
+        case 'hours':
+          aVal = a.hours;
+          bVal = b.hours;
+          break;
+        case 'percentage':
+          aVal = parseFloat(a.percentage);
+          bVal = parseFloat(b.percentage);
+          break;
+        default:
+          aVal = a.hours;
+          bVal = b.hours;
+      }
+      
+      if (aVal < bVal) {
+        return opsSortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aVal > bVal) {
+        return opsSortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+    
+    return ops;
+  };
+
+  const handleClientSort = (key) => {
+    let direction = 'desc'; // Default to high-to-low for metrics
+    if (key === 'name' || key === 'location' || key === 'status') {
+      direction = 'asc'; // Default to A-Z for text fields
+    }
+    if (clientSortConfig.key === key) {
+      direction = clientSortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+    setClientSortConfig({ key, direction });
+  };
+
   const getSortedClients = () => {
     let filtered = clientData.filter(client =>
       client.name.toLowerCase().includes(clientSearch.toLowerCase())
     );
 
-    if (sortConfig.key) {
-      filtered.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
+    filtered.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (clientSortConfig.key) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'status':
+          aVal = a.totalHours > 0 ? 'active' : 'inactive';
+          bVal = b.totalHours > 0 ? 'active' : 'inactive';
+          break;
+        case 'location':
+          aVal = (a.location || '').toLowerCase();
+          bVal = (b.location || '').toLowerCase();
+          break;
+        case 'totalHours':
+          aVal = a.totalHours;
+          bVal = b.totalHours;
+          break;
+        case 'totalEarnings':
+          aVal = a.totalEarnings;
+          bVal = b.totalEarnings;
+          break;
+        case 'lastActivity':
+          aVal = a.lastActivity === 'No activity' ? '' : a.lastActivity;
+          bVal = b.lastActivity === 'No activity' ? '' : b.lastActivity;
+          break;
+        default:
+          aVal = a.totalHours;
+          bVal = b.totalHours;
+      }
+      
+      if (aVal < bVal) {
+        return clientSortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aVal > bVal) {
+        return clientSortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
 
     return filtered;
   };
@@ -721,23 +934,41 @@ const CedarGroveAnalytics = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Attorney
+                    <th 
+                      onClick={() => handleAttorneySort('name')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Attorney {attorneySortConfig.key === 'name' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Billable Hours
+                    <th 
+                      onClick={() => handleAttorneySort('billable')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Billable Hours {attorneySortConfig.key === 'billable' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ops Hours
+                    <th 
+                      onClick={() => handleAttorneySort('ops')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Ops Hours {attorneySortConfig.key === 'ops' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
+                    <th 
+                      onClick={() => handleAttorneySort('total')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Total {attorneySortConfig.key === 'total' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Earnings
+                    <th 
+                      onClick={() => handleAttorneySort('earnings')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Earnings {attorneySortConfig.key === 'earnings' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Utilization
+                    <th 
+                      onClick={() => handleAttorneySort('utilization')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Utilization {attorneySortConfig.key === 'utilization' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Top Transactions
@@ -745,7 +976,7 @@ const CedarGroveAnalytics = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {attorneyData.map((attorney, idx) => {
+                  {getSortedAttorneys().map((attorney, idx) => {
                     const utilization = calculateUtilization(attorney);
                     const total = attorney.billable + attorney.ops;
                     return (
@@ -865,28 +1096,46 @@ const CedarGroveAnalytics = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Transaction Type
+                    <th 
+                      onClick={() => handleTransactionSort('type')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Transaction Type {transactionSortConfig.key === 'type' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Avg Hours
+                    <th 
+                      onClick={() => handleTransactionSort('avgHours')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Avg Hours {transactionSortConfig.key === 'avgHours' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Count
+                    <th 
+                      onClick={() => handleTransactionSort('count')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Count {transactionSortConfig.key === 'count' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Hours
+                    <th 
+                      onClick={() => handleTransactionSort('totalHours')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Total Hours {transactionSortConfig.key === 'totalHours' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Earnings
+                    <th 
+                      onClick={() => handleTransactionSort('totalEarnings')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      Total Earnings {transactionSortConfig.key === 'totalEarnings' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      % of Total
+                    <th 
+                      onClick={() => handleTransactionSort('percentage')}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    >
+                      % of Total {transactionSortConfig.key === 'percentage' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {transactionData.map((txn, idx) => {
+                  {getSortedTransactions().map((txn, idx) => {
                     const totalHours = transactionData.reduce((sum, t) => sum + t.totalHours, 0);
                     const percentage = totalHours > 0 ? ((txn.totalHours / totalHours) * 100).toFixed(1) : 0;
                     return (
@@ -950,19 +1199,28 @@ const CedarGroveAnalytics = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Ops Category
+                        <th 
+                          onClick={() => handleOpsSort('category')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        >
+                          Ops Category {opsSortConfig.key === 'category' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Hours
+                        <th 
+                          onClick={() => handleOpsSort('hours')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        >
+                          Total Hours {opsSortConfig.key === 'hours' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          % of Total Ops
+                        <th 
+                          onClick={() => handleOpsSort('percentage')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        >
+                          % of Total Ops {opsSortConfig.key === 'percentage' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {opsData.map((ops, idx) => (
+                      {getSortedOps().map((ops, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {ops.category}
@@ -1068,40 +1326,40 @@ const CedarGroveAnalytics = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th 
-                      onClick={() => handleSort('name')}
+                      onClick={() => handleClientSort('name')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Client Name {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Client Name {clientSortConfig.key === 'name' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('fbStatus')}
+                      onClick={() => handleClientSort('status')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Status {sortConfig.key === 'fbStatus' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Status {clientSortConfig.key === 'status' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('location')}
+                      onClick={() => handleClientSort('location')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Location {sortConfig.key === 'location' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Location {clientSortConfig.key === 'location' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('totalHours')}
+                      onClick={() => handleClientSort('totalHours')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Total Hours {sortConfig.key === 'totalHours' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Total Hours {clientSortConfig.key === 'totalHours' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('totalEarnings')}
+                      onClick={() => handleClientSort('totalEarnings')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Earnings {sortConfig.key === 'totalEarnings' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Earnings {clientSortConfig.key === 'totalEarnings' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
-                      onClick={() => handleSort('lastActivity')}
+                      onClick={() => handleClientSort('lastActivity')}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
-                      Last Activity {sortConfig.key === 'lastActivity' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Last Activity {clientSortConfig.key === 'lastActivity' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                   </tr>
                 </thead>
