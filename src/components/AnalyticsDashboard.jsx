@@ -91,7 +91,7 @@ const CedarGroveAnalytics = () => {
   const [selectedAttorney, setSelectedAttorney] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [dateRange, setDateRange] = useState('current-month');
+  const [dateRange, setDateRange] = useState('all-time');
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
@@ -155,6 +155,11 @@ const CedarGroveAnalytics = () => {
   // Process data based on date range
   const filteredEntries = useMemo(() => {
     if (!allEntries) return [];
+
+    // If "all-time" selected, return all entries
+    if (dateRange === 'all-time') {
+      return allEntries;
+    }
 
     const now = new Date();
     let startDate = new Date();
@@ -472,11 +477,46 @@ const CedarGroveAnalytics = () => {
 
   if (filteredEntries.length === 0) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center max-w-md">
-          <div className="text-gray-900 text-xl mb-4">No data available</div>
-          <div className="text-gray-600 mb-4">
-            No time entries found for the selected date range. Try adjusting your filters.
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Cedar Grove Analytics</h1>
+              <p className="text-gray-600">Law firm performance dashboard</p>
+            </div>
+          </div>
+
+          {/* Date Range Selector */}
+          <div className="mb-6 flex items-center gap-2">
+            {[
+              { value: 'all-time', label: 'All Time' },
+              { value: 'current-week', label: 'Current Week' },
+              { value: 'current-month', label: 'Current Month' },
+              { value: 'trailing-60', label: 'Trailing 60 Days' },
+            ].map(option => (
+              <button
+                key={option.value}
+                onClick={() => setDateRange(option.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  dateRange === option.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {/* No Data Message */}
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center max-w-md">
+              <div className="text-gray-900 text-xl mb-4">No data available</div>
+              <div className="text-gray-600">
+                No time entries found for the selected date range. Try selecting a different time period above.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -722,11 +762,12 @@ const CedarGroveAnalytics = () => {
 
   const getDateRangeLabel = () => {
     const labels = {
+      'all-time': 'All Time',
       'current-week': 'Current Week',
       'current-month': 'Current Month',
       'trailing-60': 'Trailing 60 Days',
     };
-    return labels[dateRange] || 'Current Month';
+    return labels[dateRange] || 'All Time';
   };
 
   const renderCustomLabel = ({ hours, percentage }) => {
@@ -746,6 +787,7 @@ const CedarGroveAnalytics = () => {
           {/* Date Range Selector - Horizontal Buttons */}
           <div className="flex items-center gap-2">
             {[
+              { value: 'all-time', label: 'All Time' },
               { value: 'current-week', label: 'Current Week' },
               { value: 'current-month', label: 'Current Month' },
               { value: 'trailing-60', label: 'Trailing 60 Days' },

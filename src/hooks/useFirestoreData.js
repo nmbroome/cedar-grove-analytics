@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, collectionGroup, query, where } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, waitForAuth } from '../firebase/config';
 
 /**
  * Normalize entry data to handle both old and new field names
@@ -62,6 +62,9 @@ export const useAllTimeEntries = (filters = {}) => {
         setLoading(true);
         setError(null);
 
+        // Wait for authentication before fetching
+        await waitForAuth();
+
         // Use collectionGroup to get all 'entries' across all attorneys
         let q = collectionGroup(db, 'entries');
 
@@ -122,6 +125,10 @@ export const useAttorneys = () => {
     const fetchAttorneys = async () => {
       try {
         setLoading(true);
+        
+        // Wait for authentication before fetching
+        await waitForAuth();
+        
         const querySnapshot = await getDocs(collection(db, 'attorneys'));
         const attorneyList = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -154,6 +161,10 @@ export const useClients = () => {
     const fetchClients = async () => {
       try {
         setLoading(true);
+        
+        // Wait for authentication before fetching
+        await waitForAuth();
+        
         const querySnapshot = await getDocs(collection(db, 'clients'));
         const clientList = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -191,6 +202,10 @@ export const useAttorneyEntries = (attorneyId) => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // Wait for authentication before fetching
+        await waitForAuth();
+        
         const entriesRef = collection(db, 'attorneys', attorneyId, 'entries');
         const querySnapshot = await getDocs(entriesRef);
         
