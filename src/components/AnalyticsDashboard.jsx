@@ -1,9 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search, ChevronDown } from 'lucide-react';
 import { useAllTimeEntries, useAttorneys, useClients } from '../hooks/useFirestoreData';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const COLORS = [
+  '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
+  '#82ca9d', '#ffc658', '#ff7c43', '#665191', '#a05195',
+  '#d45087', '#f95d6a', '#ff7c43', '#2f4b7c', '#003f5c',
+  '#7a5195', '#bc5090', '#ef5675', '#ff764a', '#ffa600',
+  '#488f31', '#de425b', '#69b3a2', '#404080', '#f4a261'
+];
 
 // Format currency - omit .00 decimals
 const formatCurrency = (amount) => {
@@ -50,8 +56,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// Tooltip that shows only a single bar value (for charts with multiple bar series)
-// Uses the activePayload to filter which bar is actually being hovered
 // Tooltip that shows total hours by default, or specific bar when directly hovered
 const PerBarTooltip = ({ active, payload, label, hoveredDataKey }) => {
   if (active && payload && payload.length > 0) {
@@ -92,6 +96,9 @@ const CedarGroveAnalytics = () => {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [dateRange, setDateRange] = useState('all-time');
+  const [customDateStart, setCustomDateStart] = useState('');
+  const [customDateEnd, setCustomDateEnd] = useState('');
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
@@ -100,6 +107,19 @@ const CedarGroveAnalytics = () => {
   const [transactionSortConfig, setTransactionSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [opsSortConfig, setOpsSortConfig] = useState({ key: 'hours', direction: 'desc' });
   const [clientSortConfig, setClientSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
+
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDateDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch data from Firebase
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
@@ -117,30 +137,49 @@ const CedarGroveAnalytics = () => {
   };
 
   // Helper function to get date from entry (handles billableDate, opsDate, or year/month)
+  // Converts to PST (UTC-8) for consistent date handling
   const getEntryDate = (entry) => {
+    let date;
+    
     // Try billableDate first (new format)
     if (entry.billableDate?.toDate) {
-      return entry.billableDate.toDate();
-    }
-    if (entry.billableDate) {
-      return new Date(entry.billableDate);
+      date = entry.billableDate.toDate();
+    } else if (entry.billableDate) {
+      date = new Date(entry.billableDate);
     }
     // Try opsDate
-    if (entry.opsDate?.toDate) {
-      return entry.opsDate.toDate();
-    }
-    if (entry.opsDate) {
-      return new Date(entry.opsDate);
+    else if (entry.opsDate?.toDate) {
+      date = entry.opsDate.toDate();
+    } else if (entry.opsDate) {
+      date = new Date(entry.opsDate);
     }
     // Try date field
-    if (entry.date?.toDate) {
-      return entry.date.toDate();
-    }
-    if (entry.date) {
-      return new Date(entry.date);
+    else if (entry.date?.toDate) {
+      date = entry.date.toDate();
+    } else if (entry.date) {
+      date = new Date(entry.date);
     }
     // Fallback to year/month
-    return new Date(entry.year, getMonthNumber(entry.month) - 1);
+    else {
+      date = new Date(entry.year, getMonthNumber(entry.month) - 1);
+    }
+    
+    return date;
+  };
+
+  // Helper to get current date/time in PST
+  const getPSTDate = () => {
+    const now = new Date();
+    // Convert to PST by creating a date string in PST timezone
+    const pstString = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+    return new Date(pstString);
+  };
+
+  // Helper to create a date in PST from year, month, day
+  const createPSTDate = (year, month, day, hours = 0, minutes = 0, seconds = 0, ms = 0) => {
+    // Create the date as if it's in PST
+    const date = new Date(year, month, day, hours, minutes, seconds, ms);
+    return date;
   };
 
   // Create attorney name map
@@ -152,7 +191,7 @@ const CedarGroveAnalytics = () => {
     return map;
   }, [firebaseAttorneys]);
 
-  // Process data based on date range
+  // Process data based on date range (using PST)
   const filteredEntries = useMemo(() => {
     if (!allEntries) return [];
 
@@ -161,33 +200,48 @@ const CedarGroveAnalytics = () => {
       return allEntries;
     }
 
-    const now = new Date();
-    let startDate = new Date();
-    let endDate = new Date();
+    const now = getPSTDate();
+    let startDate;
+    let endDate = new Date(now);
 
     switch (dateRange) {
       case 'current-week':
-        // Start of current week (Sunday)
+        // Start of current week (Sunday) in PST
         const dayOfWeek = now.getDay();
-        startDate.setDate(now.getDate() - dayOfWeek);
-        startDate.setHours(0, 0, 0, 0);
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
         break;
       case 'current-month':
-        // Start of current month
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Start of current month in PST
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        break;
+      case 'last-month':
+        // Start of last month to end of last month in PST
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         break;
       case 'trailing-60':
-        startDate.setDate(now.getDate() - 60);
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 0, 0, 0, 0);
+        break;
+      case 'custom':
+        if (customDateStart && customDateEnd) {
+          // Parse date strings directly to avoid timezone issues
+          const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
+          const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
+          startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+          endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+        } else {
+          return allEntries;
+        }
         break;
       default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     }
 
     return allEntries.filter(entry => {
       const entryDate = getEntryDate(entry);
       return entryDate >= startDate && entryDate <= endDate;
     });
-  }, [allEntries, dateRange]);
+  }, [allEntries, dateRange, customDateStart, customDateEnd]);
 
   // Process attorney data - updated to use new field names
   const attorneyData = useMemo(() => {
@@ -395,7 +449,8 @@ const CedarGroveAnalytics = () => {
     return { active, quiet, terminated, total };
   }, [firebaseClients]);
 
-  // Process ops data - updated to use new field names (opsHours, opsCategory)
+  // Process ops data - only use opsCategory (structured data from dropdown)
+  // Entries without a valid opsCategory are grouped into "Other"
   const opsData = useMemo(() => {
     const opsStats = {};
     let totalOpsHours = 0;
@@ -404,8 +459,10 @@ const CedarGroveAnalytics = () => {
       const opsHours = entry.opsHours || 0;
       
       if (opsHours > 0) {
-        // Use opsCategory if available, fallback to ops field, then 'Other Ops'
-        const category = entry.opsCategory || entry.ops || 'Other Ops';
+        // Use opsCategory if valid, otherwise categorize as "Other"
+        const category = (entry.opsCategory && entry.opsCategory.trim() !== '') 
+          ? entry.opsCategory 
+          : 'Other';
         
         if (!opsStats[category]) {
           opsStats[category] = 0;
@@ -470,54 +527,6 @@ const CedarGroveAnalytics = () => {
           >
             Retry
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (filteredEntries.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8 flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Cedar Grove Analytics</h1>
-              <p className="text-gray-600">Law firm performance dashboard</p>
-            </div>
-          </div>
-
-          {/* Date Range Selector */}
-          <div className="mb-6 flex items-center gap-2">
-            {[
-              { value: 'all-time', label: 'All Time' },
-              { value: 'current-week', label: 'Current Week' },
-              { value: 'current-month', label: 'Current Month' },
-              { value: 'trailing-60', label: 'Trailing 60 Days' },
-            ].map(option => (
-              <button
-                key={option.value}
-                onClick={() => setDateRange(option.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateRange === option.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          {/* No Data Message */}
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center max-w-md">
-              <div className="text-gray-900 text-xl mb-4">No data available</div>
-              <div className="text-gray-600">
-                No time entries found for the selected date range. Try selecting a different time period above.
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -761,18 +770,190 @@ const CedarGroveAnalytics = () => {
   };
 
   const getDateRangeLabel = () => {
-    const labels = {
-      'all-time': 'All Time',
-      'current-week': 'Current Week',
-      'current-month': 'Current Month',
-      'trailing-60': 'Trailing 60 Days',
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const formatDateRange = (start, end) => {
+      const startStr = `${monthNames[start.getMonth()]} ${start.getDate()}`;
+      const endStr = `${monthNames[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+      return `${startStr} - ${endStr}`;
     };
-    return labels[dateRange] || 'All Time';
+
+    if (dateRange === 'all-time') {
+      return 'All Time';
+    }
+
+    const now = getPSTDate();
+    let startDate;
+    let endDate = new Date(now);
+
+    switch (dateRange) {
+      case 'current-week':
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        return `Current Week (${formatDateRange(startDate, endDate)})`;
+      case 'current-month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        return `Current Month (${formatDateRange(startDate, endDate)})`;
+      case 'last-month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+        return `Last Month (${formatDateRange(startDate, endDate)})`;
+      case 'trailing-60':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        return `Trailing 60 Days (${formatDateRange(startDate, endDate)})`;
+      case 'custom':
+        if (customDateStart && customDateEnd) {
+          const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
+          const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
+          const start = `${monthNames[startMonth - 1]} ${startDay}`;
+          const end = `${monthNames[endMonth - 1]} ${endDay}, ${endYear}`;
+          return `${start} - ${end}`;
+        }
+        return 'Custom Range';
+      default:
+        return 'All Time';
+    }
   };
 
-  const renderCustomLabel = ({ hours, percentage }) => {
-    return `${hours}h (${percentage}%)`;
+  const handleDateRangeSelect = (value) => {
+    if (value !== 'custom') {
+      setDateRange(value);
+      setShowDateDropdown(false);
+    }
   };
+
+  const handleApplyCustomRange = () => {
+    if (customDateStart && customDateEnd) {
+      setDateRange('custom');
+      setShowDateDropdown(false);
+    }
+  };
+
+  // Custom label for pie chart - only show for slices >= 5%
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, hours, percentage }) => {
+    // Only show label if slice is >= 5%
+    if (percent < 0.05) return null;
+    
+    const RADIAN = Math.PI / 180;
+    const radius = outerRadius * 1.2;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="#374151" 
+        textAnchor={x > cx ? 'start' : 'end'} 
+        dominantBaseline="central"
+        fontSize={12}
+      >
+        {`${hours}h (${percentage}%)`}
+      </text>
+    );
+  };
+
+  // Date Range Dropdown Component
+  const DateRangeDropdown = () => (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setShowDateDropdown(!showDateDropdown)}
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+      >
+        <Calendar className="w-4 h-4 text-gray-600" />
+        <span className="text-sm font-medium text-gray-700">{getDateRangeLabel()}</span>
+        <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showDateDropdown ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showDateDropdown && (
+        <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+          {/* Preset Options */}
+          <div className="py-1">
+            {[
+              { value: 'all-time', label: 'All Time' },
+              { value: 'current-week', label: 'Current Week' },
+              { value: 'current-month', label: 'Current Month' },
+              { value: 'last-month', label: 'Last Month' },
+              { value: 'trailing-60', label: 'Trailing 60 Days' },
+            ].map(option => (
+              <button
+                key={option.value}
+                onClick={() => handleDateRangeSelect(option.value)}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
+                  dateRange === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom Range Section */}
+          <div className="border-t border-gray-200 p-4 bg-gray-50">
+            <p className="text-xs font-medium text-gray-700 mb-3 uppercase tracking-wide">Custom Range</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={customDateStart}
+                  onChange={(e) => setCustomDateStart(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={customDateEnd}
+                  onChange={(e) => setCustomDateEnd(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleApplyCustomRange}
+                disabled={!customDateStart || !customDateEnd}
+                className={`w-full px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  customDateStart && customDateEnd
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Apply Custom Range
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (filteredEntries.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Cedar Grove Analytics</h1>
+              <p className="text-gray-600">Law firm performance dashboard</p>
+            </div>
+            <DateRangeDropdown />
+          </div>
+
+          {/* No Data Message */}
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center max-w-md">
+              <div className="text-gray-900 text-xl mb-4">No data available</div>
+              <div className="text-gray-600">
+                No time entries found for the selected date range. Try selecting a different time period above.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -784,27 +965,8 @@ const CedarGroveAnalytics = () => {
             <p className="text-gray-600">Attorney time allocation and efficiency insights</p>
           </div>
           
-          {/* Date Range Selector - Horizontal Buttons */}
-          <div className="flex items-center gap-2">
-            {[
-              { value: 'all-time', label: 'All Time' },
-              { value: 'current-week', label: 'Current Week' },
-              { value: 'current-month', label: 'Current Month' },
-              { value: 'trailing-60', label: 'Trailing 60 Days' },
-            ].map(option => (
-              <button
-                key={option.value}
-                onClick={() => setDateRange(option.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateRange === option.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {/* Date Range Dropdown */}
+          <DateRangeDropdown />
         </div>
 
         {/* Navigation Tabs */}
@@ -1284,23 +1446,32 @@ const CedarGroveAnalytics = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Ops Time Distribution
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
+                  <ResponsiveContainer width="100%" height={450}>
+                    <PieChart margin={{ top: 40, right: 40, bottom: 20, left: 40 }}>
                       <Pie
                         data={opsData}
-                        dataKey="percentage"
+                        dataKey="hours"
                         nameKey="category"
                         cx="50%"
-                        cy="50%"
-                        outerRadius={100}
+                        cy="40%"
+                        outerRadius={120}
                         label={renderCustomLabel}
+                        labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
                       >
                         {opsData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
+                      <Tooltip 
+                        formatter={(value, name) => [`${value}h`, name]}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                      />
+                      <Legend 
+                        layout="horizontal" 
+                        align="center" 
+                        verticalAlign="bottom"
+                        wrapperStyle={{ paddingTop: '20px' }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
