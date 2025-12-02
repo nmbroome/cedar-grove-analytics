@@ -91,6 +91,99 @@ const PerBarTooltip = ({ active, payload, label, hoveredDataKey }) => {
   return null;
 };
 
+// Transaction row tooltip component
+const TransactionRowTooltip = ({ transaction, position, formatCurrency, formatHours }) => {
+  if (!transaction) return null;
+
+  const attorneyBreakdown = Object.entries(transaction.byAttorney || {})
+    .sort((a, b) => b[1].count - a[1].count);
+
+  // Helper to format dates (handles Firestore Timestamps and strings)
+  const formatDate = (date) => {
+    if (!date) return 'No date';
+    // Handle Firestore Timestamp
+    if (date && typeof date === 'object' && date.seconds) {
+      return new Date(date.seconds * 1000).toLocaleDateString();
+    }
+    // Handle string dates
+    if (typeof date === 'string') {
+      return date;
+    }
+    // Handle Date objects
+    if (date instanceof Date) {
+      return date.toLocaleDateString();
+    }
+    return 'No date';
+  };
+
+  return (
+    <div 
+      className="fixed z-50 bg-white border border-gray-300 rounded-xl shadow-2xl p-5"
+      style={{ 
+        left: Math.min(position.x + 15, window.innerWidth - 750),
+        top: Math.max(10, Math.min(position.y - 200, window.innerHeight - 550)),
+        width: '700px',
+      }}
+    >
+      {/* Header */}
+      <div className="font-bold text-gray-900 text-xl mb-4 pb-3 border-b-2 border-blue-200">
+        {transaction.type}
+        <span className="text-sm font-normal text-gray-500 ml-3">
+          {transaction.count} total entries • {formatHours(transaction.totalHours)}h • {formatCurrency(transaction.totalEarnings)}
+        </span>
+      </div>
+      
+      {/* Attorney Breakdown - Horizontal */}
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-gray-700 mb-2">By Attorney:</div>
+        <div className="flex flex-wrap gap-2">
+          {attorneyBreakdown.map(([attorney, stats]) => (
+            <div key={attorney} className="inline-flex items-center bg-gray-100 px-3 py-1.5 rounded-full text-sm">
+              <span className="font-medium text-gray-800">{attorney}</span>
+              <span className="text-gray-500 ml-2">({stats.count})</span>
+              <span className="text-blue-600 font-semibold ml-2">{formatHours(stats.hours)}h</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Entries Table */}
+      <div>
+        <div className="text-sm font-semibold text-gray-700 mb-2">
+          Recent Entries:
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 text-gray-600 text-xs uppercase">
+              <th className="px-3 py-2 text-left font-semibold">Date</th>
+              <th className="px-3 py-2 text-left font-semibold">Attorney</th>
+              <th className="px-3 py-2 text-left font-semibold">Client</th>
+              <th className="px-3 py-2 text-right font-semibold">Hours</th>
+              <th className="px-3 py-2 text-right font-semibold">Earnings</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(transaction.entries || []).slice(0, 10).map((entry, idx) => (
+              <tr key={idx} className="hover:bg-blue-50">
+                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
+                <td className="px-3 py-2 font-medium text-gray-800">{entry.attorney}</td>
+                <td className="px-3 py-2 text-gray-700 truncate max-w-[200px]" title={entry.client}>{entry.client}</td>
+                <td className="px-3 py-2 text-right text-gray-900 font-medium">{formatHours(entry.hours)}h</td>
+                <td className="px-3 py-2 text-right text-green-600 font-medium">{formatCurrency(entry.earnings)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {transaction.count > 10 && (
+          <div className="text-xs text-gray-400 mt-2 text-center">
+            Showing 10 of {transaction.count} entries
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CedarGroveAnalytics = () => {
   const [selectedView, setSelectedView] = useState('overview');
   const [selectedAttorney, setSelectedAttorney] = useState(null);
@@ -108,8 +201,14 @@ const CedarGroveAnalytics = () => {
   const [transactionSortConfig, setTransactionSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [opsSortConfig, setOpsSortConfig] = useState({ key: 'hours', direction: 'desc' });
   const [clientSortConfig, setClientSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
+  const [hoveredTransaction, setHoveredTransaction] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [clientActivityPeriod, setClientActivityPeriod] = useState('3-months'); // Default to trailing 3 months
+  const [clientActivityStartDate, setClientActivityStartDate] = useState('');
+  const [clientActivityEndDate, setClientActivityEndDate] = useState('');
 
   const dropdownRef = useRef(null);
+  const tooltipRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -325,6 +424,7 @@ const CedarGroveAnalytics = () => {
       const category = entry.billingCategory || entry.category || 'Other';
       const billableHours = entry.billableHours || 0;
       const earnings = entry.billablesEarnings || 0;
+      const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
 
       // Only count entries with billable hours for transaction stats
       if (billableHours > 0) {
@@ -333,29 +433,133 @@ const CedarGroveAnalytics = () => {
             type: category,
             totalHours: 0,
             totalEarnings: 0,
-            count: 0
+            count: 0,
+            byAttorney: {},
+            entries: []
           };
         }
 
         transactionStats[category].totalHours += billableHours;
         transactionStats[category].totalEarnings += earnings;
         transactionStats[category].count += 1;
+        
+        // Track by attorney
+        if (!transactionStats[category].byAttorney[attorneyName]) {
+          transactionStats[category].byAttorney[attorneyName] = {
+            count: 0,
+            hours: 0,
+            earnings: 0
+          };
+        }
+        transactionStats[category].byAttorney[attorneyName].count += 1;
+        transactionStats[category].byAttorney[attorneyName].hours += billableHours;
+        transactionStats[category].byAttorney[attorneyName].earnings += earnings;
+        
+        // Store entry details (limit to most recent 50 for performance)
+        if (transactionStats[category].entries.length < 50) {
+          transactionStats[category].entries.push({
+            attorney: attorneyName,
+            client: entry.client || 'Unknown',
+            hours: billableHours,
+            earnings: earnings,
+            date: entry.billableDate || entry.date || '',
+            notes: entry.notes || ''
+          });
+        }
       }
     });
 
     return Object.values(transactionStats).map(stat => ({
       ...stat,
       avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0,
-      avgEarnings: stat.count > 0 ? (stat.totalEarnings / stat.count).toFixed(2) : 0
+      avgEarnings: stat.count > 0 ? (stat.totalEarnings / stat.count).toFixed(2) : 0,
+      // Sort entries by date descending
+      entries: stat.entries.sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return new Date(b.date) - new Date(a.date);
+      })
     })).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredEntries, transactionAttorneyFilter, attorneyMap]);
 
+  // Calculate client activity period date range
+  const clientActivityDateRange = useMemo(() => {
+    const now = getPSTDate();
+    let startDate = null;
+    let endDate = now;
+    
+    switch (clientActivityPeriod) {
+      case '2-weeks':
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 14);
+        break;
+      case '1-month':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 1);
+        break;
+      case '2-months':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 2);
+        break;
+      case '3-months':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 3);
+        break;
+      case '6-months':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 6);
+        break;
+      case '9-months':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 9);
+        break;
+      case '12-months':
+        startDate = new Date(now);
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
+      case '18-months':
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 18);
+        break;
+      case '24-months':
+        startDate = new Date(now);
+        startDate.setFullYear(startDate.getFullYear() - 2);
+        break;
+      case 'custom':
+        if (clientActivityStartDate) {
+          startDate = new Date(clientActivityStartDate + 'T00:00:00');
+        }
+        if (clientActivityEndDate) {
+          endDate = new Date(clientActivityEndDate + 'T23:59:59');
+        }
+        break;
+      case 'all-time':
+      default:
+        startDate = null;
+        break;
+    }
+    
+    return { startDate, endDate };
+  }, [clientActivityPeriod, clientActivityStartDate, clientActivityEndDate]);
+
   // Process client data - uses Firebase clients collection as master list
   const clientData = useMemo(() => {
+    // Filter entries by client activity period
+    const clientActivityEntries = clientActivityPeriod === 'all-time' 
+      ? filteredEntries 
+      : filteredEntries.filter(entry => {
+          const entryDate = getEntryDate(entry);
+          if (!entryDate) return false;
+          
+          const afterStart = !clientActivityDateRange.startDate || entryDate >= clientActivityDateRange.startDate;
+          const beforeEnd = !clientActivityDateRange.endDate || entryDate <= clientActivityDateRange.endDate;
+          
+          return afterStart && beforeEnd;
+        });
+
     // Build a map of time entry stats by client name
     const entryStats = {};
     
-    filteredEntries.forEach(entry => {
+    clientActivityEntries.forEach(entry => {
       const clientName = entry.client || 'Unknown';
       const billableHours = entry.billableHours || 0;
       const opsHours = entry.opsHours || 0;
@@ -435,7 +639,7 @@ const CedarGroveAnalytics = () => {
         };
       })
       .sort((a, b) => b.totalHours - a.totalHours);
-  }, [filteredEntries, firebaseClients]);
+  }, [filteredEntries, firebaseClients, clientActivityPeriod, clientActivityDateRange]);
 
   // Count clients by status from Firebase
   const clientCounts = useMemo(() => {
@@ -1365,7 +1569,18 @@ const CedarGroveAnalytics = () => {
                     const totalHours = transactionData.reduce((sum, t) => sum + t.totalHours, 0);
                     const percentage = totalHours > 0 ? ((txn.totalHours / totalHours) * 100).toFixed(1) : 0;
                     return (
-                      <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
+                      <tr 
+                        key={idx} 
+                        className="hover:bg-blue-50 cursor-pointer transition-colors"
+                        onMouseEnter={(e) => {
+                          setHoveredTransaction(txn);
+                          setTooltipPosition({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseMove={(e) => {
+                          setTooltipPosition({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseLeave={() => setHoveredTransaction(null)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                           {txn.type}
                         </td>
@@ -1389,6 +1604,16 @@ const CedarGroveAnalytics = () => {
                   })}
                 </tbody>
               </table>
+              
+              {/* Transaction Tooltip */}
+              {hoveredTransaction && (
+                <TransactionRowTooltip 
+                  transaction={hoveredTransaction} 
+                  position={tooltipPosition}
+                  formatCurrency={formatCurrency}
+                  formatHours={formatHours}
+                />
+              )}
             </div>
 
             {/* Average Time per Transaction */}
@@ -1525,7 +1750,6 @@ const CedarGroveAnalytics = () => {
                     <div className="text-3xl font-bold text-green-600 mt-2">
                       {clientData.filter(c => c.totalHours > 0).length}
                     </div>
-                    <span className="text-gray-400 text-xs">with transactions in period</span>
                   </div>
                   <div className="text-gray-300 text-4xl font-light mx-4">/</div>
                   <div>
@@ -1533,11 +1757,51 @@ const CedarGroveAnalytics = () => {
                     <div className="text-3xl font-bold text-red-600 mt-2">
                       {clientData.filter(c => c.totalHours === 0).length}
                     </div>
-                    <span className="text-gray-400 text-xs">no transactions in period</span>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <span className="text-gray-500 text-sm">Total: {clientCounts.total} clients (Active + Quiet)</span>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-600 text-sm whitespace-nowrap">Activity window:</span>
+                    <div className="flex items-center gap-2 flex-1">
+                      <select
+                        value={clientActivityPeriod}
+                        onChange={(e) => setClientActivityPeriod(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      >
+                        <option value="2-weeks">Last 2 Weeks</option>
+                        <option value="1-month">Last 1 Month</option>
+                        <option value="2-months">Last 2 Months</option>
+                        <option value="3-months">Last 3 Months</option>
+                        <option value="6-months">Last 6 Months</option>
+                        <option value="9-months">Last 9 Months</option>
+                        <option value="12-months">Last 12 Months</option>
+                        <option value="18-months">Last 18 Months</option>
+                        <option value="24-months">Last 24 Months</option>
+                        <option value="custom">Custom Range</option>
+                        <option value="all-time">All Time</option>
+                      </select>
+                    </div>
+                  </div>
+                  {clientActivityPeriod === 'custom' && (
+                    <div className="flex items-center gap-2 mt-3">
+                      <input
+                        type="date"
+                        value={clientActivityStartDate}
+                        onChange={(e) => setClientActivityStartDate(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-500 text-sm">to</span>
+                      <input
+                        type="date"
+                        value={clientActivityEndDate}
+                        onChange={(e) => setClientActivityEndDate(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div className="text-gray-400 text-xs mt-2">
+                    Total: {clientCounts.total} clients (Active + Quiet status)
+                  </div>
                 </div>
               </div>
 
