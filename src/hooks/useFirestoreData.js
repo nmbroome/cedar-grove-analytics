@@ -125,18 +125,26 @@ export const useAttorneys = () => {
     const fetchAttorneys = async () => {
       try {
         setLoading(true);
+        setError(null);
         
         // Wait for authentication before fetching
-        await waitForAuth();
+        console.log('useAttorneys: waiting for auth...');
+        const user = await waitForAuth();
+        console.log('useAttorneys: auth complete, user:', user?.uid);
         
+        console.log('useAttorneys: fetching attorneys collection...');
         const querySnapshot = await getDocs(collection(db, 'attorneys'));
+        console.log('useAttorneys: got snapshot, size:', querySnapshot.size);
+        
         const attorneyList = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        console.log('useAttorneys: attorney list:', attorneyList);
         setAttorneys(attorneyList);
       } catch (err) {
-        console.error('Error fetching attorneys:', err);
+        console.error('useAttorneys: Error fetching attorneys:', err);
         setError(err.message);
       } finally {
         setLoading(false);

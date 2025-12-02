@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search, ChevronDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search, ChevronDown, Settings } from 'lucide-react';
 import { useAllTimeEntries, useAttorneys, useClients } from '../hooks/useFirestoreData';
 
 const COLORS = [
@@ -830,7 +831,7 @@ const CedarGroveAnalytics = () => {
   };
 
   // Custom label for pie chart - only show for slices >= 5%
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, hours, percentage }) => {
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, hours, percentage, index }) => {
     // Only show label if slice is >= 5%
     if (percent < 0.05) return null;
     
@@ -843,10 +844,11 @@ const CedarGroveAnalytics = () => {
       <text 
         x={x} 
         y={y} 
-        fill="#374151" 
+        fill={COLORS[index % COLORS.length]}
         textAnchor={x > cx ? 'start' : 'end'} 
         dominantBaseline="central"
         fontSize={12}
+        fontWeight={600}
       >
         {`${hours}h (${percentage}%)`}
       </text>
@@ -938,7 +940,16 @@ const CedarGroveAnalytics = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Cedar Grove Analytics</h1>
               <p className="text-gray-600">Law firm performance dashboard</p>
             </div>
-            <DateRangeDropdown />
+            <div className="flex items-center gap-4">
+              <Link
+                to="/admin/targets"
+                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="text-sm font-medium">Manage Targets</span>
+              </Link>
+              <DateRangeDropdown />
+            </div>
           </div>
 
           {/* No Data Message */}
@@ -965,8 +976,19 @@ const CedarGroveAnalytics = () => {
             <p className="text-gray-600">Attorney time allocation and efficiency insights</p>
           </div>
           
-          {/* Date Range Dropdown */}
-          <DateRangeDropdown />
+          {/* Right side controls */}
+          <div className="flex items-center gap-4">
+            <Link
+              to="/admin/targets"
+              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="text-sm font-medium">Manage Targets</span>
+            </Link>
+            
+            {/* Date Range Dropdown */}
+            <DateRangeDropdown />
+          </div>
         </div>
 
         {/* Navigation Tabs */}
