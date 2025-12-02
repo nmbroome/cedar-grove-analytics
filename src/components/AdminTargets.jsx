@@ -3,41 +3,17 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Calendar, Users, Target, CheckCircle, AlertCircle } from 'lucide-react';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '../firebase/config';
-import { useAllTimeEntries } from '../hooks/useFirestoreData';
+import { useAttorneys } from '../hooks/useFirestoreData';
 
 const AdminTargets = () => {
-  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
+  const { attorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error' | null
+  const [saveStatus, setSaveStatus] = useState(null);
   const [error, setError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-
-  // Derive attorneys from entries - the attorneyId IS the attorney name (document ID)
-  const attorneys = useMemo(() => {
-    if (!allEntries || allEntries.length === 0) {
-      return [];
-    }
-    
-    // Get unique attorney IDs from entries
-    const attorneySet = new Set();
-    allEntries.forEach(entry => {
-      if (entry.attorneyId) {
-        attorneySet.add(entry.attorneyId);
-      }
-    });
-    
-    // Convert to array of attorney objects
-    // Since the document ID is the attorney name, id and name are the same
-    return Array.from(attorneySet).map(id => ({
-      id: id,
-      name: id
-    })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [allEntries]);
-
-  const isDataLoading = entriesLoading;
 
   const months = [
     { value: 1, label: 'January' },
@@ -56,15 +32,6 @@ const AdminTargets = () => {
 
   const years = [2024, 2025, 2026];
 
-  // Create attorney name map
-  const attorneyMap = useMemo(() => {
-    const map = {};
-    attorneys.forEach(attorney => {
-      map[attorney.id] = attorney.name || attorney.id;
-    });
-    return map;
-  }, [attorneys]);
-
   // Fetch existing targets for the selected month/year
   useEffect(() => {
     const fetchTargets = async () => {
@@ -73,81 +40,70 @@ const AdminTargets = () => {
         setError(null);
         await waitForAuth();
 
-        // First, create default targets from attorneys list
+        const targetDocId = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        
+        // Create default targets from attorneys list
         const defaultTargets = attorneys.map(attorney => ({
-          id: `${attorney.id}_${selectedYear}_${selectedMonth}`,
+          id: `${attorney.id}_${targetDocId}`,
           attorneyId: attorney.id,
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: 100,
-          opsTarget: 50,
-          totalTarget: 150,
+          billableTarget: attorney.billableTarget || 100,
+          opsTarget: attorney.opsTarget || 50,
+          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
           isNew: true
         }));
 
-        // Try to fetch existing targets from Firebase
-        try {
-          const targetsRef = collection(db, 'utilizationTargets');
-          const snapshot = await getDocs(targetsRef);
-          
-          const allTargets = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-
-          // Filter for selected month/year
-          const filteredTargets = allTargets.filter(
-            t => t.year === selectedYear && t.month === selectedMonth
-          );
-
-          if (filteredTargets.length > 0) {
-            // Merge existing targets with any missing attorneys
-            const existingAttorneyIds = filteredTargets.map(t => t.attorneyId);
-            const missingAttorneys = attorneys.filter(a => !existingAttorneyIds.includes(a.id));
+        // Try to fetch existing targets from each attorney's targets subcollection
+        const existingTargets = [];
+        
+        for (const attorney of attorneys) {
+          try {
+            const targetsSnapshot = await getDocs(collection(db, 'attorneys', attorney.id, 'targets'));
+            const monthTarget = targetsSnapshot.docs.find(d => d.id === targetDocId);
             
-            const missingTargets = missingAttorneys.map(attorney => ({
-              id: `${attorney.id}_${selectedYear}_${selectedMonth}`,
-              attorneyId: attorney.id,
-              attorneyName: attorney.name || attorney.id,
-              year: selectedYear,
-              month: selectedMonth,
-              billableTarget: 100,
-              opsTarget: 50,
-              totalTarget: 150,
-              isNew: true
-            }));
-
-            setTargets([
-              ...filteredTargets.map(t => ({
-                ...t,
-                attorneyName: attorneyMap[t.attorneyId] || t.attorneyId,
+            if (monthTarget) {
+              const data = monthTarget.data();
+              existingTargets.push({
+                id: `${attorney.id}_${targetDocId}`,
+                attorneyId: attorney.id,
+                attorneyName: attorney.name || attorney.id,
+                year: data.year || selectedYear,
+                month: data.month || selectedMonth,
+                billableTarget: data.billableTarget ?? 100,
+                opsTarget: data.opsTarget ?? 50,
+                totalTarget: (data.billableTarget ?? 100) + (data.opsTarget ?? 50),
                 isNew: false
-              })), 
-              ...missingTargets
-            ]);
-          } else {
-            // No existing targets, use defaults
-            setTargets(defaultTargets);
+              });
+            }
+          } catch (err) {
+            console.log(`No targets found for ${attorney.id}:`, err.message);
           }
-        } catch (firebaseError) {
-          // If collection doesn't exist or other Firebase error, just use defaults
-          console.log('No existing targets found, using defaults:', firebaseError.message);
+        }
+
+        // Merge existing targets with defaults for missing attorneys
+        if (existingTargets.length > 0) {
+          const existingAttorneyIds = existingTargets.map(t => t.attorneyId);
+          const missingTargets = defaultTargets.filter(t => !existingAttorneyIds.includes(t.attorneyId));
+          setTargets([...existingTargets, ...missingTargets]);
+        } else {
           setTargets(defaultTargets);
         }
       } catch (err) {
         console.error('Error in fetchTargets:', err);
         setError(err.message);
         // Still try to show attorneys with default targets
+        const targetDocId = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
         const defaultTargets = attorneys.map(attorney => ({
-          id: `${attorney.id}_${selectedYear}_${selectedMonth}`,
+          id: `${attorney.id}_${targetDocId}`,
           attorneyId: attorney.id,
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: 100,
-          opsTarget: 50,
-          totalTarget: 150,
+          billableTarget: attorney.billableTarget || 100,
+          opsTarget: attorney.opsTarget || 50,
+          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
           isNew: true
         }));
         setTargets(defaultTargets);
@@ -156,25 +112,21 @@ const AdminTargets = () => {
       }
     };
 
-    // Only fetch if attorneys are done loading and we have attorneys
-    if (!isDataLoading) {
-      if (attorneys.length > 0) {
-        fetchTargets();
-      } else {
-        setLoading(false);
-        setTargets([]);
-      }
+    if (!attorneysLoading && attorneys.length > 0) {
+      fetchTargets();
+    } else if (!attorneysLoading) {
+      setLoading(false);
+      setTargets([]);
     }
-  }, [selectedYear, selectedMonth, attorneys, isDataLoading, attorneyMap]);
+  }, [selectedYear, selectedMonth, attorneys, attorneysLoading]);
 
   // Update a target value
   const handleTargetChange = (attorneyId, field, value) => {
     setTargets(prev => prev.map(target => {
       if (target.attorneyId === attorneyId) {
         const numValue = parseFloat(value) || 0;
-        const updated = { ...target, [field]: numValue };
+        const updated = { ...target, [field]: numValue, isNew: true };
         
-        // Auto-calculate total if billable or ops changes
         if (field === 'billableTarget' || field === 'opsTarget') {
           updated.totalTarget = (updated.billableTarget || 0) + (updated.opsTarget || 0);
         }
@@ -192,27 +144,30 @@ const AdminTargets = () => {
       setSaveStatus(null);
       await waitForAuth();
 
+      const targetDocId = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+
       for (const target of targets) {
-        const docId = `${target.attorneyId}_${selectedYear}_${selectedMonth}`;
-        const docRef = doc(db, 'utilizationTargets', docId);
-        
-        await setDoc(docRef, {
-          attorneyId: target.attorneyId,
-          year: selectedYear,
-          month: selectedMonth,
+        // First, ensure the attorney parent document exists
+        const attorneyDocRef = doc(db, 'attorneys', target.attorneyId);
+        await setDoc(attorneyDocRef, {
+          name: target.attorneyName,
+          updatedAt: new Date()
+        }, { merge: true });
+
+        // Then save the target to the targets subcollection
+        const targetDocRef = doc(db, 'attorneys', target.attorneyId, 'targets', targetDocId);
+        await setDoc(targetDocRef, {
           billableTarget: target.billableTarget,
           opsTarget: target.opsTarget,
           totalTarget: target.totalTarget,
+          year: selectedYear,
+          month: selectedMonth,
           updatedAt: new Date()
         });
       }
 
       setSaveStatus('success');
-      
-      // Update targets to remove isNew flag
       setTargets(prev => prev.map(t => ({ ...t, isNew: false })));
-      
-      // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (error) {
       console.error('Error saving targets:', error);
@@ -235,40 +190,61 @@ const AdminTargets = () => {
         prevYear = selectedYear - 1;
       }
 
-      const targetsRef = collection(db, 'utilizationTargets');
-      const snapshot = await getDocs(targetsRef);
-      
-      const previousTargets = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(t => t.year === prevYear && t.month === prevMonth);
+      const prevTargetDocId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+      const previousTargets = [];
+
+      for (const attorney of attorneys) {
+        try {
+          const targetsSnapshot = await getDocs(collection(db, 'attorneys', attorney.id, 'targets'));
+          const monthTarget = targetsSnapshot.docs.find(d => d.id === prevTargetDocId);
+          
+          if (monthTarget) {
+            const data = monthTarget.data();
+            previousTargets.push({
+              attorneyId: attorney.id,
+              attorneyName: attorney.name || attorney.id,
+              billableTarget: data.billableTarget ?? 100,
+              opsTarget: data.opsTarget ?? 50
+            });
+          }
+        } catch (err) {
+          console.log(`No previous targets for ${attorney.id}`);
+        }
+      }
 
       if (previousTargets.length > 0) {
+        const targetDocId = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
         const copiedTargets = previousTargets.map(t => ({
-          ...t,
-          id: `${t.attorneyId}_${selectedYear}_${selectedMonth}`,
+          id: `${t.attorneyId}_${targetDocId}`,
+          attorneyId: t.attorneyId,
+          attorneyName: t.attorneyName,
           year: selectedYear,
           month: selectedMonth,
-          attorneyName: attorneyMap[t.attorneyId] || t.attorneyId,
+          billableTarget: t.billableTarget,
+          opsTarget: t.opsTarget,
+          totalTarget: t.billableTarget + t.opsTarget,
           isNew: true
         }));
 
-        // Merge with any attorneys not in previous month
         const existingAttorneyIds = copiedTargets.map(t => t.attorneyId);
         const missingAttorneys = attorneys.filter(a => !existingAttorneyIds.includes(a.id));
         
         const missingTargets = missingAttorneys.map(attorney => ({
-          id: `${attorney.id}_${selectedYear}_${selectedMonth}`,
+          id: `${attorney.id}_${targetDocId}`,
           attorneyId: attorney.id,
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: 100,
-          opsTarget: 50,
-          totalTarget: 150,
+          billableTarget: attorney.billableTarget || 100,
+          opsTarget: attorney.opsTarget || 50,
+          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
           isNew: true
         }));
 
         setTargets([...copiedTargets, ...missingTargets]);
+        setSaveStatus(null);
+      } else {
+        alert(`No targets found for ${months[prevMonth - 1]?.label || prevMonth} ${prevYear}`);
       }
     } catch (error) {
       console.error('Error copying targets:', error);
@@ -281,7 +257,7 @@ const AdminTargets = () => {
   const handleApplyToAll = (field, value) => {
     const numValue = parseFloat(value) || 0;
     setTargets(prev => prev.map(target => {
-      const updated = { ...target, [field]: numValue };
+      const updated = { ...target, [field]: numValue, isNew: true };
       if (field === 'billableTarget' || field === 'opsTarget') {
         updated.totalTarget = (updated.billableTarget || 0) + (updated.opsTarget || 0);
       }
@@ -294,7 +270,7 @@ const AdminTargets = () => {
     return month ? month.label : '';
   };
 
-  if (loading || isDataLoading) {
+  if (loading || attorneysLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
@@ -305,16 +281,13 @@ const AdminTargets = () => {
     );
   }
 
-  if (entriesError) {
+  if (attorneysError) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center max-w-md">
-          <div className="text-red-600 text-xl mb-4">Error loading data</div>
-          <div className="text-gray-600 mb-4">{entriesError}</div>
-          <Link
-            to="/"
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
+          <div className="text-red-600 text-xl mb-4">Error loading attorneys</div>
+          <div className="text-gray-600 mb-4">{attorneysError}</div>
+          <Link to="/" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
             Back to Dashboard
           </Link>
         </div>
@@ -327,10 +300,7 @@ const AdminTargets = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <Link 
-              to="/" 
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
+            <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
             </Link>
@@ -355,10 +325,7 @@ const AdminTargets = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link 
-                to="/" 
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
+              <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
                 <ArrowLeft className="w-5 h-5" />
                 <span>Back to Dashboard</span>
               </Link>
@@ -369,7 +336,6 @@ const AdminTargets = () => {
               </div>
             </div>
             
-            {/* Save Button */}
             <button
               onClick={handleSave}
               disabled={saving}
@@ -397,7 +363,7 @@ const AdminTargets = () => {
 
       {/* Save Status Message */}
       {saveStatus && (
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
           <div className={`flex items-center gap-2 px-4 py-3 rounded-lg ${
             saveStatus === 'success' 
               ? 'bg-green-50 border border-green-200 text-green-700' 
@@ -435,9 +401,7 @@ const AdminTargets = () => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 {months.map(month => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
+                  <option key={month.value} value={month.value}>{month.label}</option>
                 ))}
               </select>
 
@@ -447,9 +411,7 @@ const AdminTargets = () => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 {years.map(year => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
             </div>

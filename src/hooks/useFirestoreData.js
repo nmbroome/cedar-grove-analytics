@@ -116,6 +116,10 @@ export const useAllTimeEntries = (filters = {}) => {
 /**
  * Fetch all attorneys with their metadata
  */
+/**
+ * Fetch all attorneys with their metadata
+ * First tries to get from attorneys collection, then falls back to deriving from entries
+ */
 export const useAttorneys = () => {
   const [attorneys, setAttorneys] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,21 +132,46 @@ export const useAttorneys = () => {
         setError(null);
         
         // Wait for authentication before fetching
-        console.log('useAttorneys: waiting for auth...');
-        const user = await waitForAuth();
-        console.log('useAttorneys: auth complete, user:', user?.uid);
+        await waitForAuth();
         
-        console.log('useAttorneys: fetching attorneys collection...');
-        const querySnapshot = await getDocs(collection(db, 'attorneys'));
-        console.log('useAttorneys: got snapshot, size:', querySnapshot.size);
+        // First, try to get attorneys from the attorneys collection
+        const attorneysRef = collection(db, 'attorneys');
+        const attorneysSnapshot = await getDocs(attorneysRef);
         
-        const attorneyList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        console.log('useAttorneys: attorney list:', attorneyList);
-        setAttorneys(attorneyList);
+        if (!attorneysSnapshot.empty) {
+          // We have attorney documents - use them
+          const attorneyList = attorneysSnapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || doc.id,
+            ...doc.data()
+          }));
+          
+          setAttorneys(attorneyList);
+        } else {
+          // No attorney documents exist yet - derive from entries
+          // This uses collectionGroup to get all entries and extract unique attorney IDs
+          const entriesSnapshot = await getDocs(collectionGroup(db, 'entries'));
+          
+          const attorneyMap = {};
+          entriesSnapshot.docs.forEach(doc => {
+            // Path structure: attorneys/{attorneyId}/entries/{entryId}
+            const pathParts = doc.ref.path.split('/');
+            const attorneyId = pathParts[1];
+            
+            if (attorneyId && !attorneyMap[attorneyId]) {
+              attorneyMap[attorneyId] = {
+                id: attorneyId,
+                name: attorneyId // The document ID is the attorney name
+              };
+            }
+          });
+          
+          const attorneyList = Object.values(attorneyMap).sort((a, b) => 
+            a.name.localeCompare(b.name)
+          );
+          
+          setAttorneys(attorneyList);
+        }
       } catch (err) {
         console.error('useAttorneys: Error fetching attorneys:', err);
         setError(err.message);
