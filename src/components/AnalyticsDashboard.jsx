@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search, ChevronDown, Settings } from 'lucide-react';
 import { useAllTimeEntries, useAttorneys, useClients } from '../hooks/useFirestoreData';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const COLORS = [
   '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
@@ -437,8 +439,57 @@ const CedarGroveAnalytics = () => {
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   const { attorneys: firebaseAttorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
+  
+  // State for attorney targets from Firebase
+  const [attorneyTargets, setAttorneyTargets] = useState({});
+  const [targetsLoading, setTargetsLoading] = useState(true);
 
-  const loading = entriesLoading || attorneysLoading || clientsLoading;
+  // Fetch all attorney targets from Firebase
+  useEffect(() => {
+    const fetchAllTargets = async () => {
+      try {
+        setTargetsLoading(true);
+        const targetsMap = {};
+        
+        for (const attorney of firebaseAttorneys) {
+          try {
+            const targetsSnapshot = await getDocs(collection(db, 'attorneys', attorney.id, 'targets'));
+            const attorneyName = attorney.name || attorney.id;
+            
+            if (!targetsMap[attorneyName]) {
+              targetsMap[attorneyName] = {};
+            }
+            
+            targetsSnapshot.docs.forEach(doc => {
+              const data = doc.data();
+              // Store by month key (e.g., "2025-01")
+              targetsMap[attorneyName][doc.id] = {
+                billableTarget: data.billableTarget ?? 100,
+                opsTarget: data.opsTarget ?? 50,
+                totalTarget: data.totalTarget ?? 150
+              };
+            });
+          } catch (err) {
+            console.log(`No targets found for ${attorney.id}`);
+          }
+        }
+        
+        setAttorneyTargets(targetsMap);
+      } catch (err) {
+        console.error('Error fetching targets:', err);
+      } finally {
+        setTargetsLoading(false);
+      }
+    };
+
+    if (!attorneysLoading && firebaseAttorneys.length > 0) {
+      fetchAllTargets();
+    } else if (!attorneysLoading) {
+      setTargetsLoading(false);
+    }
+  }, [firebaseAttorneys, attorneysLoading]);
+
+  const loading = entriesLoading || attorneysLoading || clientsLoading || targetsLoading;
   const error = entriesError || attorneysError || clientsError;
 
   // Helper function to convert month name to number
@@ -592,11 +643,27 @@ const CedarGroveAnalytics = () => {
     return entries;
   }, [allEntries, dateRange, customDateStart, customDateEnd, globalAttorneyFilter, attorneyMap]);
 
-  // Calculate the number of months in the selected date range for target scaling
-  const monthsInDateRange = useMemo(() => {
+  // Calculate the date range boundaries and list of months included
+  const dateRangeInfo = useMemo(() => {
+    // Helper to calculate what fraction of a month is included in the date range
+    const calculateMonthFraction = (monthDate, rangeStart, rangeEnd) => {
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      const daysInMonth = monthEnd.getDate();
+      
+      const effectiveStart = monthStart < rangeStart ? rangeStart : monthStart;
+      const effectiveEnd = monthEnd > rangeEnd ? rangeEnd : monthEnd;
+      
+      const msPerDay = 1000 * 60 * 60 * 24;
+      const daysIncluded = Math.max(0, (effectiveEnd.getTime() - effectiveStart.getTime()) / msPerDay + 1);
+      
+      return Math.min(1, daysIncluded / daysInMonth);
+    };
+
     const now = getPSTDate();
     let startDate;
     let endDate = new Date(now);
+    let monthsList = [];
 
     switch (dateRange) {
       case 'all-time':
@@ -606,24 +673,26 @@ const CedarGroveAnalytics = () => {
           if (dates.length > 0) {
             startDate = new Date(Math.min(...dates.map(d => d.getTime())));
           } else {
-            return 1;
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
           }
         } else {
-          return 1;
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }
         break;
       case 'current-week':
-        // A week is roughly 0.25 months
-        return 0.25;
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+        break;
       case 'current-month':
-        // Current month - calculate fraction of month elapsed
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const dayOfMonth = now.getDate();
-        return dayOfMonth / daysInMonth;
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        break;
       case 'last-month':
-        return 1;
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
       case 'trailing-60':
-        return 2; // ~60 days = ~2 months
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 0, 0, 0, 0);
+        break;
       case 'custom':
         if (customDateStart && customDateEnd) {
           const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
@@ -631,49 +700,93 @@ const CedarGroveAnalytics = () => {
           startDate = new Date(startYear, startMonth - 1, startDay);
           endDate = new Date(endYear, endMonth - 1, endDay);
         } else {
-          return 1;
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }
         break;
       default:
-        return 1;
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
+    // Generate list of months in the range (as "YYYY-MM" strings)
     if (startDate && endDate) {
-      // Calculate months between dates
-      const msPerMonth = 1000 * 60 * 60 * 24 * 30.44; // Average days per month
-      const months = (endDate.getTime() - startDate.getTime()) / msPerMonth;
-      return Math.max(0.25, months); // Minimum of 1 week equivalent
+      let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      
+      while (current <= endMonth) {
+        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+        monthsList.push({
+          key: monthKey,
+          year: current.getFullYear(),
+          month: current.getMonth() + 1,
+          // Calculate fraction of month included
+          fraction: calculateMonthFraction(current, startDate, endDate)
+        });
+        current.setMonth(current.getMonth() + 1);
+      }
     }
 
-    return 1;
+    // Calculate total months for fallback
+    let totalMonths = 1;
+    if (startDate && endDate) {
+      const msPerMonth = 1000 * 60 * 60 * 24 * 30.44;
+      totalMonths = Math.max(0.25, (endDate.getTime() - startDate.getTime()) / msPerMonth);
+    }
+
+    return { startDate, endDate, monthsList, totalMonths };
   }, [dateRange, customDateStart, customDateEnd, allEntries]);
 
-  // Process attorney data - updated to use new field names
+  // Process attorney data - uses historical targets from Firebase
   const attorneyData = useMemo(() => {
     const attorneyStats = {};
     
-    // Monthly targets (base values)
-    const monthlyTarget = 150;
-    const monthlyBillableTarget = 100;
-    const monthlyOpsTarget = 50;
-    
-    // Scale targets based on date range
-    const scaledTarget = Math.round(monthlyTarget * monthsInDateRange * 10) / 10;
-    const scaledBillableTarget = Math.round(monthlyBillableTarget * monthsInDateRange * 10) / 10;
-    const scaledOpsTarget = Math.round(monthlyOpsTarget * monthsInDateRange * 10) / 10;
+    // Default monthly targets (fallback values)
+    const defaultBillableTarget = 100;
+    const defaultOpsTarget = 50;
+    const defaultTotalTarget = 150;
 
     filteredEntries.forEach(entry => {
       const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
       
       if (!attorneyStats[attorneyName]) {
+        // Calculate target for this attorney based on the date range
+        let totalBillableTarget = 0;
+        let totalOpsTarget = 0;
+        let totalTarget = 0;
+        
+        const attorneyTargetData = attorneyTargets[attorneyName] || {};
+        
+        // Sum up targets for each month in the range
+        dateRangeInfo.monthsList.forEach(monthInfo => {
+          const monthTarget = attorneyTargetData[monthInfo.key];
+          
+          if (monthTarget) {
+            // Use saved target for this month, scaled by fraction of month included
+            totalBillableTarget += (monthTarget.billableTarget || defaultBillableTarget) * monthInfo.fraction;
+            totalOpsTarget += (monthTarget.opsTarget || defaultOpsTarget) * monthInfo.fraction;
+            totalTarget += (monthTarget.totalTarget || defaultTotalTarget) * monthInfo.fraction;
+          } else {
+            // Use default target for this month, scaled by fraction
+            totalBillableTarget += defaultBillableTarget * monthInfo.fraction;
+            totalOpsTarget += defaultOpsTarget * monthInfo.fraction;
+            totalTarget += defaultTotalTarget * monthInfo.fraction;
+          }
+        });
+        
+        // If no months in range (shouldn't happen), use defaults
+        if (dateRangeInfo.monthsList.length === 0) {
+          totalBillableTarget = defaultBillableTarget;
+          totalOpsTarget = defaultOpsTarget;
+          totalTarget = defaultTotalTarget;
+        }
+
         attorneyStats[attorneyName] = {
           name: attorneyName,
           billable: 0,
           ops: 0,
           earnings: 0,
-          target: scaledTarget,
-          billableTarget: scaledBillableTarget,
-          opsTarget: scaledOpsTarget,
+          target: Math.round(totalTarget * 10) / 10,
+          billableTarget: Math.round(totalBillableTarget * 10) / 10,
+          opsTarget: Math.round(totalOpsTarget * 10) / 10,
           role: 'Attorney',
           transactions: {},
           clients: {}
@@ -721,7 +834,7 @@ const CedarGroveAnalytics = () => {
         .slice(0, 5)
         .map(([name]) => name)
     }));
-  }, [filteredEntries, attorneyMap, monthsInDateRange]);
+  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets]);
 
   // Process transaction data - updated to use new field names
   const transactionData = useMemo(() => {
