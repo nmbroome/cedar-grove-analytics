@@ -744,96 +744,112 @@ const CedarGroveAnalytics = () => {
     const defaultOpsTarget = 50;
     const defaultTotalTarget = 150;
 
+    // First pass: collect entries by attorney and track which months they have activity
+    const attorneyMonthlyActivity = {};
+    
     filteredEntries.forEach(entry => {
       const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+      const entryDate = getEntryDate(entry);
       
-      if (!attorneyStats[attorneyName]) {
-        // Calculate target for this attorney based on the date range
-        let totalBillableTarget = 0;
-        let totalOpsTarget = 0;
-        let totalTarget = 0;
-        
-        const attorneyTargetData = attorneyTargets[attorneyName] || {};
-        
-        // Sum up targets for each month in the range
-        dateRangeInfo.monthsList.forEach(monthInfo => {
-          const monthTarget = attorneyTargetData[monthInfo.key];
-          
-          if (monthTarget) {
-            // Use saved target for this month, scaled by fraction of month included
-            totalBillableTarget += (monthTarget.billableTarget || defaultBillableTarget) * monthInfo.fraction;
-            totalOpsTarget += (monthTarget.opsTarget || defaultOpsTarget) * monthInfo.fraction;
-            totalTarget += (monthTarget.totalTarget || defaultTotalTarget) * monthInfo.fraction;
-          } else {
-            // Use default target for this month, scaled by fraction
-            totalBillableTarget += defaultBillableTarget * monthInfo.fraction;
-            totalOpsTarget += defaultOpsTarget * monthInfo.fraction;
-            totalTarget += defaultTotalTarget * monthInfo.fraction;
-          }
-        });
-        
-        // If no months in range (shouldn't happen), use defaults
-        if (dateRangeInfo.monthsList.length === 0) {
-          totalBillableTarget = defaultBillableTarget;
-          totalOpsTarget = defaultOpsTarget;
-          totalTarget = defaultTotalTarget;
-        }
-
-        attorneyStats[attorneyName] = {
-          name: attorneyName,
+      if (!attorneyMonthlyActivity[attorneyName]) {
+        attorneyMonthlyActivity[attorneyName] = {
+          months: new Set(),
           billable: 0,
           ops: 0,
           earnings: 0,
-          target: Math.round(totalTarget * 10) / 10,
-          billableTarget: Math.round(totalBillableTarget * 10) / 10,
-          opsTarget: Math.round(totalOpsTarget * 10) / 10,
-          role: 'Attorney',
           transactions: {},
           clients: {}
         };
       }
-
-      // Use normalized field names from useFirestoreData
+      
+      // Track which months this attorney has activity
+      if (entryDate) {
+        const monthKey = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+        attorneyMonthlyActivity[attorneyName].months.add(monthKey);
+      }
+      
+      // Accumulate hours and earnings
       const billableHours = entry.billableHours || 0;
       const opsHours = entry.opsHours || 0;
       const earnings = entry.billablesEarnings || 0;
-
-      // Add billable hours
-      attorneyStats[attorneyName].billable += billableHours;
       
-      // Add ops hours
-      attorneyStats[attorneyName].ops += opsHours;
+      attorneyMonthlyActivity[attorneyName].billable += billableHours;
+      attorneyMonthlyActivity[attorneyName].ops += opsHours;
+      attorneyMonthlyActivity[attorneyName].earnings += earnings;
       
-      // Add earnings
-      attorneyStats[attorneyName].earnings += earnings;
-
-      // Get category for transaction tracking
+      // Track transactions and clients
       const category = entry.billingCategory || entry.category || 'Other';
       const client = entry.client || 'Unknown';
-
-      // Track transaction types (by billingCategory)
+      
       if (billableHours > 0) {
-        if (!attorneyStats[attorneyName].transactions[category]) {
-          attorneyStats[attorneyName].transactions[category] = 0;
+        if (!attorneyMonthlyActivity[attorneyName].transactions[category]) {
+          attorneyMonthlyActivity[attorneyName].transactions[category] = 0;
         }
-        attorneyStats[attorneyName].transactions[category] += billableHours;
+        attorneyMonthlyActivity[attorneyName].transactions[category] += billableHours;
       }
-
-      // Track clients
-      if (!attorneyStats[attorneyName].clients[client]) {
-        attorneyStats[attorneyName].clients[client] = 0;
+      
+      if (!attorneyMonthlyActivity[attorneyName].clients[client]) {
+        attorneyMonthlyActivity[attorneyName].clients[client] = 0;
       }
-      attorneyStats[attorneyName].clients[client] += billableHours + opsHours;
+      attorneyMonthlyActivity[attorneyName].clients[client] += billableHours + opsHours;
     });
 
-    // Convert to array and add top transactions
-    return Object.values(attorneyStats).map(attorney => ({
-      ...attorney,
-      topTransactions: Object.entries(attorney.transactions)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name]) => name)
-    }));
+    // Second pass: calculate targets based on months with activity
+    Object.entries(attorneyMonthlyActivity).forEach(([attorneyName, data]) => {
+      let totalBillableTarget = 0;
+      let totalOpsTarget = 0;
+      let totalTarget = 0;
+      
+      const attorneyTargetData = attorneyTargets[attorneyName] || {};
+      const activeMonths = Array.from(data.months);
+      
+      // For each month this attorney has activity, add up their target
+      activeMonths.forEach(monthKey => {
+        const monthTarget = attorneyTargetData[monthKey];
+        
+        // Find the fraction for this month from dateRangeInfo
+        const monthInfo = dateRangeInfo.monthsList.find(m => m.key === monthKey);
+        const fraction = monthInfo ? monthInfo.fraction : 1;
+        
+        if (monthTarget) {
+          // Use saved target for this month
+          totalBillableTarget += (monthTarget.billableTarget || defaultBillableTarget) * fraction;
+          totalOpsTarget += (monthTarget.opsTarget || defaultOpsTarget) * fraction;
+          totalTarget += (monthTarget.totalTarget || defaultTotalTarget) * fraction;
+        } else {
+          // Use default target for this month
+          totalBillableTarget += defaultBillableTarget * fraction;
+          totalOpsTarget += defaultOpsTarget * fraction;
+          totalTarget += defaultTotalTarget * fraction;
+        }
+      });
+      
+      // If no active months (shouldn't happen), use defaults for 1 month
+      if (activeMonths.length === 0) {
+        totalBillableTarget = defaultBillableTarget;
+        totalOpsTarget = defaultOpsTarget;
+        totalTarget = defaultTotalTarget;
+      }
+
+      attorneyStats[attorneyName] = {
+        name: attorneyName,
+        billable: data.billable,
+        ops: data.ops,
+        earnings: data.earnings,
+        target: Math.round(totalTarget * 10) / 10,
+        billableTarget: Math.round(totalBillableTarget * 10) / 10,
+        opsTarget: Math.round(totalOpsTarget * 10) / 10,
+        role: 'Attorney',
+        transactions: data.transactions,
+        clients: data.clients,
+        topTransactions: Object.entries(data.transactions)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name]) => name)
+      };
+    });
+
+    return Object.values(attorneyStats);
   }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets]);
 
   // Process transaction data - updated to use new field names
