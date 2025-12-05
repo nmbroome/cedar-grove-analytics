@@ -2170,14 +2170,14 @@ const CedarGroveAnalytics = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Ops Time Distribution
                   </h3>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <ResponsiveContainer width="100%" height={600}>
+                    <PieChart margin={{ top: 60, right: 20, bottom: 120, left: 20 }}>
                       <Pie
                         data={opsData}
                         dataKey="hours"
                         nameKey="category"
                         cx="50%"
-                        cy="45%"
+                        cy="38%"
                         outerRadius={100}
                         label={renderCustomLabel}
                         labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
@@ -2194,7 +2194,7 @@ const CedarGroveAnalytics = () => {
                         layout="horizontal" 
                         align="center" 
                         verticalAlign="bottom"
-                        wrapperStyle={{ paddingTop: '10px' }}
+                        wrapperStyle={{ paddingTop: '40px' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
