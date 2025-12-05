@@ -184,6 +184,207 @@ const TransactionRowTooltip = ({ transaction, position, formatCurrency, formatHo
   );
 };
 
+// Ops row tooltip component
+const OpsRowTooltip = ({ ops, position, formatHours }) => {
+  if (!ops) return null;
+
+  const attorneyBreakdown = Object.entries(ops.byAttorney || {})
+    .sort((a, b) => b[1].hours - a[1].hours);
+
+  // Helper to format dates (handles Firestore Timestamps and strings)
+  const formatDate = (date) => {
+    if (!date) return 'No date';
+    if (date && typeof date === 'object' && date.seconds) {
+      return new Date(date.seconds * 1000).toLocaleDateString();
+    }
+    if (typeof date === 'string') {
+      return date;
+    }
+    if (date instanceof Date) {
+      return date.toLocaleDateString();
+    }
+    return 'No date';
+  };
+
+  return (
+    <div 
+      className="fixed z-50 bg-white border border-gray-300 rounded-xl shadow-2xl p-5"
+      style={{ 
+        left: Math.min(position.x + 15, window.innerWidth - 650),
+        top: Math.max(10, Math.min(position.y - 200, window.innerHeight - 550)),
+        width: '600px',
+      }}
+    >
+      {/* Header */}
+      <div className="font-bold text-gray-900 text-xl mb-4 pb-3 border-b-2 border-green-200">
+        {ops.category}
+        <span className="text-sm font-normal text-gray-500 ml-3">
+          {ops.count} entries • {formatHours(ops.hours)}h • {ops.percentage}% of total
+        </span>
+      </div>
+      
+      {/* Attorney Breakdown - Horizontal */}
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-gray-700 mb-2">By Attorney:</div>
+        <div className="flex flex-wrap gap-2">
+          {attorneyBreakdown.map(([attorney, stats]) => (
+            <div key={attorney} className="inline-flex items-center bg-green-50 px-3 py-1.5 rounded-full text-sm">
+              <span className="font-medium text-gray-800">{attorney}</span>
+              <span className="text-gray-500 ml-2">({stats.count})</span>
+              <span className="text-green-600 font-semibold ml-2">{formatHours(stats.hours)}h</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Entries Table */}
+      <div>
+        <div className="text-sm font-semibold text-gray-700 mb-2">
+          Recent Entries:
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 text-gray-600 text-xs uppercase">
+              <th className="px-3 py-2 text-left font-semibold">Date</th>
+              <th className="px-3 py-2 text-left font-semibold">Attorney</th>
+              <th className="px-3 py-2 text-left font-semibold">Notes</th>
+              <th className="px-3 py-2 text-right font-semibold">Hours</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(ops.entries || []).slice(0, 10).map((entry, idx) => (
+              <tr key={idx} className="hover:bg-green-50">
+                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
+                <td className="px-3 py-2 font-medium text-gray-800">{entry.attorney}</td>
+                <td className="px-3 py-2 text-gray-700 truncate max-w-[250px]" title={entry.notes}>{entry.notes || '-'}</td>
+                <td className="px-3 py-2 text-right text-gray-900 font-medium">{formatHours(entry.hours)}h</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {ops.count > 10 && (
+          <div className="text-xs text-gray-400 mt-2 text-center">
+            Showing 10 of {ops.count} entries
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Client row tooltip component
+const ClientRowTooltip = ({ client, position, formatCurrency, formatHours }) => {
+  if (!client || client.entryCount === 0) return null;
+
+  const attorneyBreakdown = Object.entries(client.byAttorney || {})
+    .sort((a, b) => b[1].hours - a[1].hours);
+  
+  const categoryBreakdown = Object.entries(client.byCategory || {})
+    .sort((a, b) => b[1].hours - a[1].hours);
+
+  // Helper to format dates (handles Firestore Timestamps and strings)
+  const formatDate = (date) => {
+    if (!date) return 'No date';
+    if (date && typeof date === 'object' && date.seconds) {
+      return new Date(date.seconds * 1000).toLocaleDateString();
+    }
+    if (typeof date === 'string') {
+      return date;
+    }
+    if (date instanceof Date) {
+      return date.toLocaleDateString();
+    }
+    return 'No date';
+  };
+
+  return (
+    <div 
+      className="fixed z-50 bg-white border border-gray-300 rounded-xl shadow-2xl p-5"
+      style={{ 
+        left: Math.min(position.x + 15, window.innerWidth - 750),
+        top: Math.max(10, Math.min(position.y - 200, window.innerHeight - 550)),
+        width: '700px',
+      }}
+    >
+      {/* Header */}
+      <div className="font-bold text-gray-900 text-xl mb-4 pb-3 border-b-2 border-purple-200">
+        {client.name}
+        <span className="text-sm font-normal text-gray-500 ml-3">
+          {client.entryCount} entries • {formatHours(client.totalHours)}h • {formatCurrency(client.totalEarnings)}
+        </span>
+      </div>
+      
+      {/* Attorney Breakdown - Horizontal */}
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-gray-700 mb-2">By Attorney:</div>
+        <div className="flex flex-wrap gap-2">
+          {attorneyBreakdown.map(([attorney, stats]) => (
+            <div key={attorney} className="inline-flex items-center bg-purple-50 px-3 py-1.5 rounded-full text-sm">
+              <span className="font-medium text-gray-800">{attorney}</span>
+              <span className="text-gray-500 ml-2">({stats.count})</span>
+              <span className="text-purple-600 font-semibold ml-2">{formatHours(stats.hours)}h</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Category Breakdown - Horizontal */}
+      {categoryBreakdown.length > 0 && (
+        <div className="mb-4">
+          <div className="text-sm font-semibold text-gray-700 mb-2">By Transaction Type:</div>
+          <div className="flex flex-wrap gap-2">
+            {categoryBreakdown.slice(0, 8).map(([category, stats]) => (
+              <div key={category} className="inline-flex items-center bg-blue-50 px-3 py-1.5 rounded-full text-sm">
+                <span className="font-medium text-gray-800">{category}</span>
+                <span className="text-blue-600 font-semibold ml-2">{formatHours(stats.hours)}h</span>
+              </div>
+            ))}
+            {categoryBreakdown.length > 8 && (
+              <div className="inline-flex items-center bg-gray-100 px-3 py-1.5 rounded-full text-sm text-gray-500">
+                +{categoryBreakdown.length - 8} more
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Entries Table */}
+      <div>
+        <div className="text-sm font-semibold text-gray-700 mb-2">
+          Recent Transactions:
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 text-gray-600 text-xs uppercase">
+              <th className="px-3 py-2 text-left font-semibold">Date</th>
+              <th className="px-3 py-2 text-left font-semibold">Attorney</th>
+              <th className="px-3 py-2 text-left font-semibold">Type</th>
+              <th className="px-3 py-2 text-right font-semibold">Hours</th>
+              <th className="px-3 py-2 text-right font-semibold">Earnings</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(client.entries || []).slice(0, 10).map((entry, idx) => (
+              <tr key={idx} className="hover:bg-purple-50">
+                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
+                <td className="px-3 py-2 font-medium text-gray-800">{entry.attorney}</td>
+                <td className="px-3 py-2 text-gray-700 truncate max-w-[150px]" title={entry.category}>{entry.category}</td>
+                <td className="px-3 py-2 text-right text-gray-900 font-medium">{formatHours(entry.totalHours)}h</td>
+                <td className="px-3 py-2 text-right text-green-600 font-medium">{formatCurrency(entry.earnings)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {client.entryCount > 10 && (
+          <div className="text-xs text-gray-400 mt-2 text-center">
+            Showing 10 of {client.entryCount} entries
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CedarGroveAnalytics = () => {
   const [selectedView, setSelectedView] = useState('overview');
   const [selectedAttorney, setSelectedAttorney] = useState(null);
@@ -203,6 +404,10 @@ const CedarGroveAnalytics = () => {
   const [clientSortConfig, setClientSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [hoveredTransaction, setHoveredTransaction] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [hoveredOps, setHoveredOps] = useState(null);
+  const [opsTooltipPosition, setOpsTooltipPosition] = useState({ x: 0, y: 0 });
+  const [hoveredClient, setHoveredClient] = useState(null);
+  const [clientTooltipPosition, setClientTooltipPosition] = useState({ x: 0, y: 0 });
   const [clientActivityPeriod, setClientActivityPeriod] = useState('3-months'); // Default to trailing 3 months
   const [clientActivityStartDate, setClientActivityStartDate] = useState('');
   const [clientActivityEndDate, setClientActivityEndDate] = useState('');
@@ -567,6 +772,7 @@ const CedarGroveAnalytics = () => {
       const category = entry.billingCategory || entry.category || 'Other';
       const earnings = entry.billablesEarnings || 0;
       const entryDate = getEntryDate(entry);
+      const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
 
       if (!entryStats[clientName]) {
         entryStats[clientName] = {
@@ -575,6 +781,9 @@ const CedarGroveAnalytics = () => {
           uniqueTransactions: new Set(),
           transactionCount: 0,
           lastActivity: entryDate,
+          byAttorney: {},
+          byCategory: {},
+          entries: []
         };
       }
 
@@ -585,6 +794,42 @@ const CedarGroveAnalytics = () => {
 
       if (entryDate > entryStats[clientName].lastActivity) {
         entryStats[clientName].lastActivity = entryDate;
+      }
+      
+      // Track by attorney
+      if (!entryStats[clientName].byAttorney[attorneyName]) {
+        entryStats[clientName].byAttorney[attorneyName] = {
+          count: 0,
+          hours: 0,
+          earnings: 0
+        };
+      }
+      entryStats[clientName].byAttorney[attorneyName].count += 1;
+      entryStats[clientName].byAttorney[attorneyName].hours += totalHours;
+      entryStats[clientName].byAttorney[attorneyName].earnings += earnings;
+      
+      // Track by category
+      if (!entryStats[clientName].byCategory[category]) {
+        entryStats[clientName].byCategory[category] = {
+          count: 0,
+          hours: 0
+        };
+      }
+      entryStats[clientName].byCategory[category].count += 1;
+      entryStats[clientName].byCategory[category].hours += totalHours;
+      
+      // Store entry details (limit to most recent 50 for performance)
+      if (entryStats[clientName].entries.length < 50) {
+        entryStats[clientName].entries.push({
+          attorney: attorneyName,
+          category: category,
+          billableHours: billableHours,
+          opsHours: opsHours,
+          totalHours: totalHours,
+          earnings: earnings,
+          date: entry.billableDate || entry.opsDate || entry.date || '',
+          notes: entry.notes || ''
+        });
       }
     });
 
@@ -607,6 +852,9 @@ const CedarGroveAnalytics = () => {
           uniqueTransactions: new Set(),
           transactionCount: 0,
           lastActivity: null,
+          byAttorney: {},
+          byCategory: {},
+          entries: []
         };
 
         // Determine display status based on Firebase status field
@@ -617,6 +865,14 @@ const CedarGroveAnalytics = () => {
         } else if (inactiveStatuses.includes(fbStatus)) {
           displayStatus = 'inactive';
         }
+
+        // Sort entries by date descending
+        const sortedEntries = (stats.entries || []).sort((a, b) => {
+          if (!a.date || !b.date) return 0;
+          const dateA = a.date.seconds ? new Date(a.date.seconds * 1000) : new Date(a.date);
+          const dateB = b.date.seconds ? new Date(b.date.seconds * 1000) : new Date(b.date);
+          return dateB - dateA;
+        });
 
         return {
           name: clientName,
@@ -636,6 +892,10 @@ const CedarGroveAnalytics = () => {
           channel: client.channel || '',
           contactEmail: client.contactEmail || '',
           website: client.website || '',
+          byAttorney: stats.byAttorney || {},
+          byCategory: stats.byCategory || {},
+          entries: sortedEntries,
+          entryCount: stats.transactionCount || 0
         };
       })
       .sort((a, b) => b.totalHours - a.totalHours);
@@ -662,6 +922,7 @@ const CedarGroveAnalytics = () => {
 
     filteredEntries.forEach(entry => {
       const opsHours = entry.opsHours || 0;
+      const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
       
       if (opsHours > 0) {
         // Use opsCategory if valid, otherwise categorize as "Other"
@@ -670,19 +931,52 @@ const CedarGroveAnalytics = () => {
           : 'Other';
         
         if (!opsStats[category]) {
-          opsStats[category] = 0;
+          opsStats[category] = {
+            hours: 0,
+            byAttorney: {},
+            entries: []
+          };
         }
-        opsStats[category] += opsHours;
+        opsStats[category].hours += opsHours;
         totalOpsHours += opsHours;
+        
+        // Track by attorney
+        if (!opsStats[category].byAttorney[attorneyName]) {
+          opsStats[category].byAttorney[attorneyName] = {
+            count: 0,
+            hours: 0
+          };
+        }
+        opsStats[category].byAttorney[attorneyName].count += 1;
+        opsStats[category].byAttorney[attorneyName].hours += opsHours;
+        
+        // Store entry details (limit to most recent 50 for performance)
+        if (opsStats[category].entries.length < 50) {
+          opsStats[category].entries.push({
+            attorney: attorneyName,
+            client: entry.client || 'N/A',
+            hours: opsHours,
+            date: entry.opsDate || entry.billableDate || entry.date || '',
+            notes: entry.ops || entry.notes || ''
+          });
+        }
       }
     });
 
-    return Object.entries(opsStats).map(([category, hours]) => ({
+    return Object.entries(opsStats).map(([category, data]) => ({
       category,
-      hours: Math.round(hours * 10) / 10,
-      percentage: totalOpsHours > 0 ? Math.round((hours / totalOpsHours) * 100) : 0
+      hours: Math.round(data.hours * 10) / 10,
+      percentage: totalOpsHours > 0 ? Math.round((data.hours / totalOpsHours) * 100) : 0,
+      byAttorney: data.byAttorney,
+      entries: data.entries.sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        const dateA = a.date.seconds ? new Date(a.date.seconds * 1000) : new Date(a.date);
+        const dateB = b.date.seconds ? new Date(b.date.seconds * 1000) : new Date(b.date);
+        return dateB - dateA;
+      }),
+      count: data.entries.length
     })).sort((a, b) => b.hours - a.hours);
-  }, [filteredEntries]);
+  }, [filteredEntries, attorneyMap]);
 
   // Calculate utilization
   const calculateUtilization = (attorney) => {
@@ -1645,63 +1939,84 @@ const CedarGroveAnalytics = () => {
             </div>
 
             {opsData.length > 0 ? (
-              <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Ops Table - Left side */}
                 <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  <table className="w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th 
                           onClick={() => handleOpsSort('category')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         >
                           Ops Category {opsSortConfig.key === 'category' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
                         <th 
                           onClick={() => handleOpsSort('hours')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-24"
                         >
-                          Total Hours {opsSortConfig.key === 'hours' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
+                          Hours {opsSortConfig.key === 'hours' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
                         <th 
                           onClick={() => handleOpsSort('percentage')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-20"
                         >
-                          % of Total Ops {opsSortConfig.key === 'percentage' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
+                          % {opsSortConfig.key === 'percentage' && (opsSortConfig.direction === 'asc' ? '↑' : '↓')}
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {getSortedOps().map((ops, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <tr 
+                          key={idx} 
+                          className="hover:bg-green-50 cursor-pointer transition-colors"
+                          onMouseEnter={(e) => {
+                            setHoveredOps(ops);
+                            setOpsTooltipPosition({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseMove={(e) => {
+                            setOpsTooltipPosition({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseLeave={() => setHoveredOps(null)}
+                        >
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                             {ops.category}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                             {ops.hours}h
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                             {ops.percentage}%
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  
+                  {/* Ops Tooltip */}
+                  {hoveredOps && (
+                    <OpsRowTooltip 
+                      ops={hoveredOps} 
+                      position={opsTooltipPosition}
+                      formatHours={formatHours}
+                    />
+                  )}
                 </div>
 
-                {/* Ops Distribution Chart */}
+                {/* Ops Distribution Chart - Right side */}
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Ops Time Distribution
                   </h3>
-                  <ResponsiveContainer width="100%" height={450}>
-                    <PieChart margin={{ top: 40, right: 40, bottom: 20, left: 40 }}>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                       <Pie
                         data={opsData}
                         dataKey="hours"
                         nameKey="category"
                         cx="50%"
-                        cy="40%"
-                        outerRadius={120}
+                        cy="45%"
+                        outerRadius={100}
                         label={renderCustomLabel}
                         labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
                       >
@@ -1717,12 +2032,12 @@ const CedarGroveAnalytics = () => {
                         layout="horizontal" 
                         align="center" 
                         verticalAlign="bottom"
-                        wrapperStyle={{ paddingTop: '20px' }}
+                        wrapperStyle={{ paddingTop: '10px' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-              </>
+              </div>
             ) : (
               <div className="bg-white p-8 rounded-lg shadow text-center">
                 <div className="text-gray-500">No ops data available for the selected date range.</div>
@@ -1864,7 +2179,22 @@ const CedarGroveAnalytics = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {getSortedClients().map((client, idx) => (
-                    <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
+                    <tr 
+                      key={idx} 
+                      className="hover:bg-purple-50 cursor-pointer transition-colors"
+                      onMouseEnter={(e) => {
+                        if (client.entryCount > 0) {
+                          setHoveredClient(client);
+                          setClientTooltipPosition({ x: e.clientX, y: e.clientY });
+                        }
+                      }}
+                      onMouseMove={(e) => {
+                        if (client.entryCount > 0) {
+                          setClientTooltipPosition({ x: e.clientX, y: e.clientY });
+                        }
+                      }}
+                      onMouseLeave={() => setHoveredClient(null)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                         {client.name}
                       </td>
@@ -1897,6 +2227,16 @@ const CedarGroveAnalytics = () => {
                   ))}
                 </tbody>
               </table>
+              
+              {/* Client Tooltip */}
+              {hoveredClient && (
+                <ClientRowTooltip 
+                  client={hoveredClient} 
+                  position={clientTooltipPosition}
+                  formatCurrency={formatCurrency}
+                  formatHours={formatHours}
+                />
+              )}
             </div>
 
             {/* Client Charts */}
