@@ -592,9 +592,75 @@ const CedarGroveAnalytics = () => {
     return entries;
   }, [allEntries, dateRange, customDateStart, customDateEnd, globalAttorneyFilter, attorneyMap]);
 
+  // Calculate the number of months in the selected date range for target scaling
+  const monthsInDateRange = useMemo(() => {
+    const now = getPSTDate();
+    let startDate;
+    let endDate = new Date(now);
+
+    switch (dateRange) {
+      case 'all-time':
+        // For all-time, calculate from earliest entry to now
+        if (allEntries && allEntries.length > 0) {
+          const dates = allEntries.map(e => getEntryDate(e)).filter(d => d);
+          if (dates.length > 0) {
+            startDate = new Date(Math.min(...dates.map(d => d.getTime())));
+          } else {
+            return 1;
+          }
+        } else {
+          return 1;
+        }
+        break;
+      case 'current-week':
+        // A week is roughly 0.25 months
+        return 0.25;
+      case 'current-month':
+        // Current month - calculate fraction of month elapsed
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const dayOfMonth = now.getDate();
+        return dayOfMonth / daysInMonth;
+      case 'last-month':
+        return 1;
+      case 'trailing-60':
+        return 2; // ~60 days = ~2 months
+      case 'custom':
+        if (customDateStart && customDateEnd) {
+          const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
+          const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
+          startDate = new Date(startYear, startMonth - 1, startDay);
+          endDate = new Date(endYear, endMonth - 1, endDay);
+        } else {
+          return 1;
+        }
+        break;
+      default:
+        return 1;
+    }
+
+    if (startDate && endDate) {
+      // Calculate months between dates
+      const msPerMonth = 1000 * 60 * 60 * 24 * 30.44; // Average days per month
+      const months = (endDate.getTime() - startDate.getTime()) / msPerMonth;
+      return Math.max(0.25, months); // Minimum of 1 week equivalent
+    }
+
+    return 1;
+  }, [dateRange, customDateStart, customDateEnd, allEntries]);
+
   // Process attorney data - updated to use new field names
   const attorneyData = useMemo(() => {
     const attorneyStats = {};
+    
+    // Monthly targets (base values)
+    const monthlyTarget = 150;
+    const monthlyBillableTarget = 100;
+    const monthlyOpsTarget = 50;
+    
+    // Scale targets based on date range
+    const scaledTarget = Math.round(monthlyTarget * monthsInDateRange * 10) / 10;
+    const scaledBillableTarget = Math.round(monthlyBillableTarget * monthsInDateRange * 10) / 10;
+    const scaledOpsTarget = Math.round(monthlyOpsTarget * monthsInDateRange * 10) / 10;
 
     filteredEntries.forEach(entry => {
       const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
@@ -605,9 +671,9 @@ const CedarGroveAnalytics = () => {
           billable: 0,
           ops: 0,
           earnings: 0,
-          target: 150,
-          billableTarget: 100,
-          opsTarget: 50,
+          target: scaledTarget,
+          billableTarget: scaledBillableTarget,
+          opsTarget: scaledOpsTarget,
           role: 'Attorney',
           transactions: {},
           clients: {}
@@ -655,7 +721,7 @@ const CedarGroveAnalytics = () => {
         .slice(0, 5)
         .map(([name]) => name)
     }));
-  }, [filteredEntries, attorneyMap]);
+  }, [filteredEntries, attorneyMap, monthsInDateRange]);
 
   // Process transaction data - updated to use new field names
   const transactionData = useMemo(() => {
