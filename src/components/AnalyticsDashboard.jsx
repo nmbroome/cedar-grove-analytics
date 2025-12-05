@@ -411,15 +411,21 @@ const CedarGroveAnalytics = () => {
   const [clientActivityPeriod, setClientActivityPeriod] = useState('3-months'); // Default to trailing 3 months
   const [clientActivityStartDate, setClientActivityStartDate] = useState('');
   const [clientActivityEndDate, setClientActivityEndDate] = useState('');
+  const [globalAttorneyFilter, setGlobalAttorneyFilter] = useState([]); // Array of selected attorney names
+  const [showAttorneyDropdown, setShowAttorneyDropdown] = useState(false);
 
   const dropdownRef = useRef(null);
   const tooltipRef = useRef(null);
+  const attorneyDropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDateDropdown(false);
+      }
+      if (attorneyDropdownRef.current && !attorneyDropdownRef.current.contains(event.target)) {
+        setShowAttorneyDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -496,57 +502,86 @@ const CedarGroveAnalytics = () => {
     return map;
   }, [firebaseAttorneys]);
 
+  // Get list of all attorney names for global filter dropdown
+  const allAttorneyNames = useMemo(() => {
+    const names = new Set();
+    // Get from Firebase attorneys
+    firebaseAttorneys.forEach(attorney => {
+      names.add(attorney.name || attorney.id);
+    });
+    // Also get from entries in case there are any not in the attorneys collection
+    if (allEntries) {
+      allEntries.forEach(entry => {
+        const name = attorneyMap[entry.attorneyId] || entry.attorneyId;
+        if (name) names.add(name);
+      });
+    }
+    return Array.from(names).sort();
+  }, [firebaseAttorneys, allEntries, attorneyMap]);
+
   // Process data based on date range (using PST)
   const filteredEntries = useMemo(() => {
     if (!allEntries) return [];
 
-    // If "all-time" selected, return all entries
-    if (dateRange === 'all-time') {
-      return allEntries;
+    let entries = allEntries;
+
+    // Filter by date range
+    if (dateRange !== 'all-time') {
+      const now = getPSTDate();
+      let startDate;
+      let endDate = new Date(now);
+
+      switch (dateRange) {
+        case 'current-week':
+          // Start of current week (Sunday) in PST
+          const dayOfWeek = now.getDay();
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+          break;
+        case 'current-month':
+          // Start of current month in PST
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'last-month':
+          // Start of last month to end of last month in PST
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+          break;
+        case 'trailing-60':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 0, 0, 0, 0);
+          break;
+        case 'custom':
+          if (customDateStart && customDateEnd) {
+            // Parse date strings directly to avoid timezone issues
+            const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
+            const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
+            startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+            endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+          } else {
+            break;
+          }
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      }
+
+      if (startDate) {
+        entries = entries.filter(entry => {
+          const entryDate = getEntryDate(entry);
+          return entryDate >= startDate && entryDate <= endDate;
+        });
+      }
     }
 
-    const now = getPSTDate();
-    let startDate;
-    let endDate = new Date(now);
-
-    switch (dateRange) {
-      case 'current-week':
-        // Start of current week (Sunday) in PST
-        const dayOfWeek = now.getDay();
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
-        break;
-      case 'current-month':
-        // Start of current month in PST
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        break;
-      case 'last-month':
-        // Start of last month to end of last month in PST
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        break;
-      case 'trailing-60':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 0, 0, 0, 0);
-        break;
-      case 'custom':
-        if (customDateStart && customDateEnd) {
-          // Parse date strings directly to avoid timezone issues
-          const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
-          const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
-          startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-          endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
-        } else {
-          return allEntries;
-        }
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    // Filter by selected attorneys (global filter)
+    if (globalAttorneyFilter.length > 0) {
+      entries = entries.filter(entry => {
+        const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+        return globalAttorneyFilter.includes(attorneyName);
+      });
     }
 
-    return allEntries.filter(entry => {
-      const entryDate = getEntryDate(entry);
-      return entryDate >= startDate && entryDate <= endDate;
-    });
-  }, [allEntries, dateRange, customDateStart, customDateEnd]);
+    return entries;
+  }, [allEntries, dateRange, customDateStart, customDateEnd, globalAttorneyFilter, attorneyMap]);
 
   // Process attorney data - updated to use new field names
   const attorneyData = useMemo(() => {
@@ -1484,6 +1519,77 @@ const CedarGroveAnalytics = () => {
               <span className="text-sm font-medium">Manage Targets</span>
             </Link>
             
+            {/* Attorney Filter Dropdown */}
+            <div className="relative" ref={attorneyDropdownRef}>
+              <button
+                onClick={() => setShowAttorneyDropdown(!showAttorneyDropdown)}
+                className={`flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors shadow-sm ${
+                  globalAttorneyFilter.length > 0 
+                    ? 'bg-purple-50 border-purple-300' 
+                    : 'bg-white border-gray-300'
+                }`}
+              >
+                <Users className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  {globalAttorneyFilter.length === 0 
+                    ? 'All Attorneys' 
+                    : globalAttorneyFilter.length === 1 
+                      ? globalAttorneyFilter[0]
+                      : `${globalAttorneyFilter.length} Attorneys`}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showAttorneyDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showAttorneyDropdown && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100">
+                    <button
+                      onClick={() => setGlobalAttorneyFilter([])}
+                      className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                        globalAttorneyFilter.length === 0 
+                          ? 'bg-purple-100 text-purple-700 font-medium' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      All Attorneys
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {allAttorneyNames.map(name => (
+                      <label
+                        key={name}
+                        className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={globalAttorneyFilter.includes(name)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setGlobalAttorneyFilter([...globalAttorneyFilter, name]);
+                            } else {
+                              setGlobalAttorneyFilter(globalAttorneyFilter.filter(n => n !== name));
+                            }
+                          }}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                        <span className="ml-3 text-sm text-gray-700">{name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {globalAttorneyFilter.length > 0 && (
+                    <div className="p-2 border-t border-gray-100 bg-gray-50">
+                      <button
+                        onClick={() => setGlobalAttorneyFilter([])}
+                        className="w-full px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
             {/* Date Range Dropdown */}
             <DateRangeDropdown />
           </div>
@@ -1510,12 +1616,26 @@ const CedarGroveAnalytics = () => {
         {selectedView === 'overview' && (
           <div className="space-y-6">
             {/* Date Range Indicator */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-                <span className="ml-2 text-blue-600">({filteredEntries.length} entries)</span>
-              </span>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-700">
+                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                  <span className="ml-2 text-blue-600">({filteredEntries.length} entries)</span>
+                </span>
+              </div>
+              {globalAttorneyFilter.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">
+                    Filtered by: <span className="font-semibold">
+                      {globalAttorneyFilter.length === 1 
+                        ? globalAttorneyFilter[0] 
+                        : `${globalAttorneyFilter.length} attorneys`}
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* KPI Cards */}
@@ -1647,11 +1767,25 @@ const CedarGroveAnalytics = () => {
         {/* Attorneys View */}
         {selectedView === 'attorneys' && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-              </span>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-700">
+                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                </span>
+              </div>
+              {globalAttorneyFilter.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">
+                    Filtered by: <span className="font-semibold">
+                      {globalAttorneyFilter.length === 1 
+                        ? globalAttorneyFilter[0] 
+                        : `${globalAttorneyFilter.length} attorneys`}
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1791,11 +1925,25 @@ const CedarGroveAnalytics = () => {
         {selectedView === 'transactions' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-blue-700">
-                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-                </span>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-blue-700">
+                    Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                  </span>
+                </div>
+                {globalAttorneyFilter.length > 0 && (
+                  <div className="flex items-center gap-2 pl-4 border-l border-blue-200">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm text-purple-700">
+                      Filtered by: <span className="font-semibold">
+                        {globalAttorneyFilter.length === 1 
+                          ? globalAttorneyFilter[0] 
+                          : `${globalAttorneyFilter.length} attorneys`}
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
               
               {/* Attorney Filter */}
@@ -1931,11 +2079,25 @@ const CedarGroveAnalytics = () => {
         {/* Ops View */}
         {selectedView === 'ops' && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-              </span>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-700">
+                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                </span>
+              </div>
+              {globalAttorneyFilter.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">
+                    Filtered by: <span className="font-semibold">
+                      {globalAttorneyFilter.length === 1 
+                        ? globalAttorneyFilter[0] 
+                        : `${globalAttorneyFilter.length} attorneys`}
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {opsData.length > 0 ? (
@@ -2049,11 +2211,25 @@ const CedarGroveAnalytics = () => {
         {/* Clients View */}
         {selectedView === 'clients' && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
-              </span>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-700">
+                  Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
+                </span>
+              </div>
+              {globalAttorneyFilter.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">
+                    Filtered by: <span className="font-semibold">
+                      {globalAttorneyFilter.length === 1 
+                        ? globalAttorneyFilter[0] 
+                        : `${globalAttorneyFilter.length} attorneys`}
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Client Summary Cards */}
