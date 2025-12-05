@@ -1562,11 +1562,22 @@ const CedarGroveAnalytics = () => {
                       >
                         <input
                           type="checkbox"
-                          checked={globalAttorneyFilter.includes(name)}
+                          checked={globalAttorneyFilter.length === 0 || globalAttorneyFilter.includes(name)}
                           onChange={(e) => {
-                            if (e.target.checked) {
-                              setGlobalAttorneyFilter([...globalAttorneyFilter, name]);
+                            if (globalAttorneyFilter.length === 0) {
+                              // Currently "All" is selected, so uncheck this one means select all others
+                              setGlobalAttorneyFilter(allAttorneyNames.filter(n => n !== name));
+                            } else if (e.target.checked) {
+                              // Add this attorney
+                              const newFilter = [...globalAttorneyFilter, name];
+                              // If all are now selected, switch to "All" mode (empty array)
+                              if (newFilter.length === allAttorneyNames.length) {
+                                setGlobalAttorneyFilter([]);
+                              } else {
+                                setGlobalAttorneyFilter(newFilter);
+                              }
                             } else {
+                              // Remove this attorney
                               setGlobalAttorneyFilter(globalAttorneyFilter.filter(n => n !== name));
                             }
                           }}
@@ -1789,46 +1800,46 @@ const CedarGroveAnalytics = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
                     <th 
                       onClick={() => handleAttorneySort('name')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
                       Attorney {attorneySortConfig.key === 'name' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleAttorneySort('billable')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
-                      Billable Hours {attorneySortConfig.key === 'billable' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Billable {attorneySortConfig.key === 'billable' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleAttorneySort('ops')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
-                      Ops Hours {attorneySortConfig.key === 'ops' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Ops {attorneySortConfig.key === 'ops' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleAttorneySort('total')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
                       Total {attorneySortConfig.key === 'total' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleAttorneySort('earnings')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
                       Earnings {attorneySortConfig.key === 'earnings' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleAttorneySort('utilization')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                     >
-                      Utilization {attorneySortConfig.key === 'utilization' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
+                      Util. {attorneySortConfig.key === 'utilization' && (attorneySortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[30%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       Top Transactions
                     </th>
                   </tr>
@@ -1965,42 +1976,42 @@ const CedarGroveAnalytics = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
                     <th 
                       onClick={() => handleTransactionSort('type')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Transaction Type {transactionSortConfig.key === 'type' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleTransactionSort('avgHours')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Avg Hours {transactionSortConfig.key === 'avgHours' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleTransactionSort('count')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Count {transactionSortConfig.key === 'count' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleTransactionSort('totalHours')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Total Hours {transactionSortConfig.key === 'totalHours' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleTransactionSort('totalEarnings')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Total Earnings {transactionSortConfig.key === 'totalEarnings' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleTransactionSort('percentage')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       % of Total {transactionSortConfig.key === 'percentage' && (transactionSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
@@ -2312,42 +2323,42 @@ const CedarGroveAnalytics = () => {
 
             {/* Clients Table */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
                     <th 
                       onClick={() => handleClientSort('name')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Client Name {clientSortConfig.key === 'name' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleClientSort('status')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Status {clientSortConfig.key === 'status' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleClientSort('location')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Location {clientSortConfig.key === 'location' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleClientSort('totalHours')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Total Hours {clientSortConfig.key === 'totalHours' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleClientSort('totalEarnings')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Earnings {clientSortConfig.key === 'totalEarnings' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => handleClientSort('lastActivity')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     >
                       Last Activity {clientSortConfig.key === 'lastActivity' && (clientSortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
