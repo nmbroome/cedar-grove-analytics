@@ -390,7 +390,7 @@ const CedarGroveAnalytics = () => {
   const [selectedAttorney, setSelectedAttorney] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [dateRange, setDateRange] = useState('all-time');
+  const [dateRange, setDateRange] = useState('current-month');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
@@ -413,6 +413,7 @@ const CedarGroveAnalytics = () => {
   const [clientActivityEndDate, setClientActivityEndDate] = useState('');
   const [globalAttorneyFilter, setGlobalAttorneyFilter] = useState([]); // Array of selected attorney names
   const [showAttorneyDropdown, setShowAttorneyDropdown] = useState(false);
+  const [attorneyFilterInitialized, setAttorneyFilterInitialized] = useState(false);
 
   const dropdownRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -518,6 +519,14 @@ const CedarGroveAnalytics = () => {
     }
     return Array.from(names).sort();
   }, [firebaseAttorneys, allEntries, attorneyMap]);
+
+  // Initialize attorney filter with all attorneys once loaded
+  useEffect(() => {
+    if (!attorneyFilterInitialized && allAttorneyNames.length > 0) {
+      setGlobalAttorneyFilter([...allAttorneyNames]);
+      setAttorneyFilterInitialized(true);
+    }
+  }, [allAttorneyNames, attorneyFilterInitialized]);
 
   // Process data based on date range (using PST)
   const filteredEntries = useMemo(() => {
@@ -1524,7 +1533,7 @@ const CedarGroveAnalytics = () => {
               <button
                 onClick={() => setShowAttorneyDropdown(!showAttorneyDropdown)}
                 className={`flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors shadow-sm ${
-                  globalAttorneyFilter.length > 0 
+                  globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length
                     ? 'bg-purple-50 border-purple-300' 
                     : 'bg-white border-gray-300'
                 }`}
@@ -1532,10 +1541,12 @@ const CedarGroveAnalytics = () => {
                 <Users className="w-4 h-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">
                   {globalAttorneyFilter.length === 0 
-                    ? 'All Attorneys' 
-                    : globalAttorneyFilter.length === 1 
-                      ? globalAttorneyFilter[0]
-                      : `${globalAttorneyFilter.length} Attorneys`}
+                    ? 'No Attorneys'
+                    : globalAttorneyFilter.length === allAttorneyNames.length
+                      ? 'All Attorneys'
+                      : globalAttorneyFilter.length === 1 
+                        ? globalAttorneyFilter[0]
+                        : `${globalAttorneyFilter.length} Attorneys`}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showAttorneyDropdown ? 'rotate-180' : ''}`} />
               </button>
@@ -1544,9 +1555,9 @@ const CedarGroveAnalytics = () => {
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
                   <div className="p-2 border-b border-gray-100">
                     <button
-                      onClick={() => setGlobalAttorneyFilter([])}
+                      onClick={() => setGlobalAttorneyFilter([...allAttorneyNames])}
                       className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
-                        globalAttorneyFilter.length === 0 
+                        globalAttorneyFilter.length === allAttorneyNames.length 
                           ? 'bg-purple-100 text-purple-700 font-medium' 
                           : 'text-gray-700 hover:bg-gray-100'
                       }`}
@@ -1562,22 +1573,11 @@ const CedarGroveAnalytics = () => {
                       >
                         <input
                           type="checkbox"
-                          checked={globalAttorneyFilter.length === 0 || globalAttorneyFilter.includes(name)}
+                          checked={globalAttorneyFilter.includes(name)}
                           onChange={(e) => {
-                            if (globalAttorneyFilter.length === 0) {
-                              // Currently "All" is selected, so uncheck this one means select all others
-                              setGlobalAttorneyFilter(allAttorneyNames.filter(n => n !== name));
-                            } else if (e.target.checked) {
-                              // Add this attorney
-                              const newFilter = [...globalAttorneyFilter, name];
-                              // If all are now selected, switch to "All" mode (empty array)
-                              if (newFilter.length === allAttorneyNames.length) {
-                                setGlobalAttorneyFilter([]);
-                              } else {
-                                setGlobalAttorneyFilter(newFilter);
-                              }
+                            if (e.target.checked) {
+                              setGlobalAttorneyFilter([...globalAttorneyFilter, name]);
                             } else {
-                              // Remove this attorney
                               setGlobalAttorneyFilter(globalAttorneyFilter.filter(n => n !== name));
                             }
                           }}
@@ -1587,16 +1587,14 @@ const CedarGroveAnalytics = () => {
                       </label>
                     ))}
                   </div>
-                  {globalAttorneyFilter.length > 0 && (
-                    <div className="p-2 border-t border-gray-100 bg-gray-50">
-                      <button
-                        onClick={() => setGlobalAttorneyFilter([])}
-                        className="w-full px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                      >
-                        Clear selection
-                      </button>
-                    </div>
-                  )}
+                  <div className="p-2 border-t border-gray-100 bg-gray-50">
+                    <button
+                      onClick={() => setGlobalAttorneyFilter([])}
+                      className="w-full px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      Clear selection
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1635,7 +1633,7 @@ const CedarGroveAnalytics = () => {
                   <span className="ml-2 text-blue-600">({filteredEntries.length} entries)</span>
                 </span>
               </div>
-              {globalAttorneyFilter.length > 0 && (
+              {globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length && (
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-purple-600" />
                   <span className="text-sm text-purple-700">
@@ -1785,7 +1783,7 @@ const CedarGroveAnalytics = () => {
                   Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
                 </span>
               </div>
-              {globalAttorneyFilter.length > 0 && (
+              {globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length && (
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-purple-600" />
                   <span className="text-sm text-purple-700">
@@ -1943,7 +1941,7 @@ const CedarGroveAnalytics = () => {
                     Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
                   </span>
                 </div>
-                {globalAttorneyFilter.length > 0 && (
+                {globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length && (
                   <div className="flex items-center gap-2 pl-4 border-l border-blue-200">
                     <Users className="w-4 h-4 text-purple-600" />
                     <span className="text-sm text-purple-700">
@@ -2097,7 +2095,7 @@ const CedarGroveAnalytics = () => {
                   Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
                 </span>
               </div>
-              {globalAttorneyFilter.length > 0 && (
+              {globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length && (
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-purple-600" />
                   <span className="text-sm text-purple-700">
@@ -2229,7 +2227,7 @@ const CedarGroveAnalytics = () => {
                   Showing data for: <span className="font-semibold">{getDateRangeLabel()}</span>
                 </span>
               </div>
-              {globalAttorneyFilter.length > 0 && (
+              {globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length && (
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-purple-600" />
                   <span className="text-sm text-purple-700">
