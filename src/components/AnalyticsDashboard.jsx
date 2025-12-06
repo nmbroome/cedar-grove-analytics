@@ -202,9 +202,6 @@ const AnalyticsDashboard = () => {
             globalAttorneyFilter={globalAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             transactionData={transactionData}
-            attorneyData={attorneyData}
-            transactionAttorneyFilter={transactionAttorneyFilter}
-            setTransactionAttorneyFilter={setTransactionAttorneyFilter}
           />
         )}
 
