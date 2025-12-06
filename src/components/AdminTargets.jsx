@@ -3,14 +3,34 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Calendar, Users, Target, CheckCircle, AlertCircle } from 'lucide-react';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '../firebase/config';
-import { useAttorneys } from '../hooks/useFirestoreData';
+import { useAllTimeEntries } from '../hooks/useFirestoreData';
 
 const AdminTargets = () => {
-  const { attorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
+  // Use entries to derive attorney list instead of useAttorneys
+  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
+  
+  // Derive unique attorneys from entries
+  const attorneys = useMemo(() => {
+    if (!allEntries || allEntries.length === 0) return [];
+    
+    const attorneyMap = new Map();
+    allEntries.forEach(entry => {
+      const id = entry.attorneyId;
+      if (id && !attorneyMap.has(id)) {
+        attorneyMap.set(id, {
+          id: id,
+          name: id // Use attorneyId as name
+        });
+      }
+    });
+    
+    return Array.from(attorneyMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allEntries]);
+
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingAttorney, setSavingAttorney] = useState(null); // Track which attorney is being saved
+  const [savingAttorney, setSavingAttorney] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const [error, setError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -50,9 +70,9 @@ const AdminTargets = () => {
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: attorney.billableTarget || 100,
-          opsTarget: attorney.opsTarget || 50,
-          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
+          billableTarget: 100,
+          opsTarget: 50,
+          totalTarget: 150,
           isNew: true
         }));
 
@@ -102,9 +122,9 @@ const AdminTargets = () => {
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: attorney.billableTarget || 100,
-          opsTarget: attorney.opsTarget || 50,
-          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
+          billableTarget: 100,
+          opsTarget: 50,
+          totalTarget: 150,
           isNew: true
         }));
         setTargets(defaultTargets);
@@ -113,13 +133,13 @@ const AdminTargets = () => {
       }
     };
 
-    if (!attorneysLoading && attorneys.length > 0) {
+    if (!entriesLoading && attorneys.length > 0) {
       fetchTargets();
-    } else if (!attorneysLoading) {
+    } else if (!entriesLoading) {
       setLoading(false);
       setTargets([]);
     }
-  }, [selectedYear, selectedMonth, attorneys, attorneysLoading]);
+  }, [selectedYear, selectedMonth, attorneys, entriesLoading]);
 
   // Update a target value
   const handleTargetChange = (attorneyId, field, value) => {
@@ -277,9 +297,9 @@ const AdminTargets = () => {
           attorneyName: attorney.name || attorney.id,
           year: selectedYear,
           month: selectedMonth,
-          billableTarget: attorney.billableTarget || 100,
-          opsTarget: attorney.opsTarget || 50,
-          totalTarget: (attorney.billableTarget || 100) + (attorney.opsTarget || 50),
+          billableTarget: 100,
+          opsTarget: 50,
+          totalTarget: 150,
           isNew: true
         }));
 
@@ -312,7 +332,7 @@ const AdminTargets = () => {
     return month ? month.label : '';
   };
 
-  if (loading || attorneysLoading) {
+  if (loading || entriesLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
@@ -323,12 +343,12 @@ const AdminTargets = () => {
     );
   }
 
-  if (attorneysError) {
+  if (entriesError) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center max-w-md">
-          <div className="text-red-600 text-xl mb-4">Error loading attorneys</div>
-          <div className="text-gray-600 mb-4">{attorneysError}</div>
+          <div className="text-red-600 text-xl mb-4">Error loading data</div>
+          <div className="text-gray-600 mb-4">{entriesError}</div>
           <Link to="/" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
             Back to Dashboard
           </Link>
@@ -352,7 +372,7 @@ const AdminTargets = () => {
           <div className="text-center max-w-md">
             <div className="text-gray-900 text-xl mb-4">No attorneys found</div>
             <div className="text-gray-600">
-              Please add attorneys to the database before setting utilization targets.
+              No time entries found in the database. Attorneys are derived from existing time entries.
             </div>
           </div>
         </div>
