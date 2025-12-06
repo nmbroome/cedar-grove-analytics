@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { DateRangeIndicator } from '../shared';
+import { AttorneysTable } from '../tables';
+import { BillableVsOpsChart } from '../charts';
+
+const AttorneysView = ({
+  dateRangeLabel,
+  globalAttorneyFilter,
+  allAttorneyNames,
+  attorneyData,
+  calculateUtilization,
+}) => {
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+
+  const handleSort = (key) => {
+    let direction = 'desc';
+    if (key === 'name') direction = 'asc';
+    if (sortConfig.key === key) {
+      direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedAttorneys = () => {
+    const attorneys = [...attorneyData];
+    
+    attorneys.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortConfig.key) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'billable':
+          aVal = a.billable;
+          bVal = b.billable;
+          break;
+        case 'ops':
+          aVal = a.ops;
+          bVal = b.ops;
+          break;
+        case 'total':
+          aVal = a.billable + a.ops;
+          bVal = b.billable + b.ops;
+          break;
+        case 'earnings':
+          aVal = a.earnings;
+          bVal = b.earnings;
+          break;
+        case 'utilization':
+          aVal = calculateUtilization(a);
+          bVal = calculateUtilization(b);
+          break;
+        default:
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+      }
+      
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return attorneys;
+  };
+
+  return (
+    <div className="space-y-6">
+      <DateRangeIndicator 
+        dateRangeLabel={dateRangeLabel}
+        globalAttorneyFilter={globalAttorneyFilter}
+        allAttorneyNames={allAttorneyNames}
+      />
+
+      <AttorneysTable 
+        attorneys={getSortedAttorneys()}
+        sortConfig={sortConfig}
+        onSort={handleSort}
+        calculateUtilization={calculateUtilization}
+      />
+
+      <BillableVsOpsChart 
+        data={attorneyData}
+        title="Billable vs Ops Time by Attorney"
+      />
+    </div>
+  );
+};
+
+export default AttorneysView;
