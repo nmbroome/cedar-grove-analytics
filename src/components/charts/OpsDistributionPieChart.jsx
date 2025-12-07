@@ -1,3 +1,5 @@
+"use client";
+
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CHART_COLORS } from '../../utils/constants';
 

@@ -1,3 +1,5 @@
+"use client";
+
 import { Activity, Clock, Users, DollarSign } from 'lucide-react';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 import { DateRangeIndicator, KPICard } from '../shared';

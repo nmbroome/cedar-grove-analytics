@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { DateRangeIndicator } from '../shared';
 import { TransactionsTable } from '../tables';

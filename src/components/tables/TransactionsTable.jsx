@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 import { TransactionRowTooltip } from '../tooltips';

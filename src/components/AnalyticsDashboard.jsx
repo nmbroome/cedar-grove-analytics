@@ -1,5 +1,7 @@
+"use client";
+
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { Settings } from 'lucide-react';
 import { getDateRangeLabel } from '../utils/dateHelpers';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
@@ -259,7 +261,7 @@ const Header = ({
       
       <div className="flex items-center gap-4">
         <Link
-          to="/admin/targets"
+          href="/admin/targets"
           className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <Settings className="w-4 h-4" />

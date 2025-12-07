@@ -1,3 +1,5 @@
+"use client";
+
 import { formatCurrency, formatHours } from '../../utils/formatters';
 
 const AttorneysTable = ({ 

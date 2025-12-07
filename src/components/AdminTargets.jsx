@@ -1,5 +1,7 @@
+"use client";
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { ArrowLeft, Save, Plus, Calendar, Users, Target, CheckCircle, AlertCircle } from 'lucide-react';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '../firebase/config';
@@ -349,7 +351,7 @@ const AdminTargets = () => {
         <div className="text-center max-w-md">
           <div className="text-red-600 text-xl mb-4">Error loading data</div>
           <div className="text-gray-600 mb-4">{entriesError}</div>
-          <Link to="/" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          <Link href="/" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
             Back to Dashboard
           </Link>
         </div>
@@ -362,7 +364,7 @@ const AdminTargets = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
             </Link>
@@ -387,7 +389,7 @@ const AdminTargets = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
+              <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
                 <ArrowLeft className="w-5 h-5" />
                 <span>Back to Dashboard</span>
               </Link>

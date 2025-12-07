@@ -1,3 +1,5 @@
+"use client";
+
 import { useRef, useEffect } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 import { DATE_RANGE_OPTIONS } from '../../utils/constants';
