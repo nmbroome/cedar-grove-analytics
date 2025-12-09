@@ -27,13 +27,25 @@ if (typeof window !== 'undefined') {
 
   onAuthStateChanged(auth, (user) => {
     if (user) {
-      console.log("User authenticated:", user.uid);
+      console.log("User authenticated:", user.uid, user.isAnonymous ? "(anonymous)" : "(signed in)");
       authReadyResolve(user);
     } else {
-      console.log("No user, signing in anonymously...");
-      signInAnonymously(auth)
-        .then(() => console.log("Signed in anonymously"))
-        .catch((error) => console.error("Anonymous auth failed:", error));
+      // Check if we're on an admin/login page - don't auto-sign-in anonymously there
+      const isAdminPage = window.location.pathname.startsWith('/admin') || 
+                          window.location.pathname.startsWith('/login');
+      
+      if (isAdminPage) {
+        console.log("On admin/login page, skipping anonymous auth");
+        authReadyResolve(null);
+      } else {
+        console.log("No user, signing in anonymously for public pages...");
+        signInAnonymously(auth)
+          .then(() => console.log("Signed in anonymously"))
+          .catch((error) => {
+            console.error("Anonymous auth failed:", error);
+            authReadyResolve(null);
+          });
+      }
     }
   });
 }

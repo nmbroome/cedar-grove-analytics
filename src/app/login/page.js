@@ -26,11 +26,25 @@ function LoginContent() {
     try {
       setSigningIn(true);
       setError(null);
-      await signInWithGoogle();
+      const result = await signInWithGoogle();
+      
+      if (!result.success) {
+        if (result.error !== 'Sign-in cancelled') {
+          setError(result.error || 'Failed to sign in. Please try again.');
+        }
+        setSigningIn(false);
+        return;
+      }
+      
+      // If sign-in succeeded and user is admin, redirect will happen via useEffect
+      // If not admin, the Access Denied screen will show
+      if (result.isAdmin) {
+        router.push(returnUrl);
+      }
+      setSigningIn(false);
     } catch (err) {
       console.error('Sign in error:', err);
       setError('Failed to sign in. Please try again.');
-    } finally {
       setSigningIn(false);
     }
   };
