@@ -2,13 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Settings } from 'lucide-react';
-import { getDateRangeLabel } from '../utils/dateHelpers';
-import { useAnalyticsData } from '../hooks/useAnalyticsData';
+import { useRouter } from 'next/navigation';
+import { Settings, LogIn, LogOut, Shield } from 'lucide-react';
+import { getDateRangeLabel } from '@/utils/dateHelpers';
+import { useAnalyticsData } from '@/hooks/useAnalyticsData';
+import { useAuth } from '@/context/AuthContext';
 import { DateRangeDropdown, AttorneyFilterDropdown } from './shared';
 import { OverviewView, AttorneysView, TransactionsView, OpsView, ClientsView } from './views';
 
 const AnalyticsDashboard = () => {
+  const { user, isAdmin, signOut } = useAuth();
+  const router = useRouter();
+
   // Date range state
   const [dateRange, setDateRange] = useState('current-month');
   const [customDateStart, setCustomDateStart] = useState('');
@@ -68,6 +73,11 @@ const AnalyticsDashboard = () => {
     }
   }, [allAttorneyNames, attorneyFilterInitialized]);
 
+  const handleLogout = async () => {
+    await signOut();
+    router.refresh();
+  };
+
   const dateRangeLabel = getDateRangeLabel(dateRange, customDateStart, customDateEnd);
 
   // Loading state
@@ -101,7 +111,7 @@ const AnalyticsDashboard = () => {
   }
 
   // No data state
-  if (filteredEntries.length === 0) {
+  if (!filteredEntries || filteredEntries.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
@@ -116,9 +126,12 @@ const AnalyticsDashboard = () => {
             setCustomDateEnd={setCustomDateEnd}
             showAttorneyDropdown={showAttorneyDropdown}
             setShowAttorneyDropdown={setShowAttorneyDropdown}
-            allAttorneyNames={allAttorneyNames}
+            allAttorneyNames={allAttorneyNames || []}
             globalAttorneyFilter={globalAttorneyFilter}
             setGlobalAttorneyFilter={setGlobalAttorneyFilter}
+            isAdmin={isAdmin}
+            user={user}
+            onLogout={handleLogout}
           />
 
           <div className="flex items-center justify-center py-20">
@@ -148,9 +161,12 @@ const AnalyticsDashboard = () => {
           setCustomDateEnd={setCustomDateEnd}
           showAttorneyDropdown={showAttorneyDropdown}
           setShowAttorneyDropdown={setShowAttorneyDropdown}
-          allAttorneyNames={allAttorneyNames}
+          allAttorneyNames={allAttorneyNames || []}
           globalAttorneyFilter={globalAttorneyFilter}
           setGlobalAttorneyFilter={setGlobalAttorneyFilter}
+          isAdmin={isAdmin}
+          user={user}
+          onLogout={handleLogout}
         />
 
         {/* Navigation Tabs */}
@@ -251,6 +267,9 @@ const Header = ({
   allAttorneyNames,
   globalAttorneyFilter,
   setGlobalAttorneyFilter,
+  isAdmin,
+  user,
+  onLogout,
 }) => {
   return (
     <div className="mb-8 flex justify-between items-start">
@@ -260,14 +279,6 @@ const Header = ({
       </div>
       
       <div className="flex items-center gap-4">
-        <Link
-          href="/admin/targets"
-          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="text-sm font-medium">Manage Targets</span>
-        </Link>
-        
         <AttorneyFilterDropdown
           allAttorneyNames={allAttorneyNames}
           globalAttorneyFilter={globalAttorneyFilter}
@@ -286,6 +297,35 @@ const Header = ({
           showDropdown={showDateDropdown}
           setShowDropdown={setShowDateDropdown}
         />
+
+        {/* Admin Button - always visible, redirects to login if not authenticated */}
+        <Link
+          href="/admin"
+          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg transition-colors"
+        >
+          <Shield className="w-4 h-4" />
+          <span className="text-sm font-medium">Admin</span>
+        </Link>
+
+        {/* User status / Logout */}
+        {user && (
+          <div className="flex items-center gap-3">
+            {user.photoURL && (
+              <img 
+                src={user.photoURL} 
+                alt={user.displayName || 'User'}
+                className="w-8 h-8 rounded-full"
+              />
+            )}
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title={`Logged in as ${user.email}`}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

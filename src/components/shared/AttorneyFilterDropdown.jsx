@@ -1,11 +1,9 @@
-"use client";
-
 import { useRef, useEffect } from 'react';
 import { Users, ChevronDown } from 'lucide-react';
 
 const AttorneyFilterDropdown = ({
-  allAttorneyNames,
-  globalAttorneyFilter,
+  allAttorneyNames = [],
+  globalAttorneyFilter = [],
   setGlobalAttorneyFilter,
   showDropdown,
   setShowDropdown,
@@ -23,13 +21,13 @@ const AttorneyFilterDropdown = ({
   }, [setShowDropdown]);
 
   const getButtonLabel = () => {
-    if (globalAttorneyFilter.length === 0) return 'No Attorneys';
+    if (!globalAttorneyFilter || globalAttorneyFilter.length === 0) return 'No Attorneys';
     if (globalAttorneyFilter.length === allAttorneyNames.length) return 'All Attorneys';
     if (globalAttorneyFilter.length === 1) return globalAttorneyFilter[0];
     return `${globalAttorneyFilter.length} Attorneys`;
   };
 
-  const isFiltered = globalAttorneyFilter.length > 0 && globalAttorneyFilter.length < allAttorneyNames.length;
+  const isFiltered = globalAttorneyFilter?.length > 0 && globalAttorneyFilter?.length < allAttorneyNames?.length;
 
   return (
     <div className="relative" ref={dropdownRef}>

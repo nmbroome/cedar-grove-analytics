@@ -2,12 +2,17 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Save, Plus, Calendar, Users, Target, CheckCircle, AlertCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Save, Plus, Calendar, Users, Target, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
-import { db, waitForAuth } from '../firebase/config';
-import { useAllTimeEntries } from '../hooks/useFirestoreData';
+import { db, waitForAuth } from '@/firebase/config';
+import { useAllTimeEntries } from '@/hooks/useFirestoreData';
+import { useAuth } from '@/context/AuthContext';
 
 const AdminTargets = () => {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+
   // Use entries to derive attorney list instead of useAttorneys
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   
@@ -21,7 +26,7 @@ const AdminTargets = () => {
       if (id && !attorneyMap.has(id)) {
         attorneyMap.set(id, {
           id: id,
-          name: id // Use attorneyId as name
+          name: id
         });
       }
     });
@@ -54,6 +59,11 @@ const AdminTargets = () => {
   ];
 
   const years = [2024, 2025, 2026];
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/');
+  };
 
   // Fetch existing targets for the selected month/year
   useEffect(() => {
@@ -389,9 +399,9 @@ const AdminTargets = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
+              <Link href="/admin" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
                 <ArrowLeft className="w-5 h-5" />
-                <span>Back to Dashboard</span>
+                <span>Back to Admin</span>
               </Link>
               <div className="h-6 w-px bg-gray-300"></div>
               <div>
@@ -400,27 +410,53 @@ const AdminTargets = () => {
               </div>
             </div>
             
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors ${
-                saving 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Save All Targets</span>
-                </>
+            <div className="flex items-center gap-4">
+              {user && (
+                <div className="flex items-center gap-3">
+                  {user.photoURL && (
+                    <img 
+                      src={user.photoURL} 
+                      alt={user.displayName || 'User'}
+                      className="w-8 h-8 rounded-full"
+                    />
+                  )}
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900">{user.displayName}</div>
+                    <div className="text-gray-500">{user.email}</div>
+                  </div>
+                </div>
               )}
-            </button>
+              
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+              
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors ${
+                  saving 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save All Targets</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
