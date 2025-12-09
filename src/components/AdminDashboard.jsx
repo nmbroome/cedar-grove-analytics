@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Target, Users, Settings, LogOut, ArrowLeft, Shield } from 'lucide-react';
+import { Target, Users, LogOut, ArrowLeft, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -22,14 +22,13 @@ const AdminDashboard = () => {
       icon: Target,
       color: 'bg-blue-500',
     },
-    // Add more admin pages here as needed
-    // {
-    //   title: 'Manage Users',
-    //   description: 'Add or remove admin users',
-    //   href: '/admin/users',
-    //   icon: Users,
-    //   color: 'bg-purple-500',
-    // },
+    {
+      title: 'Manage Admins',
+      description: 'Add or remove administrator access for users',
+      href: '/admin/users',
+      icon: Users,
+      color: 'bg-purple-500',
+    },
   ];
 
   return (

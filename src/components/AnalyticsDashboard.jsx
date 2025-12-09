@@ -308,7 +308,7 @@ const Header = ({
         </Link>
 
         {/* User status / Logout */}
-        {user && (
+        {user && !user.isAnonymous && (
           <div className="flex items-center gap-3">
             {user.photoURL && (
               <img 
