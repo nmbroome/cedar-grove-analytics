@@ -10,7 +10,8 @@ export default function ProtectedRoute({ children }) {
 
   useEffect(() => {
     if (!loading) {
-      if (!user || !isAdmin) {
+      // Redirect if: no user, anonymous user, or not an admin
+      if (!user || user.isAnonymous || !isAdmin) {
         router.push('/login');
       }
     }
@@ -27,7 +28,8 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  if (!user || !isAdmin) {
+  // Don't render children if not authenticated properly
+  if (!user || user.isAnonymous || !isAdmin) {
     return null;
   }
 

@@ -17,7 +17,7 @@ function LoginContent() {
 
   // Redirect if already authenticated and is admin
   useEffect(() => {
-    if (!loading && user && isAdmin) {
+    if (!loading && user && !user.isAnonymous && isAdmin) {
       router.push(returnUrl);
     }
   }, [user, isAdmin, loading, router, returnUrl]);
@@ -50,8 +50,8 @@ function LoginContent() {
     );
   }
 
-  // User is logged in but not an admin
-  if (user && !isAdmin) {
+  // User is logged in but not an admin (skip anonymous users - they should see login form)
+  if (user && !user.isAnonymous && !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
@@ -75,7 +75,7 @@ function LoginContent() {
     );
   }
 
-  // Not logged in - show sign in form
+  // Not logged in (or anonymous) - show sign in form
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
