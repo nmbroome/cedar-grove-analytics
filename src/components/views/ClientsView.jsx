@@ -15,6 +15,7 @@ const ClientsView = ({
 }) => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
+  const [showInactive, setShowInactive] = useState(false);
 
   const handleSort = (key) => {
     let direction = 'desc';
@@ -29,6 +30,11 @@ const ClientsView = ({
     let filtered = clientData.filter(client =>
       client.name.toLowerCase().includes(clientSearch.toLowerCase())
     );
+
+    // Filter out inactive clients unless showInactive is true
+    if (!showInactive) {
+      filtered = filtered.filter(client => client.totalHours > 0);
+    }
 
     filtered.sort((a, b) => {
       let aVal, bVal;
@@ -99,8 +105,19 @@ const ClientsView = ({
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="text-gray-400 text-xs">
-              Total: {clientCounts.total} clients (Active + Quiet status)
+            <div className="flex items-center justify-between">
+              <div className="text-gray-400 text-xs">
+                Total: {clientCounts.total} clients (Active + Quiet status)
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-600">Show inactive</span>
+              </label>
             </div>
           </div>
         </div>

@@ -89,7 +89,7 @@ const ClientsTable = ({
                       : 'bg-red-100 text-red-800'
                   }`}
                 >
-                  {client.totalHours > 0 ? 'active' : 'inactive'}
+                  {client.totalHours > 0 ? 'Active' : 'Inactive'}
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
