@@ -233,8 +233,10 @@ export const useAnalyticsData = ({
       
       const category = entry.billingCategory || entry.category || 'Other';
       const client = entry.client || 'Unknown';
+      const isAdjustment = category.toLowerCase() === 'adjustment' || category.toLowerCase() === 'adjustments';
       
-      if (billableHours > 0) {
+      // Track transactions for attorney page, but exclude adjustments
+      if (billableHours > 0 && !isAdjustment) {
         if (!attorneyMonthlyActivity[attorneyName].transactions[category]) {
           attorneyMonthlyActivity[attorneyName].transactions[category] = 0;
         }
