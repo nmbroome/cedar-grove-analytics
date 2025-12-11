@@ -87,16 +87,16 @@ const OverviewView = ({
         </div>
       </div>
 
-      {/* Top Transactions */}
-      <TopTransactionsChart 
-        data={transactionData} 
-        title={`Top Transaction Types by Time - ${dateRangeLabel}`}
-      />
-
       {/* Billable vs Ops Time by Attorney */}
       <BillableVsOpsChart 
         data={attorneyData}
         title={`Billable vs Ops Time by Attorney - ${dateRangeLabel}`}
+      />
+
+      {/* Top Transactions */}
+      <TopTransactionsChart 
+        data={transactionData} 
+        title={`Top Transaction Types by Time - ${dateRangeLabel}`}
       />
     </div>
   );
