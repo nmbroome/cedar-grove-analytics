@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAllTimeEntries, useAttorneys, useClients } from './useFirestoreData';
-import { getEntryDate, getPSTDate, calculateClientActivityDateRange } from '../utils/dateHelpers';
+import { 
+  getEntryDate, 
+  getPSTDate, 
+  calculateClientActivityDateRange,
+  getMonthBusinessDays,
+  countBusinessDays 
+} from '../utils/dateHelpers';
 
 export const useAnalyticsData = ({
   dateRange,
@@ -94,84 +100,11 @@ export const useAnalyticsData = ({
     return Array.from(names).sort();
   }, [firebaseAttorneys, allEntries, attorneyMap]);
 
-  // Filter entries based on date range
-  const filteredEntries = useMemo(() => {
-    if (!allEntries) return [];
-
-    let entries = allEntries;
-
-    // Filter by date range
-    if (dateRange !== 'all-time') {
-      const now = getPSTDate();
-      let startDate;
-      let endDate = new Date(now);
-
-      switch (dateRange) {
-        case 'current-week':
-          const dayOfWeek = now.getDay();
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
-          break;
-        case 'current-month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          break;
-        case 'last-month':
-          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-          endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-          break;
-        case 'trailing-60':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 0, 0, 0, 0);
-          break;
-        case 'custom':
-          if (customDateStart && customDateEnd) {
-            const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
-            const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
-            startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-            endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
-          }
-          break;
-        default:
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      }
-
-      if (startDate) {
-        entries = entries.filter(entry => {
-          const entryDate = getEntryDate(entry);
-          return entryDate >= startDate && entryDate <= endDate;
-        });
-      }
-    }
-
-    // Filter by selected attorneys (global filter)
-    if (globalAttorneyFilter.length > 0) {
-      entries = entries.filter(entry => {
-        const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
-        return globalAttorneyFilter.includes(attorneyName);
-      });
-    }
-
-    return entries;
-  }, [allEntries, dateRange, customDateStart, customDateEnd, globalAttorneyFilter, attorneyMap]);
-
-  // Calculate the date range boundaries and list of months included
+  // Calculate the date range boundaries
   const dateRangeInfo = useMemo(() => {
-    const calculateMonthFraction = (monthDate, rangeStart, rangeEnd) => {
-      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
-      const daysInMonth = monthEnd.getDate();
-      
-      const effectiveStart = monthStart < rangeStart ? rangeStart : monthStart;
-      const effectiveEnd = monthEnd > rangeEnd ? rangeEnd : monthEnd;
-      
-      const msPerDay = 1000 * 60 * 60 * 24;
-      const daysIncluded = Math.max(0, (effectiveEnd.getTime() - effectiveStart.getTime()) / msPerDay + 1);
-      
-      return Math.min(1, daysIncluded / daysInMonth);
-    };
-
     const now = getPSTDate();
     let startDate;
     let endDate = new Date(now);
-    let monthsList = [];
 
     switch (dateRange) {
       case 'all-time':
@@ -205,7 +138,7 @@ export const useAnalyticsData = ({
           const [startYear, startMonth, startDay] = customDateStart.split('-').map(Number);
           const [endYear, endMonth, endDay] = customDateEnd.split('-').map(Number);
           startDate = new Date(startYear, startMonth - 1, startDay);
-          endDate = new Date(endYear, endMonth - 1, endDay);
+          endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
         } else {
           startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }
@@ -214,33 +147,62 @@ export const useAnalyticsData = ({
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    if (startDate && endDate) {
-      let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-      
-      while (current <= endMonth) {
-        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
-        monthsList.push({
-          key: monthKey,
-          year: current.getFullYear(),
-          month: current.getMonth() + 1,
-          fraction: calculateMonthFraction(current, startDate, endDate)
+    // Current month key for comparison
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    return { startDate, endDate, currentMonthKey, now };
+  }, [dateRange, customDateStart, customDateEnd, allEntries]);
+
+  // Filter entries based on date range
+  const filteredEntries = useMemo(() => {
+    if (!allEntries) return [];
+
+    let entries = allEntries;
+
+    // Filter by date range
+    if (dateRange !== 'all-time') {
+      const { startDate, endDate } = dateRangeInfo;
+
+      if (startDate) {
+        entries = entries.filter(entry => {
+          const entryDate = getEntryDate(entry);
+          return entryDate >= startDate && entryDate <= endDate;
         });
-        current.setMonth(current.getMonth() + 1);
       }
     }
 
-    return { startDate, endDate, monthsList };
-  }, [dateRange, customDateStart, customDateEnd, allEntries]);
+    // Filter by selected attorneys (global filter)
+    if (globalAttorneyFilter.length > 0) {
+      entries = entries.filter(entry => {
+        const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+        return globalAttorneyFilter.includes(attorneyName);
+      });
+    }
 
-  // Process attorney data
+    return entries;
+  }, [allEntries, dateRange, dateRangeInfo, globalAttorneyFilter, attorneyMap]);
+
+  // Helper function to get default target for an attorney (uses current month target if available)
+  const getDefaultTarget = (attorneyName) => {
+    const { currentMonthKey } = dateRangeInfo;
+    const attorneyTargetData = attorneyTargets[attorneyName] || {};
+    const currentMonthTarget = attorneyTargetData[currentMonthKey];
+    
+    return {
+      billableTarget: currentMonthTarget?.billableTarget ?? 100,
+      opsTarget: currentMonthTarget?.opsTarget ?? 50,
+      totalTarget: currentMonthTarget?.totalTarget ?? 150
+    };
+  };
+
+  // Process attorney data with proper target calculations
   const attorneyData = useMemo(() => {
     const attorneyStats = {};
-    const defaultBillableTarget = 100;
-    const defaultOpsTarget = 50;
-    const defaultTotalTarget = 150;
     const attorneyMonthlyActivity = {};
     
+    const { startDate, endDate, currentMonthKey, now } = dateRangeInfo;
+    
+    // First pass: collect hours and track active months per attorney
     filteredEntries.forEach(entry => {
       const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
       const entryDate = getEntryDate(entry);
@@ -285,34 +247,73 @@ export const useAnalyticsData = ({
       attorneyMonthlyActivity[attorneyName].clients[client] += billableHours + opsHours;
     });
 
+    // Second pass: calculate targets for each attorney based on their active months
     Object.entries(attorneyMonthlyActivity).forEach(([attorneyName, data]) => {
       let totalBillableTarget = 0;
       let totalOpsTarget = 0;
       let totalTarget = 0;
       
       const attorneyTargetData = attorneyTargets[attorneyName] || {};
+      const defaultTarget = getDefaultTarget(attorneyName);
       const activeMonths = Array.from(data.months);
       
-      activeMonths.forEach(monthKey => {
-        const monthTarget = attorneyTargetData[monthKey];
-        const monthInfo = dateRangeInfo.monthsList.find(m => m.key === monthKey);
-        const fraction = monthInfo ? monthInfo.fraction : 1;
-        
-        if (monthTarget) {
-          totalBillableTarget += (monthTarget.billableTarget || defaultBillableTarget) * fraction;
-          totalOpsTarget += (monthTarget.opsTarget || defaultOpsTarget) * fraction;
-          totalTarget += (monthTarget.totalTarget || defaultTotalTarget) * fraction;
-        } else {
-          totalBillableTarget += defaultBillableTarget * fraction;
-          totalOpsTarget += defaultOpsTarget * fraction;
-          totalTarget += defaultTotalTarget * fraction;
-        }
-      });
-      
+      // If no active months, use defaults for one month
       if (activeMonths.length === 0) {
-        totalBillableTarget = defaultBillableTarget;
-        totalOpsTarget = defaultOpsTarget;
-        totalTarget = defaultTotalTarget;
+        totalBillableTarget = defaultTarget.billableTarget;
+        totalOpsTarget = defaultTarget.opsTarget;
+        totalTarget = defaultTarget.totalTarget;
+      } else {
+        activeMonths.forEach(monthKey => {
+          const [year, month] = monthKey.split('-').map(Number);
+          const monthStart = new Date(year, month - 1, 1);
+          const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+          
+          // Get the target for this month (use stored target, or fall back to default)
+          const monthTarget = attorneyTargetData[monthKey];
+          const billableTarget = monthTarget?.billableTarget ?? defaultTarget.billableTarget;
+          const opsTarget = monthTarget?.opsTarget ?? defaultTarget.opsTarget;
+          const monthTotalTarget = monthTarget?.totalTarget ?? defaultTarget.totalTarget;
+          
+          // Determine if this month needs pro-rating (is partial)
+          // A month is partial if:
+          // 1. The date range starts after the 1st of the month, OR
+          // 2. The date range ends before the last day of the month, OR  
+          // 3. It's the current month and we're mid-month
+          const rangeStartsAfterMonthStart = startDate && startDate > monthStart;
+          const rangeEndsBeforeMonthEnd = endDate && endDate < monthEnd;
+          const isCurrentMonthInProgress = monthKey === currentMonthKey;
+          
+          const needsProRating = rangeStartsAfterMonthStart || rangeEndsBeforeMonthEnd || isCurrentMonthInProgress;
+          
+          if (needsProRating) {
+            // Calculate business days for pro-rating
+            const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
+            let effectiveEnd;
+            
+            if (isCurrentMonthInProgress) {
+              // For current month, use today as the end date
+              effectiveEnd = now;
+            } else if (endDate && endDate < monthEnd) {
+              effectiveEnd = endDate;
+            } else {
+              effectiveEnd = monthEnd;
+            }
+            
+            const businessDaysElapsed = countBusinessDays(effectiveStart, effectiveEnd);
+            const totalBusinessDaysInMonth = getMonthBusinessDays(year, month).total;
+            
+            const fraction = totalBusinessDaysInMonth > 0 ? businessDaysElapsed / totalBusinessDaysInMonth : 1;
+            
+            totalBillableTarget += billableTarget * fraction;
+            totalOpsTarget += opsTarget * fraction;
+            totalTarget += monthTotalTarget * fraction;
+          } else {
+            // Complete historical month - use full stored target (or default)
+            totalBillableTarget += billableTarget;
+            totalOpsTarget += opsTarget;
+            totalTarget += monthTotalTarget;
+          }
+        });
       }
 
       attorneyStats[attorneyName] = {
@@ -609,9 +610,10 @@ export const useAnalyticsData = ({
     return { active, quiet, terminated, total };
   }, [firebaseClients]);
 
-  // Calculate utilization
+  // Calculate utilization (targets are already properly calculated in attorneyData)
   const calculateUtilization = (attorney) => {
     const total = attorney.billable + attorney.ops;
+    if (attorney.target === 0) return 0;
     return Math.round((total / attorney.target) * 100);
   };
 
@@ -648,6 +650,7 @@ export const useAnalyticsData = ({
     clientData,
     clientCounts,
     calculateUtilization,
+    dateRangeInfo,
     ...totals,
   };
 };

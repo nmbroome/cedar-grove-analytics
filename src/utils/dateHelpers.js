@@ -35,6 +35,186 @@ export const getEntryDate = (entry) => {
   return date;
 };
 
+/**
+ * Check if a date is a business day (Monday-Friday, excluding US federal holidays)
+ */
+export const isBusinessDay = (date) => {
+  const day = date.getDay();
+  // Weekend check
+  if (day === 0 || day === 6) return false;
+  
+  // US Federal Holidays (approximate - some holidays have complex rules)
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const dayOfMonth = date.getDate();
+  
+  const holidays = getUSFederalHolidays(year);
+  
+  for (const holiday of holidays) {
+    if (holiday.getMonth() === month && holiday.getDate() === dayOfMonth) {
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+/**
+ * Get US Federal Holidays for a given year
+ * Returns array of Date objects
+ */
+export const getUSFederalHolidays = (year) => {
+  const holidays = [];
+  
+  // New Year's Day - January 1 (observed on closest weekday if on weekend)
+  holidays.push(observedHoliday(new Date(year, 0, 1)));
+  
+  // MLK Day - Third Monday in January
+  holidays.push(nthWeekdayOfMonth(year, 0, 1, 3));
+  
+  // Presidents Day - Third Monday in February
+  holidays.push(nthWeekdayOfMonth(year, 1, 1, 3));
+  
+  // Memorial Day - Last Monday in May
+  holidays.push(lastWeekdayOfMonth(year, 4, 1));
+  
+  // Juneteenth - June 19 (observed on closest weekday if on weekend)
+  holidays.push(observedHoliday(new Date(year, 5, 19)));
+  
+  // Independence Day - July 4 (observed on closest weekday if on weekend)
+  holidays.push(observedHoliday(new Date(year, 6, 4)));
+  
+  // Labor Day - First Monday in September
+  holidays.push(nthWeekdayOfMonth(year, 8, 1, 1));
+  
+  // Columbus Day - Second Monday in October
+  holidays.push(nthWeekdayOfMonth(year, 9, 1, 2));
+  
+  // Veterans Day - November 11 (observed on closest weekday if on weekend)
+  holidays.push(observedHoliday(new Date(year, 10, 11)));
+  
+  // Thanksgiving - Fourth Thursday in November
+  holidays.push(nthWeekdayOfMonth(year, 10, 4, 4));
+  
+  // Day after Thanksgiving - Fourth Friday in November
+  const thanksgiving = nthWeekdayOfMonth(year, 10, 4, 4);
+  holidays.push(new Date(thanksgiving.getTime() + 24 * 60 * 60 * 1000));
+  
+  // Christmas Day - December 25 (observed on closest weekday if on weekend)
+  holidays.push(observedHoliday(new Date(year, 11, 25)));
+  
+  return holidays;
+};
+
+/**
+ * Get the nth occurrence of a weekday in a month
+ * @param year - Year
+ * @param month - Month (0-indexed)
+ * @param weekday - Day of week (0=Sunday, 1=Monday, etc.)
+ * @param n - Which occurrence (1=first, 2=second, etc.)
+ */
+const nthWeekdayOfMonth = (year, month, weekday, n) => {
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = firstDay.getDay();
+  let dayOffset = weekday - firstWeekday;
+  if (dayOffset < 0) dayOffset += 7;
+  const day = 1 + dayOffset + (n - 1) * 7;
+  return new Date(year, month, day);
+};
+
+/**
+ * Get the last occurrence of a weekday in a month
+ */
+const lastWeekdayOfMonth = (year, month, weekday) => {
+  const lastDay = new Date(year, month + 1, 0);
+  const lastWeekday = lastDay.getDay();
+  let dayOffset = lastWeekday - weekday;
+  if (dayOffset < 0) dayOffset += 7;
+  return new Date(year, month + 1, -dayOffset);
+};
+
+/**
+ * Get the observed date for a holiday (Friday if Saturday, Monday if Sunday)
+ */
+const observedHoliday = (date) => {
+  const day = date.getDay();
+  if (day === 6) {
+    // Saturday -> observed on Friday
+    return new Date(date.getTime() - 24 * 60 * 60 * 1000);
+  } else if (day === 0) {
+    // Sunday -> observed on Monday
+    return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return date;
+};
+
+/**
+ * Count business days between two dates (inclusive of start, exclusive of end)
+ */
+export const countBusinessDays = (startDate, endDate) => {
+  let count = 0;
+  const current = new Date(startDate);
+  current.setHours(0, 0, 0, 0);
+  
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+  
+  while (current <= end) {
+    if (isBusinessDay(current)) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return count;
+};
+
+/**
+ * Get business days info for a month
+ * Returns { total: number, elapsed: number, remaining: number }
+ */
+export const getMonthBusinessDays = (year, month, asOfDate = null) => {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0); // Last day of month
+  
+  const total = countBusinessDays(monthStart, monthEnd);
+  
+  if (!asOfDate) {
+    return { total, elapsed: total, remaining: 0 };
+  }
+  
+  const asOf = new Date(asOfDate);
+  asOf.setHours(23, 59, 59, 999);
+  
+  // If asOfDate is before the month starts, no days elapsed
+  if (asOf < monthStart) {
+    return { total, elapsed: 0, remaining: total };
+  }
+  
+  // If asOfDate is after the month ends, all days elapsed
+  if (asOf > monthEnd) {
+    return { total, elapsed: total, remaining: 0 };
+  }
+  
+  // Count business days from month start to asOfDate
+  const elapsed = countBusinessDays(monthStart, asOf);
+  const remaining = total - elapsed;
+  
+  return { total, elapsed, remaining };
+};
+
+/**
+ * Calculate the pro-rated target based on business days elapsed
+ * @param fullTarget - The full month target
+ * @param businessDaysElapsed - Number of business days elapsed
+ * @param totalBusinessDays - Total business days in the period
+ * @returns Pro-rated target
+ */
+export const proRateTarget = (fullTarget, businessDaysElapsed, totalBusinessDays) => {
+  if (totalBusinessDays === 0) return fullTarget;
+  return (fullTarget * businessDaysElapsed) / totalBusinessDays;
+};
+
 // Get date range label for display
 export const getDateRangeLabel = (dateRange, customDateStart, customDateEnd) => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
