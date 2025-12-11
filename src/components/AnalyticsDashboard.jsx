@@ -28,11 +28,6 @@ const AnalyticsDashboard = () => {
   // Transaction filter state
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
 
-  // Client activity period state
-  const [clientActivityPeriod, setClientActivityPeriod] = useState('3-months');
-  const [clientActivityStartDate, setClientActivityStartDate] = useState('');
-  const [clientActivityEndDate, setClientActivityEndDate] = useState('');
-
   // View state
   const [selectedView, setSelectedView] = useState('overview');
 
@@ -60,9 +55,6 @@ const AnalyticsDashboard = () => {
     customDateEnd,
     globalAttorneyFilter,
     transactionAttorneyFilter,
-    clientActivityPeriod,
-    clientActivityStartDate,
-    clientActivityEndDate,
   });
 
   // Initialize attorney filter with all attorneys once loaded
@@ -239,12 +231,6 @@ const AnalyticsDashboard = () => {
             allAttorneyNames={allAttorneyNames}
             clientData={clientData}
             clientCounts={clientCounts}
-            clientActivityPeriod={clientActivityPeriod}
-            setClientActivityPeriod={setClientActivityPeriod}
-            clientActivityStartDate={clientActivityStartDate}
-            setClientActivityStartDate={setClientActivityStartDate}
-            clientActivityEndDate={clientActivityEndDate}
-            setClientActivityEndDate={setClientActivityEndDate}
           />
         )}
       </div>

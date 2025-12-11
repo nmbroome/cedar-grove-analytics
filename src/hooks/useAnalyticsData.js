@@ -5,7 +5,6 @@ import { useAllTimeEntries, useAttorneys, useClients } from './useFirestoreData'
 import { 
   getEntryDate, 
   getPSTDate, 
-  calculateClientActivityDateRange,
   getMonthBusinessDays,
   countBusinessDays 
 } from '../utils/dateHelpers';
@@ -16,9 +15,6 @@ export const useAnalyticsData = ({
   customDateEnd,
   globalAttorneyFilter,
   transactionAttorneyFilter,
-  clientActivityPeriod,
-  clientActivityStartDate,
-  clientActivityEndDate,
 }) => {
   // Fetch data from Firebase
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
@@ -456,28 +452,11 @@ export const useAnalyticsData = ({
     })).sort((a, b) => b.hours - a.hours);
   }, [filteredEntries, attorneyMap]);
 
-  // Calculate client activity period date range
-  const clientActivityDateRange = useMemo(() => {
-    return calculateClientActivityDateRange(clientActivityPeriod, clientActivityStartDate, clientActivityEndDate);
-  }, [clientActivityPeriod, clientActivityStartDate, clientActivityEndDate]);
-
-  // Process client data
+  // Process client data - uses the same date filter as other tabs (no separate activity window)
   const clientData = useMemo(() => {
-    const clientActivityEntries = clientActivityPeriod === 'all-time' 
-      ? filteredEntries 
-      : filteredEntries.filter(entry => {
-          const entryDate = getEntryDate(entry);
-          if (!entryDate) return false;
-          
-          const afterStart = !clientActivityDateRange.startDate || entryDate >= clientActivityDateRange.startDate;
-          const beforeEnd = !clientActivityDateRange.endDate || entryDate <= clientActivityDateRange.endDate;
-          
-          return afterStart && beforeEnd;
-        });
-
     const entryStats = {};
     
-    clientActivityEntries.forEach(entry => {
+    filteredEntries.forEach(entry => {
       const clientName = entry.client || 'Unknown';
       const billableHours = entry.billableHours || 0;
       const opsHours = entry.opsHours || 0;
@@ -597,7 +576,7 @@ export const useAnalyticsData = ({
         };
       })
       .sort((a, b) => b.totalHours - a.totalHours);
-  }, [filteredEntries, firebaseClients, clientActivityPeriod, clientActivityDateRange, attorneyMap]);
+  }, [filteredEntries, firebaseClients, attorneyMap]);
 
   // Count clients by status from Firebase
   const clientCounts = useMemo(() => {

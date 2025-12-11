@@ -5,7 +5,6 @@ import { Search } from 'lucide-react';
 import { DateRangeIndicator } from '../shared';
 import { ClientsTable } from '../tables';
 import { ClientHoursChart, ServiceBreadthChart } from '../charts';
-import { CLIENT_ACTIVITY_PERIODS } from '../../utils/constants';
 
 const ClientsView = ({
   dateRangeLabel,
@@ -13,12 +12,6 @@ const ClientsView = ({
   allAttorneyNames,
   clientData,
   clientCounts,
-  clientActivityPeriod,
-  setClientActivityPeriod,
-  clientActivityStartDate,
-  setClientActivityStartDate,
-  clientActivityEndDate,
-  setClientActivityEndDate,
 }) => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
@@ -96,46 +89,17 @@ const ClientsView = ({
             <div>
               <span className="text-gray-600 text-sm">Active Clients</span>
               <div className="text-3xl font-bold text-green-600 mt-2">{activeCount}</div>
+              <span className="text-gray-400 text-xs">with activity in selected period</span>
             </div>
             <div className="text-gray-300 text-4xl font-light mx-4">/</div>
             <div>
               <span className="text-gray-600 text-sm">Inactive Clients</span>
               <div className="text-3xl font-bold text-red-600 mt-2">{inactiveCount}</div>
+              <span className="text-gray-400 text-xs">no activity in selected period</span>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-gray-600 text-sm whitespace-nowrap">Activity window:</span>
-              <div className="flex items-center gap-2 flex-1">
-                <select
-                  value={clientActivityPeriod}
-                  onChange={(e) => setClientActivityPeriod(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                >
-                  {CLIENT_ACTIVITY_PERIODS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {clientActivityPeriod === 'custom' && (
-              <div className="flex items-center gap-2 mt-3">
-                <input
-                  type="date"
-                  value={clientActivityStartDate}
-                  onChange={(e) => setClientActivityStartDate(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-gray-500 text-sm">to</span>
-                <input
-                  type="date"
-                  value={clientActivityEndDate}
-                  onChange={(e) => setClientActivityEndDate(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-            <div className="text-gray-400 text-xs mt-2">
+            <div className="text-gray-400 text-xs">
               Total: {clientCounts.total} clients (Active + Quiet status)
             </div>
           </div>
