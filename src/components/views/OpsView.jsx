@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { DateRangeIndicator } from '../shared';
 import { OpsTable } from '../tables';
-import { OpsDistributionPieChart } from '../charts';
+import { OpsZoomableSunburst } from '../charts';
 
 const OpsView = ({
   dateRangeLabel,
@@ -85,8 +85,8 @@ const OpsView = ({
           onSort={handleSort}
         />
 
-        {/* Ops Distribution Chart - Right side */}
-        <OpsDistributionPieChart data={opsData} />
+        {/* Zoomable Sunburst Chart - Right side */}
+        <OpsZoomableSunburst data={opsData} />
       </div>
     </div>
   );
