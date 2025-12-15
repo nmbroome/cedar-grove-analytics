@@ -176,17 +176,24 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
     path.filter(d => d.children)
       .on("click", clicked);
 
+    // Track current zoom level for label display
+    let currentZoomDepth = 0;
+
     // Add labels
     const label = svg.append("g")
       .attr("pointer-events", "none")
       .attr("text-anchor", "middle")
       .style("user-select", "none")
-      .selectAll("text")
+      .selectAll("g")
       .data(root.descendants().slice(1))
-      .join("text")
-      .attr("dy", "0.35em")
-      .attr("fill-opacity", d => +labelVisible(d.current))
+      .join("g")
       .attr("transform", d => labelTransform(d.current))
+      .attr("opacity", d => +labelVisible(d.current));
+
+    // Primary label (name)
+    label.append("text")
+      .attr("class", "label-name")
+      .attr("dy", "0.35em")
       .text(d => {
         const name = d.data.name;
         // Truncate long names
@@ -195,6 +202,16 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
       .style("font-size", d => d.depth === 1 ? "11px" : "9px")
       .style("font-weight", d => d.depth === 1 ? "600" : "400")
       .style("fill", "#333");
+
+    // Secondary label (hours) - only for leaf nodes, hidden initially
+    label.append("text")
+      .attr("class", "label-hours")
+      .attr("dy", "1.4em")
+      .text(d => !d.children ? `${formatHours(d.value)}h` : "")
+      .style("font-size", "8px")
+      .style("font-weight", "500")
+      .style("fill", "#666")
+      .style("opacity", 0);
 
     // Center circle for clicking back
     const parent = svg.append("circle")
@@ -229,6 +246,7 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
 
     function clicked(event, p) {
       parent.datum(p.parent || root);
+      currentZoomDepth = p.depth;
 
       // Update center text
       if (p.depth === 0) {
@@ -263,10 +281,20 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
         .attrTween("d", d => () => arc(d.current));
 
       label.filter(function(d) {
-          return +this.getAttribute("fill-opacity") || labelVisible(d.target);
+          return +this.getAttribute("opacity") || labelVisible(d.target);
         }).transition(t)
-        .attr("fill-opacity", d => +labelVisible(d.target))
+        .attr("opacity", d => +labelVisible(d.target))
         .attrTween("transform", d => () => labelTransform(d.current));
+
+      // Show/hide hours labels based on zoom depth
+      // Only show hours when zoomed into a category (depth >= 1)
+      label.selectAll(".label-name")
+        .transition(t)
+        .attr("dy", p.depth >= 1 ? "-0.1em" : "0.35em");
+      
+      label.selectAll(".label-hours")
+        .transition(t)
+        .style("opacity", p.depth >= 1 ? 1 : 0);
     }
 
     function arcVisible(d) {
