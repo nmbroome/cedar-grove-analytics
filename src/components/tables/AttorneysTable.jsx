@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from 'next/navigation';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 
 const AttorneysTable = ({ 
@@ -8,9 +9,15 @@ const AttorneysTable = ({
   onSort,
   calculateUtilization 
 }) => {
+  const router = useRouter();
+
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return '';
     return sortConfig.direction === 'asc' ? '↑' : '↓';
+  };
+
+  const handleAttorneyClick = (attorneyName) => {
+    router.push(`/attorneys/${encodeURIComponent(attorneyName)}`);
   };
 
   return (
@@ -64,9 +71,13 @@ const AttorneysTable = ({
             const utilization = calculateUtilization(attorney);
             const total = attorney.billable + attorney.ops;
             return (
-              <tr key={idx} className="hover:bg-blue-50 cursor-pointer transition-colors">
+              <tr 
+                key={idx} 
+                className="hover:bg-blue-50 cursor-pointer transition-colors"
+                onClick={() => handleAttorneyClick(attorney.name)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
-                  {attorney.name}
+                  <span className="hover:underline">{attorney.name}</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {formatHours(attorney.billable)}h

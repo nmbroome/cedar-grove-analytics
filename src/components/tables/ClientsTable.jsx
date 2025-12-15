@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 import { ClientRowTooltip } from '../tooltips';
 
@@ -9,12 +10,17 @@ const ClientsTable = ({
   sortConfig, 
   onSort 
 }) => {
+  const router = useRouter();
   const [hoveredClient, setHoveredClient] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return '';
     return sortConfig.direction === 'asc' ? '↑' : '↓';
+  };
+
+  const handleClientClick = (clientName) => {
+    router.push(`/clients/${encodeURIComponent(clientName)}`);
   };
 
   return (
@@ -65,6 +71,7 @@ const ClientsTable = ({
             <tr 
               key={idx} 
               className="hover:bg-purple-50 cursor-pointer transition-colors"
+              onClick={() => handleClientClick(client.name)}
               onMouseEnter={(e) => {
                 if (client.entryCount > 0) {
                   setHoveredClient(client);
@@ -79,7 +86,7 @@ const ClientsTable = ({
               onMouseLeave={() => setHoveredClient(null)}
             >
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
-                {client.name}
+                <span className="hover:underline">{client.name}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">
                 <span
