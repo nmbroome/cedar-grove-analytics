@@ -1,3 +1,5 @@
+"use client";
+
 import { formatCurrency, formatHours, formatDate } from '../../utils/formatters';
 
 const ClientRowTooltip = ({ client, position }) => {
@@ -22,7 +24,7 @@ const ClientRowTooltip = ({ client, position }) => {
       <div className="font-bold text-gray-900 text-xl mb-4 pb-3 border-b-2 border-purple-200">
         {client.name}
         <span className="text-sm font-normal text-gray-500 ml-3">
-          {client.entryCount} entries • {formatHours(client.totalHours)}h • {formatCurrency(client.totalEarnings)}
+          {client.entryCount} entries • {formatHours(client.billableHours || client.totalHours)}h • {formatCurrency(client.grossBillables || 0)}
         </span>
       </div>
       
@@ -72,7 +74,7 @@ const ClientRowTooltip = ({ client, position }) => {
               <th className="px-3 py-2 text-left font-semibold">Attorney</th>
               <th className="px-3 py-2 text-left font-semibold">Type</th>
               <th className="px-3 py-2 text-right font-semibold">Hours</th>
-              <th className="px-3 py-2 text-right font-semibold">Earnings</th>
+              <th className="px-3 py-2 text-right font-semibold">Billables</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -81,8 +83,8 @@ const ClientRowTooltip = ({ client, position }) => {
                 <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
                 <td className="px-3 py-2 font-medium text-gray-800">{entry.attorney}</td>
                 <td className="px-3 py-2 text-gray-700 truncate max-w-[150px]" title={entry.category}>{entry.category}</td>
-                <td className="px-3 py-2 text-right text-gray-900 font-medium">{formatHours(entry.totalHours)}h</td>
-                <td className="px-3 py-2 text-right text-green-600 font-medium">{formatCurrency(entry.earnings)}</td>
+                <td className="px-3 py-2 text-right text-gray-900 font-medium">{formatHours(entry.billableHours || entry.totalHours)}h</td>
+                <td className="px-3 py-2 text-right text-green-600 font-medium">{formatCurrency(entry.grossBillables || 0)}</td>
               </tr>
             ))}
           </tbody>

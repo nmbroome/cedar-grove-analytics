@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Settings, LogIn, LogOut, Shield } from 'lucide-react';
@@ -20,10 +20,9 @@ const AnalyticsDashboard = () => {
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
 
-  // Attorney filter state
+  // Attorney filter state - start with empty array, will default to all attorneys
   const [globalAttorneyFilter, setGlobalAttorneyFilter] = useState([]);
   const [showAttorneyDropdown, setShowAttorneyDropdown] = useState(false);
-  const [attorneyFilterInitialized, setAttorneyFilterInitialized] = useState(false);
 
   // Transaction filter state
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
@@ -57,13 +56,13 @@ const AnalyticsDashboard = () => {
     transactionAttorneyFilter,
   });
 
-  // Initialize attorney filter with all attorneys once loaded
-  useEffect(() => {
-    if (!attorneyFilterInitialized && allAttorneyNames.length > 0) {
-      setGlobalAttorneyFilter([...allAttorneyNames]);
-      setAttorneyFilterInitialized(true);
+  // Effective attorney filter - defaults to all attorneys when empty
+  const effectiveAttorneyFilter = useMemo(() => {
+    if (globalAttorneyFilter.length === 0 && allAttorneyNames.length > 0) {
+      return [...allAttorneyNames];
     }
-  }, [allAttorneyNames, attorneyFilterInitialized]);
+    return globalAttorneyFilter;
+  }, [globalAttorneyFilter, allAttorneyNames]);
 
   const handleLogout = async () => {
     await signOut();
@@ -119,7 +118,7 @@ const AnalyticsDashboard = () => {
             showAttorneyDropdown={showAttorneyDropdown}
             setShowAttorneyDropdown={setShowAttorneyDropdown}
             allAttorneyNames={allAttorneyNames || []}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             setGlobalAttorneyFilter={setGlobalAttorneyFilter}
             isAdmin={isAdmin}
             user={user}
@@ -154,7 +153,7 @@ const AnalyticsDashboard = () => {
           showAttorneyDropdown={showAttorneyDropdown}
           setShowAttorneyDropdown={setShowAttorneyDropdown}
           allAttorneyNames={allAttorneyNames || []}
-          globalAttorneyFilter={globalAttorneyFilter}
+          globalAttorneyFilter={effectiveAttorneyFilter}
           setGlobalAttorneyFilter={setGlobalAttorneyFilter}
           isAdmin={isAdmin}
           user={user}
@@ -183,7 +182,7 @@ const AnalyticsDashboard = () => {
           <OverviewView
             dateRangeLabel={dateRangeLabel}
             filteredEntriesCount={filteredEntries.length}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             avgUtilization={avgUtilization}
             totalBillable={totalBillable}
@@ -199,7 +198,7 @@ const AnalyticsDashboard = () => {
         {selectedView === 'attorneys' && (
           <AttorneysView
             dateRangeLabel={dateRangeLabel}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             attorneyData={attorneyData}
             calculateUtilization={calculateUtilization}
@@ -209,7 +208,7 @@ const AnalyticsDashboard = () => {
         {selectedView === 'transactions' && (
           <TransactionsView
             dateRangeLabel={dateRangeLabel}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             transactionData={transactionData}
           />
@@ -218,7 +217,7 @@ const AnalyticsDashboard = () => {
         {selectedView === 'ops' && (
           <OpsView
             dateRangeLabel={dateRangeLabel}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             opsData={opsData}
           />
@@ -227,10 +226,11 @@ const AnalyticsDashboard = () => {
         {selectedView === 'clients' && (
           <ClientsView
             dateRangeLabel={dateRangeLabel}
-            globalAttorneyFilter={globalAttorneyFilter}
+            globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             clientData={clientData}
             clientCounts={clientCounts}
+            filteredEntries={filteredEntries}
           />
         )}
       </div>

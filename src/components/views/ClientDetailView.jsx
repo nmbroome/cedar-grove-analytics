@@ -33,6 +33,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { useAllTimeEntries, useClients } from '@/hooks/useFirestoreData';
+import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 import { CHART_COLORS, DATE_RANGE_OPTIONS } from '@/utils/constants';
@@ -83,6 +84,7 @@ const ClientDetailView = ({ clientName }) => {
   const router = useRouter();
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
+  const { rates: attorneyRates, loading: ratesLoading, error: ratesError, getRate } = useAttorneyRates();
   
   // Date range state
   const [dateRange, setDateRange] = useState('all-time');
@@ -90,8 +92,8 @@ const ClientDetailView = ({ clientName }) => {
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
 
-  const loading = entriesLoading || clientsLoading;
-  const error = entriesError || clientsError;
+  const loading = entriesLoading || clientsLoading || ratesLoading;
+  const error = entriesError || clientsError || ratesError;
 
   // Get client metadata from Firebase
   const clientMetadata = useMemo(() => {
@@ -166,7 +168,8 @@ const ClientDetailView = ({ clientName }) => {
         totalHours: 0,
         billableHours: 0,
         opsHours: 0,
-        totalEarnings: 0,
+        grossBillables: 0,
+        takeHomeEarnings: 0,
         transactionCount: 0,
         uniqueTransactionTypes: 0,
         uniqueAttorneys: 0,
@@ -180,7 +183,8 @@ const ClientDetailView = ({ clientName }) => {
       totalHours: 0,
       billableHours: 0,
       opsHours: 0,
-      totalEarnings: 0,
+      grossBillables: 0,
+      takeHomeEarnings: 0,
       transactionCount: clientEntries.length,
       transactionTypes: new Set(),
       attorneys: new Set(),
@@ -195,7 +199,15 @@ const ClientDetailView = ({ clientName }) => {
       stats.billableHours += billable;
       stats.opsHours += ops;
       stats.totalHours += billable + ops;
-      stats.totalEarnings += entry.billablesEarnings || 0;
+      stats.takeHomeEarnings += entry.billablesEarnings || 0;
+      
+      // Calculate gross billables using attorney rate * hours
+      const entryDate = getEntryDate(entry);
+      const attorneyName = entry.attorneyId;
+      if (attorneyName && billable > 0) {
+        const rate = getRate(attorneyName, entryDate);
+        stats.grossBillables += rate * billable;
+      }
       
       if (entry.billingCategory || entry.category) {
         stats.transactionTypes.add(entry.billingCategory || entry.category);
@@ -204,12 +216,12 @@ const ClientDetailView = ({ clientName }) => {
         stats.attorneys.add(entry.attorneyId);
       }
 
-      const entryDate = getEntryDate(entry);
-      if (!stats.lastActivity || entryDate > stats.lastActivity) {
-        stats.lastActivity = entryDate;
+      const entryDate2 = getEntryDate(entry);
+      if (!stats.lastActivity || entryDate2 > stats.lastActivity) {
+        stats.lastActivity = entryDate2;
       }
-      if (!stats.firstActivity || entryDate < stats.firstActivity) {
-        stats.firstActivity = entryDate;
+      if (!stats.firstActivity || entryDate2 < stats.firstActivity) {
+        stats.firstActivity = entryDate2;
       }
     });
 
@@ -221,7 +233,7 @@ const ClientDetailView = ({ clientName }) => {
         ? stats.totalHours / stats.transactionCount 
         : 0,
     };
-  }, [clientEntries]);
+  }, [clientEntries, getRate]);
 
   // Attorney breakdown data
   const attorneyBreakdown = useMemo(() => {
@@ -235,19 +247,28 @@ const ClientDetailView = ({ clientName }) => {
           hours: 0,
           billableHours: 0,
           opsHours: 0,
-          earnings: 0,
+          grossBillables: 0,
+          takeHomeEarnings: 0,
           count: 0,
         };
       }
-      breakdown[attorney].billableHours += entry.billableHours || 0;
+      const billableHours = entry.billableHours || 0;
+      breakdown[attorney].billableHours += billableHours;
       breakdown[attorney].opsHours += entry.opsHours || 0;
-      breakdown[attorney].hours += (entry.billableHours || 0) + (entry.opsHours || 0);
-      breakdown[attorney].earnings += entry.billablesEarnings || 0;
+      breakdown[attorney].hours += billableHours + (entry.opsHours || 0);
+      breakdown[attorney].takeHomeEarnings += entry.billablesEarnings || 0;
       breakdown[attorney].count += 1;
+      
+      // Calculate gross billables using attorney rate * hours
+      if (billableHours > 0) {
+        const entryDate = getEntryDate(entry);
+        const rate = getRate(attorney, entryDate);
+        breakdown[attorney].grossBillables += rate * billableHours;
+      }
     });
 
     return Object.values(breakdown).sort((a, b) => b.hours - a.hours);
-  }, [clientEntries]);
+  }, [clientEntries, getRate]);
 
   // Transaction type breakdown data
   const transactionBreakdown = useMemo(() => {
@@ -262,13 +283,22 @@ const ClientDetailView = ({ clientName }) => {
           breakdown[category] = {
             type: category,
             hours: 0,
-            earnings: 0,
+            grossBillables: 0,
+            takeHomeEarnings: 0,
             count: 0,
           };
         }
         breakdown[category].hours += billable;
-        breakdown[category].earnings += entry.billablesEarnings || 0;
+        breakdown[category].takeHomeEarnings += entry.billablesEarnings || 0;
         breakdown[category].count += 1;
+        
+        // Calculate gross billables
+        const attorney = entry.attorneyId;
+        if (attorney) {
+          const entryDate = getEntryDate(entry);
+          const rate = getRate(attorney, entryDate);
+          breakdown[category].grossBillables += rate * billable;
+        }
       }
     });
 
@@ -279,7 +309,7 @@ const ClientDetailView = ({ clientName }) => {
       ...t,
       percentage: totalHours > 0 ? Math.round((t.hours / totalHours) * 100) : 0,
     }));
-  }, [clientEntries]);
+  }, [clientEntries, getRate]);
 
   // Monthly trend data
   const monthlyTrend = useMemo(() => {
@@ -297,20 +327,29 @@ const ClientDetailView = ({ clientName }) => {
           billableHours: 0,
           opsHours: 0,
           totalHours: 0,
-          earnings: 0,
+          grossBillables: 0,
+          takeHomeEarnings: 0,
           count: 0,
         };
       }
       
-      monthlyData[monthKey].billableHours += entry.billableHours || 0;
+      const billableHours = entry.billableHours || 0;
+      monthlyData[monthKey].billableHours += billableHours;
       monthlyData[monthKey].opsHours += entry.opsHours || 0;
-      monthlyData[monthKey].totalHours += (entry.billableHours || 0) + (entry.opsHours || 0);
-      monthlyData[monthKey].earnings += entry.billablesEarnings || 0;
+      monthlyData[monthKey].totalHours += billableHours + (entry.opsHours || 0);
+      monthlyData[monthKey].takeHomeEarnings += entry.billablesEarnings || 0;
       monthlyData[monthKey].count += 1;
+      
+      // Calculate gross billables
+      const attorney = entry.attorneyId;
+      if (attorney && billableHours > 0) {
+        const rate = getRate(attorney, entryDate);
+        monthlyData[monthKey].grossBillables += rate * billableHours;
+      }
     });
 
     return Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
-  }, [clientEntries]);
+  }, [clientEntries, getRate]);
 
   // Recent entries (sorted by date, most recent first)
   const recentEntries = useMemo(() => {
@@ -457,22 +496,22 @@ const ClientDetailView = ({ clientName }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Total Hours</span>
+              <span className="text-gray-600 text-sm font-medium">Billable Hours</span>
               <Clock className="w-5 h-5 text-blue-500" />
             </div>
-            <div className="text-2xl font-bold text-gray-900">{formatHours(clientStats.totalHours)}h</div>
+            <div className="text-2xl font-bold text-gray-900">{formatHours(clientStats.billableHours)}h</div>
             <div className="text-xs text-gray-500 mt-1">
-              {formatHours(clientStats.billableHours)}h billable / {formatHours(clientStats.opsHours)}h ops
+              {clientStats.transactionCount} entries
             </div>
           </div>
 
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Total Earnings</span>
+              <span className="text-gray-600 text-sm font-medium">Gross Billables</span>
               <DollarSign className="w-5 h-5 text-green-500" />
             </div>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(clientStats.totalEarnings)}</div>
-            <div className="text-xs text-gray-500 mt-1">From billable work</div>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(clientStats.grossBillables)}</div>
+            <div className="text-xs text-gray-500 mt-1">Rate × Hours</div>
           </div>
 
           <div className="bg-white p-4 rounded-lg shadow">
@@ -540,14 +579,6 @@ const ClientDetailView = ({ clientName }) => {
                       name="Billable Hours"
                       dot={{ r: 4 }}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="opsHours" 
-                      stroke="#00C49F" 
-                      strokeWidth={2} 
-                      name="Ops Hours"
-                      dot={{ r: 4 }}
-                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -564,8 +595,7 @@ const ClientDetailView = ({ clientName }) => {
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip content={<CustomChartTooltip />} />
                     <Legend />
-                    <Bar dataKey="billableHours" fill="#0088FE" name="Billable" stackId="hours" />
-                    <Bar dataKey="opsHours" fill="#00C49F" name="Ops" stackId="hours" />
+                    <Bar dataKey="billableHours" fill="#0088FE" name="Billable Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -614,7 +644,7 @@ const ClientDetailView = ({ clientName }) => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Count</th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Earnings</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gross Billables</th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">%</th>
                     </tr>
                   </thead>
@@ -624,7 +654,7 @@ const ClientDetailView = ({ clientName }) => {
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{txn.type}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 text-right">{txn.count}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">{formatHours(txn.hours)}h</td>
-                        <td className="px-4 py-3 text-sm text-green-600 text-right font-medium">{formatCurrency(txn.earnings)}</td>
+                        <td className="px-4 py-3 text-sm text-green-600 text-right font-medium">{formatCurrency(txn.grossBillables)}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 text-right">{txn.percentage}%</td>
                       </tr>
                     ))}
@@ -647,10 +677,8 @@ const ClientDetailView = ({ clientName }) => {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attorney</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Entries</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Billable</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ops</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Hours</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Earnings</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Billable Hours</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gross Billables</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">% of Total</th>
                   </tr>
                 </thead>
@@ -667,17 +695,11 @@ const ClientDetailView = ({ clientName }) => {
                         {formatHours(attorney.billableHours)}h
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
-                        {formatHours(attorney.opsHours)}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-semibold">
-                        {formatHours(attorney.hours)}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
-                        {formatCurrency(attorney.earnings)}
+                        {formatCurrency(attorney.grossBillables)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
-                        {clientStats.totalHours > 0 
-                          ? Math.round((attorney.hours / clientStats.totalHours) * 100)
+                        {clientStats.billableHours > 0 
+                          ? Math.round((attorney.billableHours / clientStats.billableHours) * 100)
                           : 0}%
                       </td>
                     </tr>
@@ -704,15 +726,17 @@ const ClientDetailView = ({ clientName }) => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attorney</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Billable</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ops</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Earnings</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gross Billables</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {recentEntries.map((entry, idx) => {
                     const entryDate = getEntryDate(entry);
+                    const billableHours = entry.billableHours || 0;
+                    const rate = entry.attorneyId ? getRate(entry.attorneyId, entryDate) : 0;
+                    const grossBillables = rate * billableHours;
                     return (
                       <tr key={idx} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -727,13 +751,10 @@ const ClientDetailView = ({ clientName }) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 text-right font-medium">
-                          {entry.billableHours > 0 ? `${formatHours(entry.billableHours)}h` : '-'}
+                          {billableHours > 0 ? `${formatHours(billableHours)}h` : '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
-                          {entry.opsHours > 0 ? `${formatHours(entry.opsHours)}h` : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
-                          {entry.billablesEarnings > 0 ? formatCurrency(entry.billablesEarnings) : '-'}
+                          {grossBillables > 0 ? formatCurrency(grossBillables) : '-'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={entry.notes}>
                           {entry.notes || '-'}

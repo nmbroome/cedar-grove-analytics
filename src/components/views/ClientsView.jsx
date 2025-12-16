@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { DateRangeIndicator } from '../shared';
 import { ClientsTable } from '../tables';
 import { ClientHoursChart, ServiceBreadthChart } from '../charts';
+import { useAttorneyRates } from '@/hooks/useAttorneyRates';
+import { getEntryDate } from '@/utils/dateHelpers';
 
 const ClientsView = ({
   dateRangeLabel,
@@ -12,10 +14,103 @@ const ClientsView = ({
   allAttorneyNames,
   clientData,
   clientCounts,
+  filteredEntries,
 }) => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [showInactive, setShowInactive] = useState(false);
+  const { getRate, loading: ratesLoading } = useAttorneyRates();
+
+  // Calculate gross billables and billable hours per client from filteredEntries
+  const clientsWithBillables = useMemo(() => {
+    if (!clientData || !Array.isArray(clientData)) {
+      return [];
+    }
+
+    // Build maps of client data from entries
+    const clientDataMap = {};
+    
+    if (filteredEntries && Array.isArray(filteredEntries)) {
+      filteredEntries.forEach(entry => {
+        const clientName = entry.client || entry.company || 'Unknown';
+        const billableHours = entry.billableHours || 0;
+        const attorneyName = entry.attorneyId;
+        const category = entry.billingCategory || entry.category || 'Other';
+        
+        // Only process entries with billable hours
+        if (billableHours <= 0) return;
+        
+        if (!clientDataMap[clientName]) {
+          clientDataMap[clientName] = {
+            grossBillables: 0,
+            billableHours: 0,
+            entryCount: 0,
+            entries: [],
+            byAttorney: {},
+            byCategory: {},
+          };
+        }
+        
+        const clientInfo = clientDataMap[clientName];
+        
+        // Calculate gross billables for this entry
+        const entryDate = getEntryDate(entry);
+        const rate = attorneyName ? getRate(attorneyName, entryDate) : 0;
+        const entryGrossBillables = rate * billableHours;
+        
+        // Accumulate totals
+        clientInfo.billableHours += billableHours;
+        clientInfo.grossBillables += entryGrossBillables;
+        clientInfo.entryCount += 1;
+        
+        // Add entry with calculated grossBillables (for tooltip)
+        clientInfo.entries.push({
+          date: entry.billableDate || entry.opsDate || entry.date,
+          attorney: attorneyName,
+          category: category,
+          billableHours: billableHours,
+          grossBillables: entryGrossBillables,
+        });
+        
+        // Track by attorney
+        if (attorneyName) {
+          if (!clientInfo.byAttorney[attorneyName]) {
+            clientInfo.byAttorney[attorneyName] = { hours: 0, count: 0, grossBillables: 0 };
+          }
+          clientInfo.byAttorney[attorneyName].hours += billableHours;
+          clientInfo.byAttorney[attorneyName].count += 1;
+          clientInfo.byAttorney[attorneyName].grossBillables += entryGrossBillables;
+        }
+        
+        // Track by category
+        if (!clientInfo.byCategory[category]) {
+          clientInfo.byCategory[category] = { hours: 0, count: 0, grossBillables: 0 };
+        }
+        clientInfo.byCategory[category].hours += billableHours;
+        clientInfo.byCategory[category].count += 1;
+        clientInfo.byCategory[category].grossBillables += entryGrossBillables;
+      });
+    }
+
+    // Sort entries by date (most recent first) for each client
+    Object.values(clientDataMap).forEach(clientInfo => {
+      clientInfo.entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
+
+    // Merge calculated data into clientData
+    return clientData.map(client => {
+      const calculated = clientDataMap[client.name] || {};
+      return {
+        ...client,
+        billableHours: calculated.billableHours || 0,
+        grossBillables: calculated.grossBillables || 0,
+        entryCount: calculated.entryCount || client.entryCount || 0,
+        entries: calculated.entries || [],
+        byAttorney: calculated.byAttorney || client.byAttorney || {},
+        byCategory: calculated.byCategory || client.byCategory || {},
+      };
+    });
+  }, [clientData, filteredEntries, getRate]);
 
   const handleSort = (key) => {
     let direction = 'desc';
@@ -27,13 +122,13 @@ const ClientsView = ({
   };
 
   const getSortedClients = () => {
-    let filtered = clientData.filter(client =>
+    let filtered = clientsWithBillables.filter(client =>
       client.name.toLowerCase().includes(clientSearch.toLowerCase())
     );
 
     // Filter out inactive clients unless showInactive is true
     if (!showInactive) {
-      filtered = filtered.filter(client => client.totalHours > 0);
+      filtered = filtered.filter(client => (client.billableHours || client.totalHours) > 0);
     }
 
     filtered.sort((a, b) => {
@@ -45,28 +140,28 @@ const ClientsView = ({
           bVal = b.name.toLowerCase();
           break;
         case 'status':
-          aVal = a.totalHours > 0 ? 'active' : 'inactive';
-          bVal = b.totalHours > 0 ? 'active' : 'inactive';
+          aVal = (a.billableHours || a.totalHours) > 0 ? 'active' : 'inactive';
+          bVal = (b.billableHours || b.totalHours) > 0 ? 'active' : 'inactive';
           break;
         case 'location':
           aVal = (a.location || '').toLowerCase();
           bVal = (b.location || '').toLowerCase();
           break;
-        case 'totalHours':
-          aVal = a.totalHours;
-          bVal = b.totalHours;
+        case 'billableHours':
+          aVal = a.billableHours || a.totalHours || 0;
+          bVal = b.billableHours || b.totalHours || 0;
           break;
-        case 'totalEarnings':
-          aVal = a.totalEarnings;
-          bVal = b.totalEarnings;
+        case 'grossBillables':
+          aVal = a.grossBillables || 0;
+          bVal = b.grossBillables || 0;
           break;
         case 'lastActivity':
           aVal = a.lastActivity === 'No activity' ? '' : a.lastActivity;
           bVal = b.lastActivity === 'No activity' ? '' : b.lastActivity;
           break;
         default:
-          aVal = a.totalHours;
-          bVal = b.totalHours;
+          aVal = a.billableHours || a.totalHours || 0;
+          bVal = b.billableHours || b.totalHours || 0;
       }
       
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -77,8 +172,24 @@ const ClientsView = ({
     return filtered;
   };
 
-  const activeCount = clientData.filter(c => c.totalHours > 0).length;
-  const inactiveCount = clientData.filter(c => c.totalHours === 0).length;
+  const activeCount = clientsWithBillables.filter(c => (c.billableHours || c.totalHours) > 0).length;
+  const inactiveCount = clientsWithBillables.filter(c => (c.billableHours || c.totalHours) === 0).length;
+
+  if (ratesLoading) {
+    return (
+      <div className="space-y-6">
+        <DateRangeIndicator 
+          dateRangeLabel={dateRangeLabel}
+          globalAttorneyFilter={globalAttorneyFilter}
+          allAttorneyNames={allAttorneyNames}
+        />
+        <div className="bg-white p-8 rounded-lg shadow text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="mt-2 text-gray-500">Loading billing rates...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -145,8 +256,8 @@ const ClientsView = ({
 
       {/* Client Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ClientHoursChart data={clientData} />
-        <ServiceBreadthChart data={clientData} />
+        <ClientHoursChart data={clientsWithBillables} />
+        <ServiceBreadthChart data={clientsWithBillables} />
       </div>
     </div>
   );

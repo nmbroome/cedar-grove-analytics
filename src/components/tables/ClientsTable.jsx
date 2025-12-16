@@ -47,16 +47,16 @@ const ClientsTable = ({
               Location {getSortIndicator('location')}
             </th>
             <th 
-              onClick={() => onSort('totalHours')}
+              onClick={() => onSort('billableHours')}
               className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Total Hours {getSortIndicator('totalHours')}
+              Billable Hours {getSortIndicator('billableHours')}
             </th>
             <th 
-              onClick={() => onSort('totalEarnings')}
+              onClick={() => onSort('grossBillables')}
               className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Earnings {getSortIndicator('totalEarnings')}
+              Billables {getSortIndicator('grossBillables')}
             </th>
             <th 
               onClick={() => onSort('lastActivity')}
@@ -91,22 +91,22 @@ const ClientsTable = ({
               <td className="px-6 py-4 whitespace-nowrap text-sm">
                 <span
                   className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    client.totalHours > 0
+                    (client.billableHours || client.totalHours) > 0
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   }`}
                 >
-                  {client.totalHours > 0 ? 'Active' : 'Inactive'}
+                  {(client.billableHours || client.totalHours) > 0 ? 'Active' : 'Inactive'}
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {client.location || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {formatHours(client.totalHours)}h
+                {formatHours(client.billableHours || client.totalHours || 0)}h
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
-                {formatCurrency(client.totalEarnings)}
+                {formatCurrency(client.grossBillables || 0)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {client.lastActivity !== 'No activity' 
