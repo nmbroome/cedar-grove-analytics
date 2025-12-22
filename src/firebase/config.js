@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -30,22 +30,9 @@ if (typeof window !== 'undefined') {
       console.log("User authenticated:", user.uid, user.isAnonymous ? "(anonymous)" : "(signed in)");
       authReadyResolve(user);
     } else {
-      // Check if we're on an admin/login page - don't auto-sign-in anonymously there
-      const isAdminPage = window.location.pathname.startsWith('/admin') || 
-                          window.location.pathname.startsWith('/login');
-      
-      if (isAdminPage) {
-        console.log("On admin/login page, skipping anonymous auth");
-        authReadyResolve(null);
-      } else {
-        console.log("No user, signing in anonymously for public pages...");
-        signInAnonymously(auth)
-          .then(() => console.log("Signed in anonymously"))
-          .catch((error) => {
-            console.error("Anonymous auth failed:", error);
-            authReadyResolve(null);
-          });
-      }
+      // No anonymous sign-in - site requires proper authentication
+      console.log("No user signed in");
+      authReadyResolve(null);
     }
   });
 }

@@ -3,7 +3,7 @@ import AdminTargets from '@/components/AdminTargets';
 
 export default function AdminTargetsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin={true}>
       <AdminTargets />
     </ProtectedRoute>
   );

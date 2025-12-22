@@ -14,22 +14,48 @@ const AuthContext = createContext({});
 
 export const useAuth = () => useContext(AuthContext);
 
+// Allowed email domain
+const ALLOWED_DOMAIN = 'cedargrovellp.com';
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const isSigningIn = useRef(false);
+
+  // Check if email is from allowed domain
+  const isAllowedDomain = (email) => {
+    if (!email) return false;
+    return email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
+  };
 
   const checkAdminStatus = async (email) => {
     if (!email) return false;
     
     try {
-      const adminDoc = await getDoc(doc(db, 'admins', email));
+      const adminDoc = await getDoc(doc(db, 'admins', email.toLowerCase()));
       return adminDoc.exists();
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;
     }
+  };
+
+  // Check if user is authorized (either from allowed domain or is an admin)
+  const checkAuthorization = async (email) => {
+    if (!email) return { isAuthorized: false, isAdmin: false };
+    
+    // Check if from allowed domain
+    if (isAllowedDomain(email)) {
+      // Also check if they happen to be an admin
+      const adminStatus = await checkAdminStatus(email);
+      return { isAuthorized: true, isAdmin: adminStatus };
+    }
+    
+    // If not from allowed domain, check if they're an admin
+    const adminStatus = await checkAdminStatus(email);
+    return { isAuthorized: adminStatus, isAdmin: adminStatus };
   };
 
   useEffect(() => {
@@ -42,9 +68,11 @@ export const AuthProvider = ({ children }) => {
       setUser(firebaseUser);
       
       if (firebaseUser && !firebaseUser.isAnonymous) {
-        const adminStatus = await checkAdminStatus(firebaseUser.email);
-        setIsAdmin(adminStatus);
+        const { isAuthorized: authorized, isAdmin: admin } = await checkAuthorization(firebaseUser.email);
+        setIsAuthorized(authorized);
+        setIsAdmin(admin);
       } else {
+        setIsAuthorized(false);
         setIsAdmin(false);
       }
       
@@ -65,17 +93,19 @@ export const AuthProvider = ({ children }) => {
       
       const result = await signInWithPopup(auth, provider);
       
-      const adminStatus = await checkAdminStatus(result.user.email);
+      const { isAuthorized: authorized, isAdmin: admin } = await checkAuthorization(result.user.email);
       
       // Now update state after sign-in is complete
       setUser(result.user);
-      setIsAdmin(adminStatus);
+      setIsAuthorized(authorized);
+      setIsAdmin(admin);
       isSigningIn.current = false;
       
       return { 
         success: true, 
         user: result.user,
-        isAdmin: adminStatus
+        isAuthorized: authorized,
+        isAdmin: admin
       };
     } catch (error) {
       isSigningIn.current = false;
@@ -97,6 +127,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await firebaseSignOut(auth);
       setUser(null);
+      setIsAuthorized(false);
       setIsAdmin(false);
       return { success: true };
     } catch (error) {
@@ -104,13 +135,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Extract attorney name from email (e.g., "noah.stone@cedargrovellp.com" -> "Noah Stone")
+  const getAttorneyNameFromEmail = (email) => {
+    if (!email) return null;
+    const localPart = email.split('@')[0];
+    if (!localPart) return null;
+    
+    // Split by dots or underscores, capitalize each part
+    return localPart
+      .split(/[._]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Get current user's attorney name
+  const userAttorneyName = user?.email ? getAttorneyNameFromEmail(user.email) : null;
+
   return (
     <AuthContext.Provider value={{ 
       user, 
       isAdmin,
+      isAuthorized,
       loading, 
       signInWithGoogle, 
-      signOut 
+      signOut,
+      isAllowedDomain,
+      getAttorneyNameFromEmail,
+      userAttorneyName,
     }}>
       {children}
     </AuthContext.Provider>

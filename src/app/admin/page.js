@@ -3,7 +3,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 
 export default function AdminPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin={true}>
       <AdminDashboard />
     </ProtectedRoute>
   );

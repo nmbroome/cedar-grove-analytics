@@ -7,20 +7,28 @@ import { useAuth } from '@/context/AuthContext';
 
 // Separate component that uses useSearchParams
 function LoginContent() {
-  const { user, isAdmin, loading, signInWithGoogle, signOut } = useAuth();
+  const { user, isAdmin, isAuthorized, loading, signInWithGoogle, signOut } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '/admin';
+  const returnUrl = searchParams.get('returnUrl') || '/';
+  const errorParam = searchParams.get('error');
 
-  const [error, setError] = useState(null);
+  // Initialize error from URL params
+  const getInitialError = () => {
+    if (errorParam === 'admin_required') return 'Admin access is required for this page.';
+    if (errorParam === 'access_denied') return 'You do not have access to that page.';
+    return null;
+  };
+
+  const [error, setError] = useState(getInitialError);
   const [signingIn, setSigningIn] = useState(false);
 
-  // Redirect if already authenticated and is admin
+  // Redirect if already authenticated and authorized
   useEffect(() => {
-    if (!loading && user && !user.isAnonymous && isAdmin) {
+    if (!loading && user && !user.isAnonymous && isAuthorized) {
       router.push(returnUrl);
     }
-  }, [user, isAdmin, loading, router, returnUrl]);
+  }, [user, isAuthorized, loading, router, returnUrl]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -36,9 +44,8 @@ function LoginContent() {
         return;
       }
       
-      // If sign-in succeeded and user is admin, redirect will happen via useEffect
-      // If not admin, the Access Denied screen will show
-      if (result.isAdmin) {
+      // If sign-in succeeded and user is authorized, redirect will happen via useEffect
+      if (result.isAuthorized) {
         router.push(returnUrl);
       }
       setSigningIn(false);
@@ -51,6 +58,7 @@ function LoginContent() {
 
   const handleSignOut = async () => {
     await signOut();
+    setError(null);
   };
 
   if (loading) {
@@ -64,8 +72,8 @@ function LoginContent() {
     );
   }
 
-  // User is logged in but not an admin (skip anonymous users - they should see login form)
-  if (user && !user.isAnonymous && !isAdmin) {
+  // User is logged in but not authorized (not from allowed domain and not an admin)
+  if (user && !user.isAnonymous && !isAuthorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
@@ -75,8 +83,11 @@ function LoginContent() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">
-            Your account ({user.email}) does not have admin access. Please contact an administrator.
+          <p className="text-gray-600 mb-4">
+            Your account ({user.email}) is not authorized to access this site.
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            Access is restricted to @cedargrovellp.com email addresses or authorized administrators.
           </p>
           <button
             onClick={handleSignOut}
@@ -95,7 +106,7 @@ function LoginContent() {
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Cedar Grove Analytics</h1>
-          <p className="text-gray-600 mt-2">Admin Login</p>
+          <p className="text-gray-600 mt-2">Sign in to continue</p>
         </div>
 
         {error && (
@@ -143,9 +154,6 @@ function LoginContent() {
           )}
         </button>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
-          Only authorized administrators can access the admin area.
-        </p>
       </div>
     </div>
   );

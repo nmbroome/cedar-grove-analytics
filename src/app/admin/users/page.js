@@ -3,7 +3,7 @@ import AdminUsers from '@/components/AdminUsers';
 
 export default function AdminUsersPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin={true}>
       <AdminUsers />
     </ProtectedRoute>
   );

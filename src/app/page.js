@@ -1,5 +1,42 @@
-import CedarGroveAnalytics from '@/components/AnalyticsDashboard'
+"use client";
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import CedarGroveAnalytics from '@/components/AnalyticsDashboard';
+
+function DashboardContent() {
+  const { isAdmin, loading, userAttorneyName, isAuthorized } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && isAuthorized && !isAdmin && userAttorneyName) {
+      // Non-admins get redirected to their own attorney page
+      router.push(`/attorneys/${encodeURIComponent(userAttorneyName)}`);
+    }
+  }, [loading, isAdmin, userAttorneyName, isAuthorized, router]);
+
+  // Show loading while checking or redirecting
+  if (loading || (!isAdmin && userAttorneyName)) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="mt-4 text-xl text-gray-700">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Only admins see the full dashboard
+  return <CedarGroveAnalytics />;
+}
 
 export default function Home() {
-  return <CedarGroveAnalytics />
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
+  );
 }
