@@ -9,14 +9,23 @@ export default function ProtectedRoute({
   requireAdmin = false,
   allowedAttorneyName = null // If set, only this attorney (or admins) can access
 }) {
-  const { user, isAdmin, isAuthorized, loading, userAttorneyName } = useAuth();
+  const { user, isAdmin, isAuthorized, loading, userFirstName, getNameVariations } = useAuth();
   const router = useRouter();
 
-  // Check if user can access this attorney's page
+  // Check if user can access this attorney's page using nickname variations
   const canAccessAttorneyPage = () => {
     if (isAdmin) return true;
     if (!allowedAttorneyName) return true;
-    return userAttorneyName?.toLowerCase() === allowedAttorneyName?.toLowerCase();
+    if (!userFirstName) return false;
+    
+    // Extract first name from the attorney page parameter (e.g., "Nick Stone" -> "nick")
+    const attorneyFirstName = allowedAttorneyName.split(' ')[0].toLowerCase();
+    
+    // Get all name variations for the user's email first name
+    const userNameVariations = getNameVariations(userFirstName);
+    
+    // Check if the attorney's first name matches any of the user's name variations
+    return userNameVariations.includes(attorneyFirstName);
   };
 
   useEffect(() => {
@@ -35,15 +44,11 @@ export default function ProtectedRoute({
 
       // If trying to access another attorney's page
       if (allowedAttorneyName && !canAccessAttorneyPage()) {
-        // Redirect non-admins to their own attorney page
-        if (userAttorneyName) {
-          router.push(`/attorneys/${encodeURIComponent(userAttorneyName)}`);
-        } else {
-          router.push('/login?error=access_denied');
-        }
+        // Redirect non-admins to login with access denied
+        router.push('/login?error=access_denied');
       }
     }
-  }, [user, isAdmin, isAuthorized, loading, router, requireAdmin, allowedAttorneyName, userAttorneyName]);
+  }, [user, isAdmin, isAuthorized, loading, router, requireAdmin, allowedAttorneyName, userFirstName]);
 
   if (loading) {
     return (
