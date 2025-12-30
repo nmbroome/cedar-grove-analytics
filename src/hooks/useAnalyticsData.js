@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAllTimeEntries, useAttorneys, useClients } from './useFirestoreData';
+import { useAttorneyRates } from './useAttorneyRates';
 import { 
   getEntryDate, 
   getPSTDate, 
@@ -20,6 +21,7 @@ export const useAnalyticsData = ({
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   const { attorneys: firebaseAttorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
+  const { getRate, loading: ratesLoading } = useAttorneyRates();
   
   // State for attorney targets from Firebase
   const [attorneyTargets, setAttorneyTargets] = useState({});
@@ -69,7 +71,7 @@ export const useAnalyticsData = ({
     }
   }, [firebaseAttorneys, attorneysLoading]);
 
-  const loading = entriesLoading || attorneysLoading || clientsLoading || targetsLoading;
+  const loading = entriesLoading || attorneysLoading || clientsLoading || targetsLoading || ratesLoading;
   const error = entriesError || attorneysError || clientsError;
 
   // Create attorney name map
@@ -598,6 +600,21 @@ export const useAnalyticsData = ({
     return Math.round((total / attorney.target) * 100);
   };
 
+  // Calculate total gross billables (rate × hours)
+  const totalGrossBillables = useMemo(() => {
+    let total = 0;
+    filteredEntries.forEach(entry => {
+      const billableHours = entry.billableHours || 0;
+      if (billableHours > 0) {
+        const entryDate = getEntryDate(entry);
+        const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+        const rate = getRate(attorneyName, entryDate);
+        total += rate * billableHours;
+      }
+    });
+    return total;
+  }, [filteredEntries, attorneyMap, getRate]);
+
   // Calculate totals
   const totals = useMemo(() => {
     const totalBillable = attorneyData.reduce((acc, att) => acc + att.billable, 0);
@@ -632,6 +649,7 @@ export const useAnalyticsData = ({
     clientCounts,
     calculateUtilization,
     dateRangeInfo,
+    totalGrossBillables,
     ...totals,
   };
 };

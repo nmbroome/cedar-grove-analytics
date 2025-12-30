@@ -45,6 +45,7 @@ const AnalyticsDashboard = () => {
     totalBillable,
     totalOps,
     totalEarnings,
+    totalGrossBillables,
     totalBillableTarget,
     totalOpsTarget,
     avgUtilization,
@@ -190,6 +191,7 @@ const AnalyticsDashboard = () => {
             totalBillableTarget={totalBillableTarget}
             totalOpsTarget={totalOpsTarget}
             totalEarnings={totalEarnings}
+            totalGrossBillables={totalGrossBillables}
             attorneyData={attorneyData}
             transactionData={transactionData}
           />
@@ -260,8 +262,7 @@ const Header = ({
   return (
     <div className="mb-8 flex justify-between items-start">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Cedar Grove Analytics</h1>
-        <p className="text-gray-600">Attorney time allocation and efficiency insights</p>
+        <h1 className="text-3xl font-bold text-gray-900">Cedar Grove Analytics</h1>
       </div>
       
       <div className="flex items-center gap-4">

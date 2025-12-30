@@ -16,6 +16,7 @@ const OverviewView = ({
   totalBillableTarget,
   totalOpsTarget,
   totalEarnings,
+  totalGrossBillables,
   attorneyData,
   transactionData,
 }) => {
@@ -77,13 +78,13 @@ const OverviewView = ({
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">Total Earnings</span>
+            <span className="text-gray-600 text-sm font-medium">Total Billables</span>
             <DollarSign className="w-5 h-5 text-emerald-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-3xl font-bold text-gray-900">{formatCurrency(totalEarnings)}</div>
+            <div className="text-3xl font-bold text-gray-900">{formatCurrency(totalGrossBillables || 0)}</div>
           </div>
-          <div className="text-sm text-gray-600 text-center">Billable earnings</div>
+          <div className="text-sm text-gray-600 text-center">Rate × Hours</div>
         </div>
       </div>
 
