@@ -1,1 +1,84 @@
-@import 'tailwindcss';
+@import "tailwindcss";
+
+@theme {
+  /* Cedar Grove LLP Brand Colors */
+  --color-cg-black: #000000;
+  --color-cg-white: #FFFFFF;
+  --color-cg-background: #ECEDE5;
+  --color-cg-dark: #5A5A48;
+  --color-cg-green: #1CA33B;
+
+  /* Override gray scale to match the warm background tone */
+  --color-gray-50: #F7F7F4;
+  --color-gray-100: #ECEDE5;
+  --color-gray-200: #E0E1D9;
+  --color-gray-300: #C9CAC0;
+  --color-gray-400: #A5A699;
+  --color-gray-500: #7A7B6E;
+  --color-gray-600: #5A5A48;
+  --color-gray-700: #484839;
+  --color-gray-800: #36362B;
+  --color-gray-900: #24241D;
+  --color-gray-950: #121210;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-cg-background);
+    color: var(--color-cg-dark);
+  }
+
+  /* Override default link colors to use Cedar Grove green */
+  a {
+    color: var(--color-cg-green);
+  }
+  
+  a:hover {
+    text-decoration: underline;
+  }
+}
+
+@layer components {
+  /* Card styling to match Cedar Grove aesthetic */
+  .cg-card {
+    background-color: var(--color-cg-white);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    border: 1px solid var(--color-gray-200);
+  }
+
+  /* Primary button styling */
+  .cg-button-primary {
+    background-color: var(--color-cg-dark);
+    color: var(--color-cg-white);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.15s;
+  }
+  
+  .cg-button-primary:hover {
+    background-color: var(--color-gray-700);
+  }
+
+  /* Secondary/accent button */
+  .cg-button-accent {
+    background-color: var(--color-cg-green);
+    color: var(--color-cg-white);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: opacity 0.15s;
+  }
+  
+  .cg-button-accent:hover {
+    opacity: 0.9;
+  }
+
+  /* KPI card styling */
+  .cg-kpi-card {
+    background-color: var(--color-cg-white);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    border: 1px solid var(--color-gray-200);
+  }
+}

@@ -75,10 +75,10 @@ const AnalyticsDashboard = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="flex items-center justify-center h-screen bg-cg-background">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <div className="mt-4 text-xl text-gray-700">Loading analytics data...</div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cg-green"></div>
+          <div className="mt-4 text-xl text-cg-dark">Loading analytics data...</div>
         </div>
       </div>
     );
@@ -87,13 +87,13 @@ const AnalyticsDashboard = () => {
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="flex items-center justify-center h-screen bg-cg-background">
         <div className="text-center max-w-md">
           <div className="text-red-600 text-xl mb-4">Error loading data</div>
-          <div className="text-gray-600 mb-4">{error}</div>
+          <div className="text-cg-dark mb-4">{error}</div>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-cg-green text-white rounded hover:opacity-90"
           >
             Retry
           </button>
@@ -105,7 +105,7 @@ const AnalyticsDashboard = () => {
   // No data state
   if (!filteredEntries || filteredEntries.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-cg-background p-6">
         <div className="max-w-7xl mx-auto">
           <Header 
             showDateDropdown={showDateDropdown}
@@ -128,8 +128,8 @@ const AnalyticsDashboard = () => {
 
           <div className="flex items-center justify-center py-20">
             <div className="text-center max-w-md">
-              <div className="text-gray-900 text-xl mb-4">No data available</div>
-              <div className="text-gray-600">
+              <div className="text-cg-dark text-xl mb-4">No data available</div>
+              <div className="text-gray-500">
                 No time entries found for the selected date range. Try selecting a different time period above.
               </div>
             </div>
@@ -140,7 +140,7 @@ const AnalyticsDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-cg-background p-6">
       <div className="max-w-7xl mx-auto">
         <Header 
           showDateDropdown={showDateDropdown}
@@ -162,15 +162,15 @@ const AnalyticsDashboard = () => {
         />
 
         {/* Navigation Tabs */}
-        <div className="mb-6 flex gap-2 border-b border-gray-200">
+        <div className="mb-6 flex gap-2 border-b border-gray-300">
           {['overview', 'attorneys', 'transactions', 'ops', 'clients'].map((view) => (
             <button
               key={view}
               onClick={() => setSelectedView(view)}
               className={`px-4 py-2 font-medium capitalize transition-colors ${
                 selectedView === view
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'text-cg-green border-b-2 border-cg-green'
+                  : 'text-cg-dark hover:text-cg-black'
               }`}
             >
               {view}
@@ -262,7 +262,7 @@ const Header = ({
   return (
     <div className="mb-8 flex justify-between items-start">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Cedar Grove Analytics</h1>
+        <h1 className="text-3xl font-bold text-cg-black">Cedar Grove Analytics</h1>
       </div>
       
       <div className="flex items-center gap-4">
@@ -285,10 +285,10 @@ const Header = ({
           setShowDropdown={setShowDateDropdown}
         />
 
-        {/* Admin Button - always visible, redirects to login if not authenticated */}
+        {/* Admin Button */}
         <Link
           href="/admin"
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-cg-dark text-white hover:bg-gray-700 rounded-lg transition-colors"
         >
           <Shield className="w-4 h-4" />
           <span className="text-sm font-medium">Admin</span>
@@ -306,7 +306,7 @@ const Header = ({
             )}
             <button
               onClick={onLogout}
-              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-cg-dark hover:text-cg-black hover:bg-gray-200 rounded-lg transition-colors"
               title={`Logged in as ${user.email}`}
             >
               <LogOut className="w-4 h-4" />

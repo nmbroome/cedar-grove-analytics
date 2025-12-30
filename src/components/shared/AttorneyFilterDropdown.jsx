@@ -35,26 +35,26 @@ const AttorneyFilterDropdown = ({
         onClick={() => setShowDropdown(!showDropdown)}
         className={`flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors shadow-sm ${
           isFiltered
-            ? 'bg-purple-50 border-purple-300' 
-            : 'bg-white border-gray-300'
+            ? 'bg-cg-green/10 border-cg-green' 
+            : 'bg-cg-white border-gray-300'
         }`}
       >
-        <Users className="w-4 h-4 text-gray-600" />
-        <span className="text-sm font-medium text-gray-700">
+        <Users className="w-4 h-4 text-cg-dark" />
+        <span className="text-sm font-medium text-cg-dark">
           {getButtonLabel()}
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-cg-dark transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
       </button>
 
       {showDropdown && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-64 bg-cg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
           <div className="p-2 border-b border-gray-100">
             <button
               onClick={() => setGlobalAttorneyFilter([...allAttorneyNames])}
               className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
                 globalAttorneyFilter.length === allAttorneyNames.length 
-                  ? 'bg-purple-100 text-purple-700 font-medium' 
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-cg-green/10 text-cg-green font-medium' 
+                  : 'text-cg-dark hover:bg-gray-100'
               }`}
             >
               All Attorneys
@@ -76,16 +76,16 @@ const AttorneyFilterDropdown = ({
                       setGlobalAttorneyFilter(globalAttorneyFilter.filter(n => n !== name));
                     }
                   }}
-                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                  className="w-4 h-4 text-cg-green border-gray-300 rounded focus:ring-cg-green accent-cg-green"
                 />
-                <span className="ml-3 text-sm text-gray-700">{name}</span>
+                <span className="ml-3 text-sm text-cg-dark">{name}</span>
               </label>
             ))}
           </div>
           <div className="p-2 border-t border-gray-100 bg-gray-50">
             <button
               onClick={() => setGlobalAttorneyFilter([])}
-              className="w-full px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              className="w-full px-3 py-1.5 text-sm text-cg-dark hover:text-cg-black transition-colors"
             >
               Clear selection
             </button>

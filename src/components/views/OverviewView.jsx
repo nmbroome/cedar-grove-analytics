@@ -35,7 +35,7 @@ const OverviewView = ({
         allAttorneyNames={allAttorneyNames}
       />
 
-      {/* KPI Cards */}
+      {/* KPI Cards - keeping original colors */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KPICard
           title="Avg Utilization"
