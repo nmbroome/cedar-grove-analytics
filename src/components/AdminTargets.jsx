@@ -8,6 +8,7 @@ import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
 import { useAllTimeEntries } from '@/hooks/useFirestoreData';
 import { useAuth } from '@/context/AuthContext';
+import { getPersonRole } from '@/utils/roles';
 
 const AdminTargets = () => {
   const { user, signOut } = useAuth();
@@ -33,6 +34,47 @@ const AdminTargets = () => {
     
     return Array.from(attorneyMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [allEntries]);
+
+  // Calculate role breakdown for display
+  const roleBreakdown = useMemo(() => {
+    if (!attorneys || attorneys.length === 0) return '';
+    
+    const roleCounts = {};
+    attorneys.forEach(attorney => {
+      const role = getPersonRole(attorney.name);
+      if (!roleCounts[role]) {
+        roleCounts[role] = 0;
+      }
+      roleCounts[role]++;
+    });
+    
+    // Sort roles so "Attorney" comes first, then alphabetically
+    const sortedRoles = Object.keys(roleCounts).sort((a, b) => {
+      if (a === 'Attorney') return -1;
+      if (b === 'Attorney') return 1;
+      return a.localeCompare(b);
+    });
+    
+    // Build the display string
+    const parts = sortedRoles.map(role => {
+      const count = roleCounts[role];
+      // Pluralize role names appropriately
+      let displayRole = role.toLowerCase();
+      if (count !== 1) {
+        // Handle pluralization
+        if (displayRole === 'attorney') {
+          displayRole = 'attorneys';
+        } else if (displayRole.endsWith('associate')) {
+          displayRole = displayRole + 's';
+        } else {
+          displayRole = displayRole + 's';
+        }
+      }
+      return `${count} ${displayRole}`;
+    });
+    
+    return parts.join(', ');
+  }, [attorneys]);
 
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -571,7 +613,7 @@ const AdminTargets = () => {
               <h2 className="text-lg font-semibold text-gray-900">
                 {getMonthLabel()} {selectedYear} Targets
               </h2>
-              <span className="text-sm text-gray-500">({targets.length} attorneys)</span>
+              <span className="text-sm text-gray-500">({roleBreakdown})</span>
             </div>
           </div>
 
@@ -608,9 +650,16 @@ const AdminTargets = () => {
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                         <Users className="w-4 h-4 text-blue-600" />
                       </div>
-                      <span className="text-sm font-medium text-gray-900">
-                        {target.attorneyName}
-                      </span>
+                      <div>
+                        <span className="text-sm font-medium text-gray-900">
+                          {target.attorneyName}
+                        </span>
+                        {getPersonRole(target.attorneyName) !== 'Attorney' && (
+                          <div className="text-xs text-gray-500">
+                            {getPersonRole(target.attorneyName)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
