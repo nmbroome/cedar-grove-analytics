@@ -114,7 +114,7 @@ const ClientsView = ({
 
   const handleSort = (key) => {
     let direction = 'desc';
-    if (key === 'name' || key === 'location' || key === 'status') direction = 'asc';
+    if (key === 'name' || key === 'status') direction = 'asc';
     if (sortConfig.key === key) {
       direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
     }
@@ -142,10 +142,6 @@ const ClientsView = ({
         case 'status':
           aVal = (a.billableHours || a.totalHours) > 0 ? 'active' : 'inactive';
           bVal = (b.billableHours || b.totalHours) > 0 ? 'active' : 'inactive';
-          break;
-        case 'location':
-          aVal = (a.location || '').toLowerCase();
-          bVal = (b.location || '').toLowerCase();
           break;
         case 'billableHours':
           aVal = a.billableHours || a.totalHours || 0;

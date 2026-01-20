@@ -13,7 +13,6 @@ import {
   Calendar,
   Mail,
   Globe,
-  MapPin,
   TrendingUp,
   FileText
 } from 'lucide-react';
@@ -457,15 +456,9 @@ const ClientDetailView = ({ clientName }) => {
         </div>
 
         {/* Client Metadata */}
-        {clientMetadata && (
+        {clientMetadata && (clientMetadata.contactEmail || clientMetadata.website || clientMetadata.channel) && (
           <div className="bg-white rounded-lg shadow p-4">
             <div className="flex flex-wrap gap-6 text-sm">
-              {clientMetadata.location && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{clientMetadata.location}</span>
-                </div>
-              )}
               {clientMetadata.contactEmail && (
                 <div className="flex items-center gap-2 text-gray-600">
                   <Mail className="w-4 h-4" />

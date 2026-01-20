@@ -30,37 +30,31 @@ const ClientsTable = ({
           <tr>
             <th 
               onClick={() => onSort('name')}
-              className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[32%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Client Name {getSortIndicator('name')}
             </th>
             <th 
               onClick={() => onSort('status')}
-              className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Status {getSortIndicator('status')}
             </th>
             <th 
-              onClick={() => onSort('location')}
-              className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              Location {getSortIndicator('location')}
-            </th>
-            <th 
               onClick={() => onSort('billableHours')}
-              className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Billable Hours {getSortIndicator('billableHours')}
             </th>
             <th 
               onClick={() => onSort('grossBillables')}
-              className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Billables {getSortIndicator('grossBillables')}
             </th>
             <th 
               onClick={() => onSort('lastActivity')}
-              className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[20%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Last Activity {getSortIndicator('lastActivity')}
             </th>
@@ -98,9 +92,6 @@ const ClientsTable = ({
                 >
                   {(client.billableHours || client.totalHours) > 0 ? 'Active' : 'Inactive'}
                 </span>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {client.location || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {formatHours(client.billableHours || client.totalHours || 0)}h
