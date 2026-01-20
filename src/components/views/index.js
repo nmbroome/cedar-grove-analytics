@@ -5,3 +5,4 @@ export { default as OpsView } from './OpsView';
 export { default as ClientsView } from './ClientsView';
 export { default as ClientDetailView } from './ClientDetailView';
 export { default as AttorneyDetailView } from './AttorneyDetailView';
+export { default as BillingSummariesView } from './BillingSummariesView';

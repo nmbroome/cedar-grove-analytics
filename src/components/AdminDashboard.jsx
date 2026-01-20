@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Target, Users, LogOut, ArrowLeft, Shield } from 'lucide-react';
+import { Target, Users, LogOut, ArrowLeft, Shield, FileText } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -28,6 +28,13 @@ const AdminDashboard = () => {
       href: '/admin/users',
       icon: Users,
       color: 'bg-purple-500',
+    },
+    {
+      title: 'Billing Summaries',
+      description: 'Generate detailed billing breakdowns by month and client',
+      href: '/billing-summaries',
+      icon: FileText,
+      color: 'bg-green-500',
     },
   ];
 
