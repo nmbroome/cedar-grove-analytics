@@ -44,6 +44,7 @@ import {
 } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 import { CHART_COLORS } from '@/utils/constants';
+import { getPersonRole } from '@/utils/roles';
 import { DateRangeDropdown } from '@/components/shared';
 
 // Custom tooltip for charts - defined outside component to prevent re-creation on render
@@ -100,6 +101,9 @@ const AttorneyDetailView = ({ attorneyName }) => {
   // Attorney targets from Firebase
   const [attorneyTargets, setAttorneyTargets] = useState({});
   const [targetsLoading, setTargetsLoading] = useState(true);
+
+  // Get the person's role (Attorney or other title like Legal Operations Associate)
+  const personRole = getPersonRole(attorneyName);
 
   // Fetch attorney targets
   useEffect(() => {
@@ -495,7 +499,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <div className="mt-4 text-xl text-gray-700">Loading attorney data...</div>
+          <div className="mt-4 text-xl text-gray-700">Loading data...</div>
         </div>
       </div>
     );
@@ -536,7 +540,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">{attorneyName}</h1>
-                  <p className="text-sm text-gray-500">Attorney Performance Analytics</p>
+                  <p className="text-sm text-gray-500">{personRole} Performance Analytics</p>
                 </div>
               </div>
             </div>

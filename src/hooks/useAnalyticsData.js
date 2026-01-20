@@ -10,6 +10,12 @@ import {
   countBusinessDays 
 } from '../utils/dateHelpers';
 
+// Role mapping for specific people who aren't attorneys
+const ROLE_OVERRIDES = {
+  'Valery Uscanga': 'Legal Operations Associate',
+  // Add more role overrides here as needed
+};
+
 export const useAnalyticsData = ({
   dateRange,
   customDateStart,
@@ -82,6 +88,22 @@ export const useAnalyticsData = ({
     });
     return map;
   }, [firebaseAttorneys]);
+
+  // Create attorney role map (from Firebase data or overrides)
+  const attorneyRoleMap = useMemo(() => {
+    const map = {};
+    firebaseAttorneys.forEach(attorney => {
+      const name = attorney.name || attorney.id;
+      // Check for role override first, then Firebase role, then default to 'Attorney'
+      map[name] = ROLE_OVERRIDES[name] || attorney.role || 'Attorney';
+    });
+    return map;
+  }, [firebaseAttorneys]);
+
+  // Helper function to get role for an attorney
+  const getAttorneyRole = (name) => {
+    return ROLE_OVERRIDES[name] || attorneyRoleMap[name] || 'Attorney';
+  };
 
   // Get list of all attorney names for global filter dropdown
   const allAttorneyNames = useMemo(() => {
@@ -324,7 +346,7 @@ export const useAnalyticsData = ({
         target: Math.round(totalTarget * 10) / 10,
         billableTarget: Math.round(totalBillableTarget * 10) / 10,
         opsTarget: Math.round(totalOpsTarget * 10) / 10,
-        role: 'Attorney',
+        role: getAttorneyRole(attorneyName),
         transactions: data.transactions,
         clients: data.clients,
         topTransactions: Object.entries(data.transactions)
@@ -335,7 +357,7 @@ export const useAnalyticsData = ({
     });
 
     return Object.values(attorneyStats);
-  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets]);
+  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets, getAttorneyRole]);
 
   // Process transaction data
   const transactionData = useMemo(() => {

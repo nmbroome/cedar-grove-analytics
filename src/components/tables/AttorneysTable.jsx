@@ -29,7 +29,7 @@ const AttorneysTable = ({
               onClick={() => onSort('name')}
               className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
             >
-              Attorney {getSortIndicator('name')}
+              Name {getSortIndicator('name')}
             </th>
             <th 
               onClick={() => onSort('billable')}
@@ -76,8 +76,17 @@ const AttorneysTable = ({
                 className="hover:bg-blue-50 cursor-pointer transition-colors"
                 onClick={() => handleAttorneyClick(attorney.name)}
               >
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
-                  <span className="hover:underline">{attorney.name}</span>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <div>
+                    <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                      {attorney.name}
+                    </span>
+                    {attorney.role && attorney.role !== 'Attorney' && (
+                      <span className="ml-2 text-xs text-gray-500 font-normal">
+                        ({attorney.role})
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {formatHours(attorney.billable)}h
