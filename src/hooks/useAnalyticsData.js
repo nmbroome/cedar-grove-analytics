@@ -9,6 +9,12 @@ import {
   getMonthBusinessDays,
   countBusinessDays 
 } from '../utils/dateHelpers';
+import { 
+  isAttorneyHidden, 
+  shouldIncludeAttorneyData,
+  filterHiddenAttorneys,
+  filterHiddenAttorneyData 
+} from '../utils/hiddenAttorneys';
 
 // Role mapping for specific people who aren't attorneys
 const ROLE_OVERRIDES = {
@@ -105,21 +111,6 @@ export const useAnalyticsData = ({
     return ROLE_OVERRIDES[name] || attorneyRoleMap[name] || 'Attorney';
   };
 
-  // Get list of all attorney names for global filter dropdown
-  const allAttorneyNames = useMemo(() => {
-    const names = new Set();
-    firebaseAttorneys.forEach(attorney => {
-      names.add(attorney.name || attorney.id);
-    });
-    if (allEntries) {
-      allEntries.forEach(entry => {
-        const name = attorneyMap[entry.attorneyId] || entry.attorneyId;
-        if (name) names.add(name);
-      });
-    }
-    return Array.from(names).sort();
-  }, [firebaseAttorneys, allEntries, attorneyMap]);
-
   // Calculate the date range boundaries
   const dateRangeInfo = useMemo(() => {
     const now = getPSTDate();
@@ -173,6 +164,26 @@ export const useAnalyticsData = ({
     return { startDate, endDate, currentMonthKey, now };
   }, [dateRange, customDateStart, customDateEnd, allEntries]);
 
+  // Get list of all attorney names for global filter dropdown
+  // Filter out hidden attorneys from the UI display
+  const allAttorneyNames = useMemo(() => {
+    const names = new Set();
+    firebaseAttorneys.forEach(attorney => {
+      names.add(attorney.name || attorney.id);
+    });
+    if (allEntries) {
+      allEntries.forEach(entry => {
+        const name = attorneyMap[entry.attorneyId] || entry.attorneyId;
+        if (name) names.add(name);
+      });
+    }
+    
+    // Filter out hidden attorneys from the dropdown
+    // They're hidden from UI but their data is still included in calculations
+    const allNames = Array.from(names).sort();
+    return filterHiddenAttorneys(allNames);
+  }, [firebaseAttorneys, allEntries, attorneyMap]);
+
   // Filter entries based on date range
   const filteredEntries = useMemo(() => {
     if (!allEntries) return [];
@@ -181,12 +192,12 @@ export const useAnalyticsData = ({
 
     // Filter by date range
     if (dateRange !== 'all-time') {
-      const { startDate, endDate } = dateRangeInfo;
+      const { startDate: rangeStart, endDate: rangeEnd } = dateRangeInfo;
 
-      if (startDate) {
+      if (rangeStart) {
         entries = entries.filter(entry => {
           const entryDate = getEntryDate(entry);
-          return entryDate >= startDate && entryDate <= endDate;
+          return entryDate >= rangeStart && entryDate <= rangeEnd;
         });
       }
     }
@@ -356,8 +367,77 @@ export const useAnalyticsData = ({
       };
     });
 
-    return Object.values(attorneyStats);
+    // Convert to array and filter out hidden attorneys from display
+    // Hidden attorneys' data is still included in the totals calculated above
+    const allAttorneyData = Object.values(attorneyStats);
+    
+    // Filter for display: only show attorneys that should be visible
+    // But we return both for different use cases
+    const visibleAttorneyData = allAttorneyData.filter(attorney => {
+      // Check if this attorney should be included based on the date range
+      // If the date range includes their active period, include their data
+      // but they may still be hidden from the UI
+      return shouldIncludeAttorneyData(attorney.name, startDate, endDate) && 
+             !isAttorneyHidden(attorney.name);
+    });
+
+    return visibleAttorneyData;
   }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets, getAttorneyRole]);
+
+  // Create a separate dataset that includes hidden attorneys for totals calculation
+  const allAttorneyDataIncludingHidden = useMemo(() => {
+    const attorneyStats = {};
+    const attorneyMonthlyActivity = {};
+    
+    const { startDate, endDate, currentMonthKey, now } = dateRangeInfo;
+    
+    // First pass: collect hours and track active months per attorney
+    filteredEntries.forEach(entry => {
+      const attorneyName = attorneyMap[entry.attorneyId] || entry.attorneyId;
+      const entryDate = getEntryDate(entry);
+      
+      if (!attorneyMonthlyActivity[attorneyName]) {
+        attorneyMonthlyActivity[attorneyName] = {
+          months: new Set(),
+          billable: 0,
+          ops: 0,
+          earnings: 0,
+          transactions: {},
+          clients: {}
+        };
+      }
+      
+      if (entryDate) {
+        const monthKey = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+        attorneyMonthlyActivity[attorneyName].months.add(monthKey);
+      }
+      
+      const billableHours = entry.billableHours || 0;
+      const opsHours = entry.opsHours || 0;
+      const earnings = entry.billablesEarnings || 0;
+      
+      attorneyMonthlyActivity[attorneyName].billable += billableHours;
+      attorneyMonthlyActivity[attorneyName].ops += opsHours;
+      attorneyMonthlyActivity[attorneyName].earnings += earnings;
+    });
+
+    // Second pass: build stats
+    Object.entries(attorneyMonthlyActivity).forEach(([attorneyName, data]) => {
+      const defaultTarget = getDefaultTarget(attorneyName);
+      
+      attorneyStats[attorneyName] = {
+        name: attorneyName,
+        billable: data.billable,
+        ops: data.ops,
+        earnings: data.earnings,
+        target: defaultTarget.totalTarget,
+        billableTarget: defaultTarget.billableTarget,
+        opsTarget: defaultTarget.opsTarget,
+      };
+    });
+
+    return Object.values(attorneyStats);
+  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets]);
 
   // Process transaction data
   const transactionData = useMemo(() => {
@@ -622,7 +702,7 @@ export const useAnalyticsData = ({
     return Math.round((total / attorney.target) * 100);
   };
 
-  // Calculate total gross billables (rate × hours)
+  // Calculate total gross billables (rate × hours) - includes all entries (hidden attorneys too)
   const totalGrossBillables = useMemo(() => {
     let total = 0;
     filteredEntries.forEach(entry => {
@@ -637,11 +717,15 @@ export const useAnalyticsData = ({
     return total;
   }, [filteredEntries, attorneyMap, getRate]);
 
-  // Calculate totals
+  // Calculate totals - use allAttorneyDataIncludingHidden for accurate totals
+  // but use visible attorneyData count for "number of attorneys" display
   const totals = useMemo(() => {
-    const totalBillable = attorneyData.reduce((acc, att) => acc + att.billable, 0);
-    const totalOps = attorneyData.reduce((acc, att) => acc + att.ops, 0);
-    const totalEarnings = attorneyData.reduce((acc, att) => acc + att.earnings, 0);
+    // For hours and earnings totals, include all attorneys (even hidden ones)
+    const totalBillable = allAttorneyDataIncludingHidden.reduce((acc, att) => acc + att.billable, 0);
+    const totalOps = allAttorneyDataIncludingHidden.reduce((acc, att) => acc + att.ops, 0);
+    const totalEarnings = allAttorneyDataIncludingHidden.reduce((acc, att) => acc + att.earnings, 0);
+    
+    // For targets and utilization, only use visible attorneys
     const totalBillableTarget = attorneyData.reduce((acc, att) => acc + att.billableTarget, 0);
     const totalOpsTarget = attorneyData.reduce((acc, att) => acc + att.opsTarget, 0);
     
@@ -657,7 +741,7 @@ export const useAnalyticsData = ({
       totalOpsTarget,
       avgUtilization,
     };
-  }, [attorneyData]);
+  }, [attorneyData, allAttorneyDataIncludingHidden]);
 
   return {
     loading,
