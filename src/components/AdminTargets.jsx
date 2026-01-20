@@ -9,6 +9,7 @@ import { db, waitForAuth } from '@/firebase/config';
 import { useAllTimeEntries } from '@/hooks/useFirestoreData';
 import { useAuth } from '@/context/AuthContext';
 import { getPersonRole } from '@/utils/roles';
+import { filterHiddenAttorneys } from '@/utils/hiddenAttorneys';
 
 const AdminTargets = () => {
   const { user, signOut } = useAuth();
@@ -17,7 +18,7 @@ const AdminTargets = () => {
   // Use entries to derive attorney list instead of useAttorneys
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   
-  // Derive unique attorneys from entries
+  // Derive unique attorneys from entries, then filter out hidden ones
   const attorneys = useMemo(() => {
     if (!allEntries || allEntries.length === 0) return [];
     
@@ -32,7 +33,15 @@ const AdminTargets = () => {
       }
     });
     
-    return Array.from(attorneyMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    // Get all attorney names and filter out hidden ones
+    const allAttorneyNames = Array.from(attorneyMap.keys());
+    const visibleAttorneyNames = filterHiddenAttorneys(allAttorneyNames);
+    
+    // Return only visible attorneys
+    return visibleAttorneyNames.map(name => ({
+      id: name,
+      name: name
+    })).sort((a, b) => a.name.localeCompare(b.name));
   }, [allEntries]);
 
   // Calculate role breakdown for display
