@@ -17,7 +17,7 @@ import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 const BillingSummariesView = () => {
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
-  const { getRate, loading: ratesLoading } = useAttorneyRates();
+  const { getRate, rates, loading: ratesLoading } = useAttorneyRates();
   
   // Selected month and client state
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -83,8 +83,10 @@ const BillingSummariesView = () => {
       .map(entry => {
         const entryDate = getEntryDate(entry);
         const attorneyName = entry.attorneyId;
-        const rate = getRate(attorneyName, entryDate);
         const billableHours = entry.billableHours || 0;
+        
+        // Get the rate for this attorney and month
+        const rate = getRate(attorneyName, entryDate);
         
         return {
           ...entry,
@@ -330,7 +332,7 @@ const BillingSummariesView = () => {
                           {entry.attorneyName}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
-                          {formatCurrency(entry.rate)}/hr
+                          {entry.rate > 0 ? `${formatCurrency(entry.rate)}/hr` : <span className="text-red-500">No rate set</span>}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
                           {formatHours(entry.billableHours)}h
