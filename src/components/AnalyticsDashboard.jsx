@@ -163,17 +163,23 @@ const AnalyticsDashboard = () => {
 
         {/* Navigation Tabs */}
         <div className="mb-6 flex gap-2 border-b border-gray-300">
-          {['overview', 'attorneys', 'transactions', 'ops', 'clients'].map((view) => (
+          {[
+            { key: 'overview', label: 'Overview' },
+            { key: 'attorneys', label: 'Team Members' },
+            { key: 'transactions', label: 'Transactions' },
+            { key: 'ops', label: 'Ops' },
+            { key: 'clients', label: 'Clients' },
+          ].map((tab) => (
             <button
-              key={view}
-              onClick={() => setSelectedView(view)}
-              className={`px-4 py-2 font-medium capitalize transition-colors ${
-                selectedView === view
+              key={tab.key}
+              onClick={() => setSelectedView(tab.key)}
+              className={`px-4 py-2 font-medium transition-colors ${
+                selectedView === tab.key
                   ? 'text-cg-green border-b-2 border-cg-green'
                   : 'text-cg-dark hover:text-cg-black'
               }`}
             >
-              {view}
+              {tab.label}
             </button>
           ))}
         </div>

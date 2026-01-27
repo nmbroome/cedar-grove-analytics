@@ -21,10 +21,10 @@ const AttorneyFilterDropdown = ({
   }, [setShowDropdown]);
 
   const getButtonLabel = () => {
-    if (!globalAttorneyFilter || globalAttorneyFilter.length === 0) return 'No Attorneys';
-    if (globalAttorneyFilter.length === allAttorneyNames.length) return 'All Attorneys';
+    if (!globalAttorneyFilter || globalAttorneyFilter.length === 0) return 'No Team Members';
+    if (globalAttorneyFilter.length === allAttorneyNames.length) return 'All Team Members';
     if (globalAttorneyFilter.length === 1) return globalAttorneyFilter[0];
-    return `${globalAttorneyFilter.length} Attorneys`;
+    return `${globalAttorneyFilter.length} Team Members`;
   };
 
   const isFiltered = globalAttorneyFilter?.length > 0 && globalAttorneyFilter?.length < allAttorneyNames?.length;
@@ -57,7 +57,7 @@ const AttorneyFilterDropdown = ({
                   : 'text-cg-dark hover:bg-gray-100'
               }`}
             >
-              All Attorneys
+              All Team Members
             </button>
           </div>
           <div className="max-h-64 overflow-y-auto py-1">
