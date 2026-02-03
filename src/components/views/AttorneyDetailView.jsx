@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -32,9 +32,8 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase/config';
 import { useAllTimeEntries } from '@/hooks/useFirestoreData';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import { 
   getEntryDate, 
   getPSTDate, 
@@ -91,49 +90,21 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, hours }) => {
 const AttorneyDetailView = ({ attorneyName }) => {
   const router = useRouter();
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
-  
+  const { allTargets } = useFirestoreCache();
+
   // Date range state
   const [dateRange, setDateRange] = useState('current-month');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
-  
-  // Attorney targets from Firebase
-  const [attorneyTargets, setAttorneyTargets] = useState({});
-  const [targetsLoading, setTargetsLoading] = useState(true);
+
+  // Attorney targets from shared cache
+  const attorneyTargets = useMemo(() => allTargets[attorneyName] || {}, [allTargets, attorneyName]);
 
   // Get the person's role (Attorney or other title like Legal Operations Associate)
   const personRole = getPersonRole(attorneyName);
 
-  // Fetch attorney targets
-  useEffect(() => {
-    const fetchTargets = async () => {
-      try {
-        setTargetsLoading(true);
-        const targetsSnapshot = await getDocs(collection(db, 'attorneys', attorneyName, 'targets'));
-        const targets = {};
-        targetsSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          targets[doc.id] = {
-            billableTarget: data.billableTarget ?? 100,
-            opsTarget: data.opsTarget ?? 50,
-            totalTarget: data.totalTarget ?? 150
-          };
-        });
-        setAttorneyTargets(targets);
-      } catch (err) {
-        console.log('No targets found for attorney:', err.message);
-      } finally {
-        setTargetsLoading(false);
-      }
-    };
-
-    if (attorneyName) {
-      fetchTargets();
-    }
-  }, [attorneyName]);
-
-  const loading = entriesLoading || targetsLoading;
+  const loading = entriesLoading;
   const error = entriesError;
 
   // Calculate date range boundaries
@@ -483,15 +454,22 @@ const AttorneyDetailView = ({ attorneyName }) => {
 
   // Utilization color helper
   const getUtilizationColor = (util) => {
-    if (util >= 100) return 'text-green-600';
-    if (util >= 80) return 'text-yellow-600';
+    if (util >= 95 && util <= 105) return 'text-green-600';
+    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const getUtilizationBgColor = (util) => {
-    if (util >= 100) return 'bg-green-100 text-green-800';
-    if (util >= 80) return 'bg-yellow-100 text-yellow-800';
+    if (util >= 95 && util <= 105) return 'bg-green-100 text-green-800';
+    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
+  };
+
+  // Progress bar color helper
+  const getProgressBarColor = (util) => {
+    if (util >= 95 && util <= 105) return 'bg-green-500';
+    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   if (loading) {
@@ -589,7 +567,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                 <div 
-                  className={`h-2 rounded-full ${attorneyStats.utilization >= 100 ? 'bg-green-500' : attorneyStats.utilization >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.utilization)}`}
                   style={{ width: `${Math.min(attorneyStats.utilization, 100)}%` }}
                 />
               </div>
@@ -606,7 +584,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                 <div 
-                  className={`h-2 rounded-full ${attorneyStats.billableUtilization >= 100 ? 'bg-green-500' : attorneyStats.billableUtilization >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.billableUtilization)}`}
                   style={{ width: `${Math.min(attorneyStats.billableUtilization, 100)}%` }}
                 />
               </div>
@@ -623,7 +601,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                 <div 
-                  className={`h-2 rounded-full ${attorneyStats.opsUtilization >= 100 ? 'bg-green-500' : attorneyStats.opsUtilization >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.opsUtilization)}`}
                   style={{ width: `${Math.min(attorneyStats.opsUtilization, 100)}%` }}
                 />
               </div>

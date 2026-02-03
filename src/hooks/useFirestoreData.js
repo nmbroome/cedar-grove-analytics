@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, getDocs, collectionGroup, query, where } from 'firebase/firestore';
-import { db, waitForAuth } from '../firebase/config';
+import { useMemo } from 'react';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 
 /**
  * Normalize entry data to handle both old and new field names
@@ -11,13 +10,13 @@ import { db, waitForAuth } from '../firebase/config';
  * - billablesEarnings (new)
  * - opsCategory (new)
  */
-const normalizeEntry = (entryData, attorneyId) => {
+export const normalizeEntry = (entryData, attorneyId) => {
   // Handle billable hours - prefer new field name, fallback to old
   const billableHours = parseFloat(entryData.billableHours) || parseFloat(entryData.hours) || 0;
-  
+
   // Handle ops hours - prefer new field name, fallback to old
   const opsHours = parseFloat(entryData.opsHours) || parseFloat(entryData.secondaryHours) || 0;
-  
+
   // Total hours combines both
   const totalHours = billableHours + opsHours;
 
@@ -48,220 +47,52 @@ const normalizeEntry = (entryData, attorneyId) => {
 };
 
 /**
- * Fetch all time entries across all attorneys
- * Uses collectionGroup to query the nested 'entries' subcollections
+ * Get all time entries from the shared cache.
+ * Optionally filter by year/month.
  */
 export const useAllTimeEntries = (filters = {}) => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { allEntries, loading, error } = useFirestoreCache();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Wait for authentication before fetching
-        await waitForAuth();
-
-        // Use collectionGroup to get all 'entries' across all attorneys
-        let q = collectionGroup(db, 'entries');
-
-        // Apply filters if provided
-        const constraints = [];
-        if (filters.year) {
-          constraints.push(where('year', '==', filters.year));
-        }
-        if (filters.month) {
-          constraints.push(where('month', '==', filters.month));
-        }
-
-        if (constraints.length > 0) {
-          q = query(q, ...constraints);
-        }
-
-        const querySnapshot = await getDocs(q);
-        const entries = [];
-
-        querySnapshot.docs.forEach(doc => {
-          const entryData = doc.data();
-          
-          // Extract attorney name from the document path
-          // Path structure: attorneys/{attorneyId}/entries/{entryId}
-          const pathParts = doc.ref.path.split('/');
-          const attorneyId = pathParts[1];
-          
-          entries.push({
-            id: doc.id,
-            ...normalizeEntry(entryData, attorneyId)
-          });
-        });
-
-        setData(entries);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [JSON.stringify(filters)]);
+  const data = useMemo(() => {
+    let entries = allEntries;
+    if (filters.year) {
+      entries = entries.filter(e => e.year === filters.year);
+    }
+    if (filters.month) {
+      entries = entries.filter(e => e.month === filters.month);
+    }
+    return entries;
+  }, [allEntries, filters.year, filters.month]);
 
   return { data, loading, error };
 };
 
 /**
- * Fetch all attorneys with their metadata
- */
-/**
- * Fetch all attorneys with their metadata
- * First tries to get from attorneys collection, then falls back to deriving from entries
+ * Get all attorneys from the shared cache.
  */
 export const useAttorneys = () => {
-  const [attorneys, setAttorneys] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchAttorneys = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Wait for authentication before fetching
-        await waitForAuth();
-        
-        // First, try to get attorneys from the attorneys collection
-        const attorneysRef = collection(db, 'attorneys');
-        const attorneysSnapshot = await getDocs(attorneysRef);
-        
-        if (!attorneysSnapshot.empty) {
-          // We have attorney documents - use them
-          const attorneyList = attorneysSnapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || doc.id,
-            ...doc.data()
-          }));
-          
-          setAttorneys(attorneyList);
-        } else {
-          // No attorney documents exist yet - derive from entries
-          // This uses collectionGroup to get all entries and extract unique attorney IDs
-          const entriesSnapshot = await getDocs(collectionGroup(db, 'entries'));
-          
-          const attorneyMap = {};
-          entriesSnapshot.docs.forEach(doc => {
-            // Path structure: attorneys/{attorneyId}/entries/{entryId}
-            const pathParts = doc.ref.path.split('/');
-            const attorneyId = pathParts[1];
-            
-            if (attorneyId && !attorneyMap[attorneyId]) {
-              attorneyMap[attorneyId] = {
-                id: attorneyId,
-                name: attorneyId // The document ID is the attorney name
-              };
-            }
-          });
-          
-          const attorneyList = Object.values(attorneyMap).sort((a, b) => 
-            a.name.localeCompare(b.name)
-          );
-          
-          setAttorneys(attorneyList);
-        }
-      } catch (err) {
-        console.error('useAttorneys: Error fetching attorneys:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAttorneys();
-  }, []);
-
+  const { attorneys, loading, error } = useFirestoreCache();
   return { attorneys, loading, error };
 };
 
 /**
- * Fetch all clients from the clients collection
+ * Get all clients from the shared cache.
  */
 export const useClients = () => {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setLoading(true);
-        
-        // Wait for authentication before fetching
-        await waitForAuth();
-        
-        const querySnapshot = await getDocs(collection(db, 'clients'));
-        const clientList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setClients(clientList);
-      } catch (err) {
-        console.error('Error fetching clients:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchClients();
-  }, []);
-
+  const { clients, loading, error } = useFirestoreCache();
   return { clients, loading, error };
 };
 
 /**
- * Fetch entries for a specific attorney
+ * Get entries for a specific attorney from the shared cache.
  */
 export const useAttorneyEntries = (attorneyId) => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { allEntries, loading, error } = useFirestoreCache();
 
-  useEffect(() => {
-    if (!attorneyId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // Wait for authentication before fetching
-        await waitForAuth();
-        
-        const entriesRef = collection(db, 'attorneys', attorneyId, 'entries');
-        const querySnapshot = await getDocs(entriesRef);
-        
-        const entries = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...normalizeEntry(doc.data(), attorneyId)
-        }));
-
-        setData(entries);
-      } catch (err) {
-        console.error('Error fetching attorney entries:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [attorneyId]);
+  const data = useMemo(() => {
+    if (!attorneyId) return [];
+    return allEntries.filter(e => e.attorneyId === attorneyId);
+  }, [allEntries, attorneyId]);
 
   return { data, loading, error };
 };

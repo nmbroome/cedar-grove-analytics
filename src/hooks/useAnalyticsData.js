@@ -1,8 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { useMemo, useCallback } from 'react';
 import { useAllTimeEntries, useAttorneys, useClients } from './useFirestoreData';
 import { useAttorneyRates } from './useAttorneyRates';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import { 
   getEntryDate, 
   getPSTDate, 
@@ -29,61 +28,14 @@ export const useAnalyticsData = ({
   globalAttorneyFilter,
   transactionAttorneyFilter,
 }) => {
-  // Fetch data from Firebase
+  // Read data from shared cache
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
   const { attorneys: firebaseAttorneys, loading: attorneysLoading, error: attorneysError } = useAttorneys();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
   const { getRate, loading: ratesLoading } = useAttorneyRates();
-  
-  // State for attorney targets from Firebase
-  const [attorneyTargets, setAttorneyTargets] = useState({});
-  const [targetsLoading, setTargetsLoading] = useState(true);
+  const { allTargets: attorneyTargets } = useFirestoreCache();
 
-  // Fetch all attorney targets from Firebase
-  useEffect(() => {
-    const fetchAllTargets = async () => {
-      try {
-        setTargetsLoading(true);
-        const targetsMap = {};
-        
-        for (const attorney of firebaseAttorneys) {
-          try {
-            const targetsSnapshot = await getDocs(collection(db, 'attorneys', attorney.id, 'targets'));
-            const attorneyName = attorney.name || attorney.id;
-            
-            if (!targetsMap[attorneyName]) {
-              targetsMap[attorneyName] = {};
-            }
-            
-            targetsSnapshot.docs.forEach(doc => {
-              const data = doc.data();
-              targetsMap[attorneyName][doc.id] = {
-                billableTarget: data.billableTarget ?? 100,
-                opsTarget: data.opsTarget ?? 50,
-                totalTarget: data.totalTarget ?? 150
-              };
-            });
-          } catch (err) {
-            console.log(`No targets found for ${attorney.id}`);
-          }
-        }
-        
-        setAttorneyTargets(targetsMap);
-      } catch (err) {
-        console.error('Error fetching targets:', err);
-      } finally {
-        setTargetsLoading(false);
-      }
-    };
-
-    if (!attorneysLoading && firebaseAttorneys.length > 0) {
-      fetchAllTargets();
-    } else if (!attorneysLoading) {
-      setTargetsLoading(false);
-    }
-  }, [firebaseAttorneys, attorneysLoading]);
-
-  const loading = entriesLoading || attorneysLoading || clientsLoading || targetsLoading || ratesLoading;
+  const loading = entriesLoading || attorneysLoading || clientsLoading || ratesLoading;
   const error = entriesError || attorneysError || clientsError;
 
   // Create attorney name map
@@ -214,17 +166,17 @@ export const useAnalyticsData = ({
   }, [allEntries, dateRange, dateRangeInfo, globalAttorneyFilter, attorneyMap]);
 
   // Helper function to get default target for an attorney (uses current month target if available)
-  const getDefaultTarget = (attorneyName) => {
+  const getDefaultTarget = useCallback((attorneyName) => {
     const { currentMonthKey } = dateRangeInfo;
     const attorneyTargetData = attorneyTargets[attorneyName] || {};
     const currentMonthTarget = attorneyTargetData[currentMonthKey];
-    
+
     return {
       billableTarget: currentMonthTarget?.billableTarget ?? 100,
       opsTarget: currentMonthTarget?.opsTarget ?? 50,
       totalTarget: currentMonthTarget?.totalTarget ?? 150
     };
-  };
+  }, [dateRangeInfo, attorneyTargets]);
 
   // Process attorney data with proper target calculations
   const attorneyData = useMemo(() => {
@@ -382,7 +334,7 @@ export const useAnalyticsData = ({
     });
 
     return visibleAttorneyData;
-  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets, getAttorneyRole]);
+  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets, getAttorneyRole, getDefaultTarget]);
 
   // Create a separate dataset that includes hidden attorneys for totals calculation
   const allAttorneyDataIncludingHidden = useMemo(() => {
@@ -437,7 +389,7 @@ export const useAnalyticsData = ({
     });
 
     return Object.values(attorneyStats);
-  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets]);
+  }, [filteredEntries, attorneyMap, dateRangeInfo, attorneyTargets, getDefaultTarget]);
 
   // Process transaction data
   const transactionData = useMemo(() => {

@@ -1,5 +1,6 @@
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import { FirestoreDataProvider } from '@/context/FirestoreDataContext'
 
 export const metadata = {
   title: 'Cedar Grove Analytics',
@@ -11,7 +12,9 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <AuthProvider>
-          {children}
+          <FirestoreDataProvider>
+            {children}
+          </FirestoreDataProvider>
         </AuthProvider>
       </body>
     </html>

@@ -20,6 +20,12 @@ const AttorneysTable = ({
     router.push(`/attorneys/${encodeURIComponent(attorneyName)}`);
   };
 
+  const getUtilizationBadgeColor = (util) => {
+    if (util >= 95 && util <= 105) return 'bg-green-100 text-green-800';
+    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+  };
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -102,13 +108,7 @@ const AttorneysTable = ({
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      utilization >= 100
-                        ? 'bg-green-100 text-green-800'
-                        : utilization >= 80
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
+                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUtilizationBadgeColor(utilization)}`}
                   >
                     {utilization}%
                   </span>

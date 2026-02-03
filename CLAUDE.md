@@ -1,0 +1,128 @@
+# CLAUDE.md — Cedar Grove Analytics
+
+## Project Overview
+
+Legal analytics dashboard for Cedar Grove LLP. Tracks attorney billable/ops hours, utilization targets, client activity, and billing summaries. Built with Next.js App Router and Firebase (Firestore + Auth).
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router), React 19
+- **Styling:** Tailwind CSS 4
+- **Backend:** Firebase 12 (Firestore, Authentication)
+- **Charts:** Recharts 3, D3 7
+- **Icons:** Lucide React
+- **Linting:** ESLint 9 with next/core-web-vitals
+
+## Commands
+
+```bash
+npm run dev      # Start dev server
+npm run build    # Production build
+npm run start    # Production server
+npm run lint     # Run ESLint
+```
+
+## Project Structure
+
+```
+src/
+├── app/                    # Next.js App Router pages
+│   ├── layout.js           # Root layout (wraps AuthProvider)
+│   ├── page.js             # Dashboard home
+│   ├── login/              # Google Sign-in page
+│   ├── attorneys/[attorneyName]/  # Attorney detail (dynamic route)
+│   ├── clients/[clientName]/      # Client detail (dynamic route)
+│   ├── billing-summaries/         # Billing summaries report
+│   └── admin/              # Admin section (targets, users)
+├── components/
+│   ├── AnalyticsDashboard.jsx  # Main dashboard with tab navigation
+│   ├── ProtectedRoute.js       # Auth guard wrapper
+│   ├── AdminDashboard.jsx      # Admin panel
+│   ├── charts/             # Recharts/D3 visualizations
+│   ├── tables/             # Data tables with sorting/pagination
+│   ├── views/              # Full-page view components
+│   ├── shared/             # Reusable UI (KPICard, dropdowns, filters)
+│   └── tooltips/           # Custom chart tooltip components
+├── context/
+│   └── AuthContext.js      # Auth state, Google Sign-in, admin check
+├── firebase/
+│   └── config.js           # Firebase app initialization
+├── hooks/
+│   ├── useFirestoreData.js # Firestore collection fetching
+│   ├── useAnalyticsData.js # Data aggregation and KPI calculations
+│   └── useAttorneyRates.js # Attorney billing rate lookups
+└── utils/
+    ├── constants.js        # Colors, date range options, periods
+    ├── dateHelpers.js      # Business day math, US holidays
+    ├── formatters.js       # Currency and number formatting
+    ├── hiddenAttorneys.js  # Attorneys hidden from UI after a date
+    └── roles.js            # Role overrides for non-attorney staff
+```
+
+## Architecture Notes
+
+- **All interactive components use `"use client"`** — server components are only used for route entry points.
+- **State management** is React Context (AuthContext) + local `useState`/`useMemo`. No Redux/Zustand.
+- **Data fetching** happens in custom hooks (`useFirestoreData.js`, `useAnalyticsData.js`) via Firestore SDK. No REST API layer.
+- **Path alias:** `@/*` maps to `./src/*` (configured in `jsconfig.json`).
+- **Component barrel exports:** `charts/index.js`, `tables/index.js`, `views/index.js`, `shared/index.js`, `tooltips/index.js`.
+
+## Firestore Data Model
+
+```
+attorneys/{attorneyName}/
+  entries/{entryId}     — billableHours, opsHours, billableDate, opsDate, client, billingCategory, opsCategory, notes
+  rates/{monthKey}      — billableRate, month, year
+  targets/{monthKey}    — billableTarget, opsTarget, totalTarget
+
+clients/{clientId}      — clientName, status, clientType, channel, contactEmail, website
+
+admins/{email}          — document existence = admin role
+```
+
+Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`/`opsHours` in hooks.
+
+## Auth & Authorization
+
+- Google OAuth via Firebase `signInWithPopup`.
+- Domain-restricted: `@cedargrovellp.com` emails are authorized.
+- Admin role: determined by document in `admins` collection.
+- Non-admin users are redirected to their own attorney detail page.
+- Nickname mapping (e.g., "Nick" → "Nicholas") handles attorney page access matching.
+
+## Key Patterns
+
+- **Date filtering:** All-time, current month, trailing 60 days, or custom range. Filters applied in `useAnalyticsData`.
+- **Attorney filtering:** Global filter dropdown affects all views; some views have additional local filters.
+- **Target pro-rating:** Utilization targets are pro-rated by business days elapsed in the current period, accounting for US federal holidays.
+- **Hidden attorneys:** Configured in `hiddenAttorneys.js` with date thresholds. Hidden from UI but included in aggregate totals.
+- **Role overrides:** `roles.js` maps non-attorney staff to custom display roles.
+
+## Environment Variables
+
+All prefixed with `NEXT_PUBLIC_` (client-side accessible):
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+
+Set in `.env.local` (gitignored).
+
+## Testing
+
+No test framework is configured. There are no test files.
+
+## Deployment
+
+Configured for Vercel. Push to `main` triggers deploy. Environment variables set in Vercel dashboard.
+
+## Conventions
+
+- JSX components use `.jsx` extension; plain JS uses `.js`.
+- Tailwind utility classes for all styling. Custom brand colors defined in `tailwind.config.js` (`cg-black`, `cg-green`, `cg-dark`, `cg-background`).
+- Recharts for standard charts; D3 for the ops sunburst visualization.
+- Tables include client-side sorting and pagination.
+- Currency formatted via `Intl.NumberFormat` helpers in `formatters.js`.

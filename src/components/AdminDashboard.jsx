@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Target, Users, LogOut, ArrowLeft, Shield, FileText } from 'lucide-react';
+import { Target, Users, LogOut, ArrowLeft, Shield, FileText, DollarSign } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -35,6 +35,13 @@ const AdminDashboard = () => {
       href: '/billing-summaries',
       icon: FileText,
       color: 'bg-green-500',
+    },
+    {
+      title: 'Transactions',
+      description: 'View Mercury bank transactions, expenses, and payments',
+      href: '/admin/transactions',
+      icon: DollarSign,
+      color: 'bg-emerald-500',
     },
   ];
 
