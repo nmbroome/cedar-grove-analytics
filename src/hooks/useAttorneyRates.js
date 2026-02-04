@@ -4,6 +4,31 @@ import { useMemo, useCallback } from 'react';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 
 /**
+ * Given a rates map ({ monthKey -> { rate } }) and a target monthKey,
+ * returns the rate for that month. If no exact match, falls back to
+ * the most recent prior month's rate.
+ */
+function findRate(ratesMap, monthKey) {
+  if (!ratesMap) return 0;
+
+  const exactRate = ratesMap[monthKey]?.rate;
+  if (exactRate) return exactRate;
+
+  // Find the most recent month key before the requested one
+  const sortedKeys = Object.keys(ratesMap).sort();
+  let fallbackKey = null;
+  for (const key of sortedKeys) {
+    if (key < monthKey) {
+      fallbackKey = key;
+    } else {
+      break;
+    }
+  }
+
+  return fallbackKey ? (ratesMap[fallbackKey]?.rate || 0) : 0;
+}
+
+/**
  * Hook to get all user billing rates from the shared cache.
  * Returns a map of userId -> { monthKey -> rate }
  */
@@ -38,8 +63,7 @@ export function useAttorneyRates() {
     const month = dateObj.getMonth() + 1;
     const monthKey = `${year}-${String(month).padStart(2, '0')}`;
 
-    const rate = allRates[userName]?.[monthKey]?.rate;
-    return rate || 0;
+    return findRate(allRates[userName], monthKey);
   }, [allRates]);
 
   const calculateGrossBillables = useCallback((entry) => {
@@ -106,7 +130,7 @@ export function useAttorneyRatesByName(userName) {
     const month = dateObj.getMonth() + 1;
     const monthKey = `${year}-${String(month).padStart(2, '0')}`;
 
-    return rates[monthKey]?.rate || 0;
+    return findRate(rates, monthKey);
   }, [rates]);
 
   return {
