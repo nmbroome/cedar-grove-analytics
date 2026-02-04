@@ -35,7 +35,8 @@ const AnalyticsDashboard = () => {
     loading,
     error,
     allAttorneyNames,
-    filteredEntries,
+    filteredBillableEntries,
+    filteredOpsEntries,
     attorneyData,
     transactionData,
     opsData,
@@ -103,7 +104,7 @@ const AnalyticsDashboard = () => {
   }
 
   // No data state
-  if (!filteredEntries || filteredEntries.length === 0) {
+  if ((!filteredBillableEntries || filteredBillableEntries.length === 0) && (!filteredOpsEntries || filteredOpsEntries.length === 0)) {
     return (
       <div className="min-h-screen bg-cg-background p-6">
         <div className="max-w-7xl mx-auto">
@@ -188,7 +189,7 @@ const AnalyticsDashboard = () => {
         {selectedView === 'overview' && (
           <OverviewView
             dateRangeLabel={dateRangeLabel}
-            filteredEntriesCount={filteredEntries.length}
+            filteredEntriesCount={(filteredBillableEntries?.length || 0) + (filteredOpsEntries?.length || 0)}
             globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
             avgUtilization={avgUtilization}
@@ -238,7 +239,7 @@ const AnalyticsDashboard = () => {
             allAttorneyNames={allAttorneyNames}
             clientData={clientData}
             clientCounts={clientCounts}
-            filteredEntries={filteredEntries}
+            filteredBillableEntries={filteredBillableEntries}
           />
         )}
       </div>

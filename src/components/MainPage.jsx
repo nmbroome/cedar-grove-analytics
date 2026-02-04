@@ -1,26 +1,26 @@
 import { useState, useMemo } from 'react';
 import TimeByClientChart from './charts/TimeByClientChart';
-import { useAllTimeEntries, useAttorneys } from '../hooks/useFirestoreData';
+import { useAllBillableEntries, useUsers } from '../hooks/useFirestoreData';
 
 function MainPage() {
   const [selectedYear, setSelectedYear] = useState(2025);
   
-  // Fetch all attorneys
-  const { attorneys, loading: attorneysLoading } = useAttorneys();
-  
-  // Fetch all time entries
-  const { data: allEntries, loading: entriesLoading, error } = useAllTimeEntries();
-  
-  const loading = attorneysLoading || entriesLoading;
+  // Fetch all users
+  const { users, loading: usersLoading } = useUsers();
 
-  // Create attorney name map
-  const attorneyMap = useMemo(() => {
+  // Fetch all billable entries
+  const { data: allEntries, loading: entriesLoading, error } = useAllBillableEntries();
+
+  const loading = usersLoading || entriesLoading;
+
+  // Create user name map
+  const userMap = useMemo(() => {
     const map = {};
-    attorneys.forEach(attorney => {
-      map[attorney.id] = attorney.name || attorney.id;
+    users.forEach(user => {
+      map[user.id] = user.name || user.id;
     });
     return map;
-  }, [attorneys]);
+  }, [users]);
 
   // Process and filter data
   const timeData = useMemo(() => {
@@ -33,11 +33,11 @@ function MainPage() {
       })
       .map(entry => ({
         ...entry,
-        attorney: entry.name || attorneyMap[entry.attorneyId] || entry.attorneyId,
-        client: entry.client || entry.company || 'Unknown Client',
-        hours: entry.hours || entry.secondaryHours || 0,
+        attorney: userMap[entry.userId] || entry.userId,
+        client: entry.client || 'Unknown Client',
+        hours: entry.billableHours || 0,
       }));
-  }, [allEntries, attorneyMap, selectedYear]);
+  }, [allEntries, userMap, selectedYear]);
 
   // Aggregate by client
   const clientData = useMemo(() => {

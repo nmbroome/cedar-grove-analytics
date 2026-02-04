@@ -2,59 +2,58 @@ import { useMemo } from 'react';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 
 /**
- * Normalize entry data to handle both old and new field names
- * New format:
- * - billableHours (was: hours)
- * - opsHours (was: secondaryHours)
- * - billableDate, opsDate (new timestamp fields)
- * - billablesEarnings (new)
- * - opsCategory (new)
+ * Normalize a billable entry from the new schema.
+ * New schema fields: client, date, hours, earnings, billingCategory, matter, reimbursements, notes, sheetRowNumber
+ * Normalized output adds: userId, billableHours, month, year
  */
-export const normalizeEntry = (entryData, attorneyId) => {
-  // Handle billable hours - prefer new field name, fallback to old
-  const billableHours = parseFloat(entryData.billableHours) || parseFloat(entryData.hours) || 0;
-
-  // Handle ops hours - prefer new field name, fallback to old
-  const opsHours = parseFloat(entryData.opsHours) || parseFloat(entryData.secondaryHours) || 0;
-
-  // Total hours combines both
-  const totalHours = billableHours + opsHours;
-
-  // Determine if this entry has ops work
-  const hasOps = opsHours > 0 || (entryData.ops && entryData.ops !== '' && entryData.ops !== 'null');
+export const normalizeBillableEntry = (entryData, userId, month, year) => {
+  const billableHours = parseFloat(entryData.hours) || 0;
+  const earnings = parseFloat(entryData.earnings) || 0;
 
   return {
     ...entryData,
-    attorneyId,
-    // Normalized hour fields
+    userId,
     billableHours,
-    opsHours,
-    totalHours,
-    hasOps,
-    // Keep legacy field names for backward compatibility
-    hours: billableHours,
-    secondaryHours: opsHours,
-    // Ensure other fields have defaults
-    billablesEarnings: parseFloat(entryData.billablesEarnings) || 0,
-    billingCategory: entryData.billingCategory || entryData.category || 'Other',
-    opsCategory: entryData.opsCategory || '',
-    client: entryData.client || entryData.company || 'Unknown',
-    ops: entryData.ops || '',
+    earnings,
+    billingCategory: entryData.billingCategory || 'Other',
+    client: entryData.client || 'Unknown',
+    matter: entryData.matter || '',
+    reimbursements: parseFloat(entryData.reimbursements) || 0,
     notes: entryData.notes || '',
-    month: entryData.month || '',
-    year: entryData.year || new Date().getFullYear(),
+    month: month || '',
+    year: year || new Date().getFullYear(),
   };
 };
 
 /**
- * Get all time entries from the shared cache.
+ * Normalize an ops entry from the new schema.
+ * New schema fields: description, date, hours, category, sheetRowNumber
+ * Normalized output adds: userId, opsHours, month, year
+ */
+export const normalizeOpsEntry = (entryData, userId, month, year) => {
+  const opsHours = parseFloat(entryData.hours) || 0;
+
+  return {
+    ...entryData,
+    userId,
+    opsHours,
+    description: entryData.description || '',
+    category: entryData.category || 'Other',
+    notes: entryData.description || '',
+    month: month || '',
+    year: year || new Date().getFullYear(),
+  };
+};
+
+/**
+ * Get all billable entries from the shared cache.
  * Optionally filter by year/month.
  */
-export const useAllTimeEntries = (filters = {}) => {
-  const { allEntries, loading, error } = useFirestoreCache();
+export const useAllBillableEntries = (filters = {}) => {
+  const { allBillableEntries, loading, error } = useFirestoreCache();
 
   const data = useMemo(() => {
-    let entries = allEntries;
+    let entries = allBillableEntries;
     if (filters.year) {
       entries = entries.filter(e => e.year === filters.year);
     }
@@ -62,17 +61,38 @@ export const useAllTimeEntries = (filters = {}) => {
       entries = entries.filter(e => e.month === filters.month);
     }
     return entries;
-  }, [allEntries, filters.year, filters.month]);
+  }, [allBillableEntries, filters.year, filters.month]);
 
   return { data, loading, error };
 };
 
 /**
- * Get all attorneys from the shared cache.
+ * Get all ops entries from the shared cache.
+ * Optionally filter by year/month.
  */
-export const useAttorneys = () => {
-  const { attorneys, loading, error } = useFirestoreCache();
-  return { attorneys, loading, error };
+export const useAllOpsEntries = (filters = {}) => {
+  const { allOpsEntries, loading, error } = useFirestoreCache();
+
+  const data = useMemo(() => {
+    let entries = allOpsEntries;
+    if (filters.year) {
+      entries = entries.filter(e => e.year === filters.year);
+    }
+    if (filters.month) {
+      entries = entries.filter(e => e.month === filters.month);
+    }
+    return entries;
+  }, [allOpsEntries, filters.year, filters.month]);
+
+  return { data, loading, error };
+};
+
+/**
+ * Get all users from the shared cache.
+ */
+export const useUsers = () => {
+  const { users, loading, error } = useFirestoreCache();
+  return { users, loading, error };
 };
 
 /**
@@ -84,15 +104,29 @@ export const useClients = () => {
 };
 
 /**
- * Get entries for a specific attorney from the shared cache.
+ * Get billable entries for a specific user from the shared cache.
  */
-export const useAttorneyEntries = (attorneyId) => {
-  const { allEntries, loading, error } = useFirestoreCache();
+export const useUserBillableEntries = (userId) => {
+  const { allBillableEntries, loading, error } = useFirestoreCache();
 
   const data = useMemo(() => {
-    if (!attorneyId) return [];
-    return allEntries.filter(e => e.attorneyId === attorneyId);
-  }, [allEntries, attorneyId]);
+    if (!userId) return [];
+    return allBillableEntries.filter(e => e.userId === userId);
+  }, [allBillableEntries, userId]);
+
+  return { data, loading, error };
+};
+
+/**
+ * Get ops entries for a specific user from the shared cache.
+ */
+export const useUserOpsEntries = (userId) => {
+  const { allOpsEntries, loading, error } = useFirestoreCache();
+
+  const data = useMemo(() => {
+    if (!userId) return [];
+    return allOpsEntries.filter(e => e.userId === userId);
+  }, [allOpsEntries, userId]);
 
   return { data, loading, error };
 };

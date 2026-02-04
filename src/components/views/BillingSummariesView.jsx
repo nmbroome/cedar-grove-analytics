@@ -10,13 +10,13 @@ import {
   User,
   Download
 } from 'lucide-react';
-import { useAllTimeEntries } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 const BillingSummariesView = () => {
-  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
+  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllBillableEntries();
   const { getRate, rates, loading: ratesLoading } = useAttorneyRates();
   
   // Selected month and client state
@@ -82,7 +82,7 @@ const BillingSummariesView = () => {
       })
       .map(entry => {
         const entryDate = getEntryDate(entry);
-        const attorneyName = entry.attorneyId;
+        const attorneyName = entry.userId;
         const billableHours = entry.billableHours || 0;
         
         // Get the rate for this attorney and month

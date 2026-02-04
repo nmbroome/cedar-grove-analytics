@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { collection, getDocs, collectionGroup } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
 import { useAuth } from './AuthContext';
-import { normalizeEntry } from '@/hooks/useFirestoreData';
+import { normalizeBillableEntry, normalizeOpsEntry } from '@/hooks/useFirestoreData';
+import { getMonthNumber } from '@/utils/dateHelpers';
 
 const FirestoreDataContext = createContext({});
 
@@ -13,8 +14,9 @@ export const useFirestoreCache = () => useContext(FirestoreDataContext);
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export const FirestoreDataProvider = ({ children }) => {
-  const [allEntries, setAllEntries] = useState([]);
-  const [attorneys, setAttorneys] = useState([]);
+  const [allBillableEntries, setAllBillableEntries] = useState([]);
+  const [allOpsEntries, setAllOpsEntries] = useState([]);
+  const [users, setUsers] = useState([]);
   const [clients, setClients] = useState([]);
   const [allRates, setAllRates] = useState({});
   const [allTargets, setAllTargets] = useState({});
@@ -37,73 +39,103 @@ export const FirestoreDataProvider = ({ children }) => {
     try {
       await waitForAuth();
 
-      const [entriesSnap, attorneysSnap, clientsSnap, ratesSnap, targetsSnap] = await Promise.all([
-        getDocs(collectionGroup(db, 'entries')),
-        getDocs(collection(db, 'attorneys')),
+      // Fetch users and clients in parallel
+      const [usersSnap, clientsSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
         getDocs(collection(db, 'clients')),
-        getDocs(collectionGroup(db, 'rates')),
-        getDocs(collectionGroup(db, 'targets')),
       ]);
 
-      // Process entries
-      const entries = entriesSnap.docs.map(doc => {
-        const pathParts = doc.ref.path.split('/');
-        const attorneyId = pathParts[1];
-        return { id: doc.id, ...normalizeEntry(doc.data(), attorneyId) };
+      // Process users and build rates/targets maps from profile arrays
+      const userList = [];
+      const ratesMap = {};
+      const targetsMap = {};
+
+      usersSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const userId = doc.id;
+        const userName = data.name || userId;
+
+        userList.push({
+          id: userId,
+          name: userName,
+          role: data.role || 'Attorney',
+          email: data.email || '',
+        });
+
+        // Build rates map from user profile rates[] array
+        if (Array.isArray(data.rates)) {
+          ratesMap[userId] = {};
+          data.rates.forEach(rateEntry => {
+            const monthNum = getMonthNumber(rateEntry.month);
+            const monthKey = `${rateEntry.year}-${String(monthNum).padStart(2, '0')}`;
+            ratesMap[userId][monthKey] = {
+              rate: rateEntry.rate || 0,
+              month: monthNum,
+              year: rateEntry.year,
+            };
+          });
+        }
+
+        // Build targets map from user profile targets[] array
+        if (Array.isArray(data.targets)) {
+          targetsMap[userId] = {};
+          data.targets.forEach(targetEntry => {
+            const monthNum = getMonthNumber(targetEntry.month);
+            const monthKey = `${targetEntry.year}-${String(monthNum).padStart(2, '0')}`;
+            targetsMap[userId][monthKey] = {
+              billableHours: targetEntry.billableHours ?? 100,
+              opsHours: targetEntry.opsHours ?? 50,
+              totalHours: targetEntry.totalHours ?? 150,
+              earnings: targetEntry.earnings ?? 0,
+            };
+          });
+        }
       });
 
-      // Process attorneys
-      let attorneyList;
-      if (!attorneysSnap.empty) {
-        attorneyList = attorneysSnap.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name || doc.id,
-          ...doc.data()
-        }));
-      } else {
-        // Fallback: derive from entries
-        const attorneyMap = {};
-        entries.forEach(entry => {
-          if (entry.attorneyId && !attorneyMap[entry.attorneyId]) {
-            attorneyMap[entry.attorneyId] = { id: entry.attorneyId, name: entry.attorneyId };
+      // Fetch billables and ops subcollections for all users in parallel
+      const userIds = usersSnap.docs.map(doc => doc.id);
+      const entryFetches = userIds.flatMap(userId => [
+        getDocs(collection(db, 'users', userId, 'billables')).then(snap => ({ userId, type: 'billables', snap })),
+        getDocs(collection(db, 'users', userId, 'ops')).then(snap => ({ userId, type: 'ops', snap })),
+      ]);
+
+      const entryResults = await Promise.all(entryFetches);
+
+      // Process billable and ops entries
+      const billableEntries = [];
+      const opsEntries = [];
+
+      entryResults.forEach(({ userId, type, snap }) => {
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          const month = data.month || '';
+          const year = data.year || new Date().getFullYear();
+          const entries = data.entries || [];
+
+          if (type === 'billables') {
+            entries.forEach((entry, idx) => {
+              billableEntries.push({
+                id: `${userId}_${doc.id}_${idx}`,
+                ...normalizeBillableEntry(entry, userId, month, year),
+              });
+            });
+          } else {
+            entries.forEach((entry, idx) => {
+              opsEntries.push({
+                id: `${userId}_${doc.id}_${idx}`,
+                ...normalizeOpsEntry(entry, userId, month, year),
+              });
+            });
           }
         });
-        attorneyList = Object.values(attorneyMap).sort((a, b) => a.name.localeCompare(b.name));
-      }
+      });
 
       // Process clients
       const clientList = clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Process rates via collectionGroup
-      const ratesMap = {};
-      ratesSnap.docs.forEach(doc => {
-        const pathParts = doc.ref.path.split('/');
-        const attorneyName = pathParts[1];
-        if (!ratesMap[attorneyName]) ratesMap[attorneyName] = {};
-        const data = doc.data();
-        ratesMap[attorneyName][doc.id] = {
-          billableRate: data.billableRate || 0,
-          month: data.month,
-          year: data.year,
-        };
-      });
-
-      // Process targets via collectionGroup
-      const targetsMap = {};
-      targetsSnap.docs.forEach(doc => {
-        const pathParts = doc.ref.path.split('/');
-        const attorneyName = pathParts[1];
-        if (!targetsMap[attorneyName]) targetsMap[attorneyName] = {};
-        const data = doc.data();
-        targetsMap[attorneyName][doc.id] = {
-          billableTarget: data.billableTarget ?? 100,
-          opsTarget: data.opsTarget ?? 50,
-          totalTarget: data.totalTarget ?? 150,
-        };
-      });
-
-      setAllEntries(entries);
-      setAttorneys(attorneyList);
+      setAllBillableEntries(billableEntries);
+      setAllOpsEntries(opsEntries);
+      setUsers(userList);
       setClients(clientList);
       setAllRates(ratesMap);
       setAllTargets(targetsMap);
@@ -146,8 +178,9 @@ export const FirestoreDataProvider = ({ children }) => {
   }, [fetchAllData]);
 
   const value = {
-    allEntries,
-    attorneys,
+    allBillableEntries,
+    allOpsEntries,
+    users,
     clients,
     allRates,
     allTargets,

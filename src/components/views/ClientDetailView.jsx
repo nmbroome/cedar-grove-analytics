@@ -31,7 +31,7 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { useAllTimeEntries, useClients } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries, useAllOpsEntries, useClients } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
@@ -81,7 +81,8 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, hours }) => {
 
 const ClientDetailView = ({ clientName }) => {
   const router = useRouter();
-  const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllTimeEntries();
+  const { data: allBillableEntries, loading: billableLoading, error: billableError } = useAllBillableEntries();
+  const { data: allOpsEntries, loading: opsLoading, error: opsError } = useAllOpsEntries();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
   const { rates: attorneyRates, loading: ratesLoading, error: ratesError, getRate } = useAttorneyRates();
   
@@ -91,8 +92,8 @@ const ClientDetailView = ({ clientName }) => {
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
 
-  const loading = entriesLoading || clientsLoading || ratesLoading;
-  const error = entriesError || clientsError || ratesError;
+  const loading = billableLoading || opsLoading || clientsLoading || ratesLoading;
+  const error = billableError || opsError || clientsError || ratesError;
 
   // Get client metadata from Firebase
   const clientMetadata = useMemo(() => {
@@ -141,13 +142,15 @@ const ClientDetailView = ({ clientName }) => {
     return { startDate, endDate };
   }, [dateRange, customDateStart, customDateEnd]);
 
-  // Filter entries for this client
+  // Merge and filter entries for this client
   const clientEntries = useMemo(() => {
-    if (!allEntries) return [];
-
-    let entries = allEntries.filter(entry => 
-      (entry.client || entry.company || 'Unknown') === clientName
+    const billable = (allBillableEntries || []).filter(entry =>
+      (entry.client || 'Unknown') === clientName
     );
+    const ops = (allOpsEntries || []).filter(entry =>
+      (entry.client || 'Unknown') === clientName
+    );
+    let entries = [...billable, ...ops];
 
     // Apply date filter
     if (dateRange !== 'all-time' && dateRangeInfo.startDate) {
@@ -158,7 +161,7 @@ const ClientDetailView = ({ clientName }) => {
     }
 
     return entries;
-  }, [allEntries, clientName, dateRange, dateRangeInfo]);
+  }, [allBillableEntries, allOpsEntries, clientName, dateRange, dateRangeInfo]);
 
   // Process client statistics
   const clientStats = useMemo(() => {
@@ -198,11 +201,11 @@ const ClientDetailView = ({ clientName }) => {
       stats.billableHours += billable;
       stats.opsHours += ops;
       stats.totalHours += billable + ops;
-      stats.takeHomeEarnings += entry.billablesEarnings || 0;
+      stats.takeHomeEarnings += entry.earnings || 0;
       
       // Calculate gross billables using attorney rate * hours
       const entryDate = getEntryDate(entry);
-      const attorneyName = entry.attorneyId;
+      const attorneyName = entry.userId;
       if (attorneyName && billable > 0) {
         const rate = getRate(attorneyName, entryDate);
         stats.grossBillables += rate * billable;
@@ -211,8 +214,8 @@ const ClientDetailView = ({ clientName }) => {
       if (entry.billingCategory || entry.category) {
         stats.transactionTypes.add(entry.billingCategory || entry.category);
       }
-      if (entry.attorneyId) {
-        stats.attorneys.add(entry.attorneyId);
+      if (entry.userId) {
+        stats.attorneys.add(entry.userId);
       }
 
       const entryDate2 = getEntryDate(entry);
@@ -239,7 +242,7 @@ const ClientDetailView = ({ clientName }) => {
     const breakdown = {};
     
     clientEntries.forEach(entry => {
-      const attorney = entry.attorneyId || 'Unknown';
+      const attorney = entry.userId || 'Unknown';
       if (!breakdown[attorney]) {
         breakdown[attorney] = {
           name: attorney,
@@ -255,7 +258,7 @@ const ClientDetailView = ({ clientName }) => {
       breakdown[attorney].billableHours += billableHours;
       breakdown[attorney].opsHours += entry.opsHours || 0;
       breakdown[attorney].hours += billableHours + (entry.opsHours || 0);
-      breakdown[attorney].takeHomeEarnings += entry.billablesEarnings || 0;
+      breakdown[attorney].takeHomeEarnings += entry.earnings || 0;
       breakdown[attorney].count += 1;
       
       // Calculate gross billables using attorney rate * hours
@@ -288,11 +291,11 @@ const ClientDetailView = ({ clientName }) => {
           };
         }
         breakdown[category].hours += billable;
-        breakdown[category].takeHomeEarnings += entry.billablesEarnings || 0;
+        breakdown[category].takeHomeEarnings += entry.earnings || 0;
         breakdown[category].count += 1;
         
         // Calculate gross billables
-        const attorney = entry.attorneyId;
+        const attorney = entry.userId;
         if (attorney) {
           const entryDate = getEntryDate(entry);
           const rate = getRate(attorney, entryDate);
@@ -336,11 +339,11 @@ const ClientDetailView = ({ clientName }) => {
       monthlyData[monthKey].billableHours += billableHours;
       monthlyData[monthKey].opsHours += entry.opsHours || 0;
       monthlyData[monthKey].totalHours += billableHours + (entry.opsHours || 0);
-      monthlyData[monthKey].takeHomeEarnings += entry.billablesEarnings || 0;
+      monthlyData[monthKey].takeHomeEarnings += entry.earnings || 0;
       monthlyData[monthKey].count += 1;
       
       // Calculate gross billables
-      const attorney = entry.attorneyId;
+      const attorney = entry.userId;
       if (attorney && billableHours > 0) {
         const rate = getRate(attorney, entryDate);
         monthlyData[monthKey].grossBillables += rate * billableHours;
@@ -728,7 +731,7 @@ const ClientDetailView = ({ clientName }) => {
                   {recentEntries.map((entry, idx) => {
                     const entryDate = getEntryDate(entry);
                     const billableHours = entry.billableHours || 0;
-                    const rate = entry.attorneyId ? getRate(entry.attorneyId, entryDate) : 0;
+                    const rate = entry.userId ? getRate(entry.userId, entryDate) : 0;
                     const grossBillables = rate * billableHours;
                     return (
                       <tr key={idx} className="hover:bg-gray-50">
@@ -736,7 +739,7 @@ const ClientDetailView = ({ clientName }) => {
                           {entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {entry.attorneyId}
+                          {entry.userId}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <span className="inline-flex px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
@@ -749,8 +752,8 @@ const ClientDetailView = ({ clientName }) => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
                           {grossBillables > 0 ? formatCurrency(grossBillables) : '-'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={entry.notes}>
-                          {entry.notes || '-'}
+                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={entry.notes || entry.description}>
+                          {entry.notes || entry.description || '-'}
                         </td>
                       </tr>
                     );

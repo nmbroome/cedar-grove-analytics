@@ -4,14 +4,14 @@ import { useMemo, useCallback } from 'react';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 
 /**
- * Hook to get all attorney billing rates from the shared cache.
- * Returns a map of attorneyName -> { monthKey -> rate }
+ * Hook to get all user billing rates from the shared cache.
+ * Returns a map of userId -> { monthKey -> rate }
  */
 export function useAttorneyRates() {
   const { allRates, loading, error } = useFirestoreCache();
 
-  const getRate = useCallback((attorneyName, date) => {
-    if (!attorneyName || !allRates[attorneyName]) {
+  const getRate = useCallback((userName, date) => {
+    if (!userName || !allRates[userName]) {
       return 0;
     }
 
@@ -38,17 +38,17 @@ export function useAttorneyRates() {
     const month = dateObj.getMonth() + 1;
     const monthKey = `${year}-${String(month).padStart(2, '0')}`;
 
-    const rate = allRates[attorneyName]?.[monthKey]?.billableRate;
+    const rate = allRates[userName]?.[monthKey]?.rate;
     return rate || 0;
   }, [allRates]);
 
   const calculateGrossBillables = useCallback((entry) => {
-    const attorneyName = entry.attorneyId;
+    const userName = entry.userId;
     const billableHours = entry.billableHours || 0;
 
-    if (!attorneyName || billableHours <= 0) return 0;
+    if (!userName || billableHours <= 0) return 0;
 
-    let entryDate = entry.billableDate || entry.opsDate || entry.date;
+    let entryDate = entry.date;
 
     // Handle Firestore Timestamp
     if (entryDate && typeof entryDate === 'object' && entryDate.toDate) {
@@ -59,7 +59,7 @@ export function useAttorneyRates() {
 
     if (!entryDate) return 0;
 
-    const rate = getRate(attorneyName, entryDate);
+    const rate = getRate(userName, entryDate);
     return rate * billableHours;
   }, [getRate]);
 
@@ -73,15 +73,15 @@ export function useAttorneyRates() {
 }
 
 /**
- * Hook to get rates for a specific attorney from the shared cache.
+ * Hook to get rates for a specific user from the shared cache.
  */
-export function useAttorneyRatesByName(attorneyName) {
+export function useAttorneyRatesByName(userName) {
   const { allRates, loading, error } = useFirestoreCache();
 
   const rates = useMemo(() => {
-    if (!attorneyName || !allRates[attorneyName]) return {};
-    return allRates[attorneyName];
-  }, [allRates, attorneyName]);
+    if (!userName || !allRates[userName]) return {};
+    return allRates[userName];
+  }, [allRates, userName]);
 
   const getRate = useCallback((date) => {
     let dateObj;
@@ -106,7 +106,7 @@ export function useAttorneyRatesByName(attorneyName) {
     const month = dateObj.getMonth() + 1;
     const monthKey = `${year}-${String(month).padStart(2, '0')}`;
 
-    return rates[monthKey]?.billableRate || 0;
+    return rates[monthKey]?.rate || 0;
   }, [rates]);
 
   return {

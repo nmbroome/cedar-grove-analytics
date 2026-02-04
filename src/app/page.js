@@ -30,8 +30,8 @@ function DashboardContent() {
         // Get all name variations for the user's email first name
         const nameVariations = getNameVariations(userFirstName);
         
-        // Query attorneys collection to find matching attorney
-        const attorneysSnapshot = await getDocs(collection(db, 'attorneys'));
+        // Query users collection to find matching user
+        const attorneysSnapshot = await getDocs(collection(db, 'users'));
         
         let foundAttorney = null;
         attorneysSnapshot.docs.forEach(doc => {
@@ -60,7 +60,7 @@ function DashboardContent() {
   useEffect(() => {
     // Redirect non-admins to their attorney page once we've found a match
     if (!loading && !checkingAttorney && isAuthorized && !isAdmin && matchedAttorneyName) {
-      router.push(`/attorneys/${encodeURIComponent(matchedAttorneyName)}`);
+      router.push(`/users/${encodeURIComponent(matchedAttorneyName)}`);
     }
   }, [loading, checkingAttorney, isAdmin, matchedAttorneyName, isAuthorized, router]);
 

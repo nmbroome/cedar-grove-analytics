@@ -4,13 +4,13 @@ import { useParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AttorneyDetailView from '@/components/views/AttorneyDetailView';
 
-export default function AttorneyDetailPage() {
+export default function UserDetailPage() {
   const params = useParams();
-  const attorneyName = decodeURIComponent(params.attorneyName);
+  const userName = decodeURIComponent(params.userName);
 
   return (
-    <ProtectedRoute allowedAttorneyName={attorneyName}>
-      <AttorneyDetailView attorneyName={attorneyName} />
+    <ProtectedRoute allowedAttorneyName={userName}>
+      <AttorneyDetailView attorneyName={userName} />
     </ProtectedRoute>
   );
 }

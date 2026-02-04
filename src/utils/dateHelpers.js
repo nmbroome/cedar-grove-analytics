@@ -12,26 +12,22 @@ export const getPSTDate = () => {
   return new Date(pstString);
 };
 
-// Helper function to get date from entry (handles billableDate, opsDate, or year/month)
+// Helper function to get date from entry
+// New schema: all entries have a `date` field (Firestore Timestamp)
+// Fallback to year+month construction if date is missing
 export const getEntryDate = (entry) => {
   let date;
-  
-  if (entry.billableDate?.toDate) {
-    date = entry.billableDate.toDate();
-  } else if (entry.billableDate) {
-    date = new Date(entry.billableDate);
-  } else if (entry.opsDate?.toDate) {
-    date = entry.opsDate.toDate();
-  } else if (entry.opsDate) {
-    date = new Date(entry.opsDate);
-  } else if (entry.date?.toDate) {
+
+  if (entry.date?.toDate) {
     date = entry.date.toDate();
+  } else if (entry.date && typeof entry.date === 'object' && entry.date.seconds) {
+    date = new Date(entry.date.seconds * 1000);
   } else if (entry.date) {
     date = new Date(entry.date);
   } else {
     date = new Date(entry.year, getMonthNumber(entry.month) - 1);
   }
-  
+
   return date;
 };
 

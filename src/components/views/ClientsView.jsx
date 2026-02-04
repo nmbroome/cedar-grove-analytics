@@ -14,7 +14,7 @@ const ClientsView = ({
   allAttorneyNames,
   clientData,
   clientCounts,
-  filteredEntries,
+  filteredBillableEntries,
 }) => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
@@ -30,12 +30,12 @@ const ClientsView = ({
     // Build maps of client data from entries
     const clientDataMap = {};
     
-    if (filteredEntries && Array.isArray(filteredEntries)) {
-      filteredEntries.forEach(entry => {
-        const clientName = entry.client || entry.company || 'Unknown';
+    if (filteredBillableEntries && Array.isArray(filteredBillableEntries)) {
+      filteredBillableEntries.forEach(entry => {
+        const clientName = entry.client || 'Unknown';
         const billableHours = entry.billableHours || 0;
-        const attorneyName = entry.attorneyId;
-        const category = entry.billingCategory || entry.category || 'Other';
+        const attorneyName = entry.userId;
+        const category = entry.billingCategory || 'Other';
         
         // Only process entries with billable hours
         if (billableHours <= 0) return;
@@ -65,7 +65,7 @@ const ClientsView = ({
         
         // Add entry with calculated grossBillables (for tooltip)
         clientInfo.entries.push({
-          date: entry.billableDate || entry.opsDate || entry.date,
+          date: entry.date,
           attorney: attorneyName,
           category: category,
           billableHours: billableHours,
@@ -110,7 +110,7 @@ const ClientsView = ({
         byCategory: calculated.byCategory || client.byCategory || {},
       };
     });
-  }, [clientData, filteredEntries, getRate]);
+  }, [clientData, filteredBillableEntries, getRate]);
 
   const handleSort = (key) => {
     let direction = 'desc';

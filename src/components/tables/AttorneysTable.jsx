@@ -17,7 +17,7 @@ const AttorneysTable = ({
   };
 
   const handleAttorneyClick = (attorneyName) => {
-    router.push(`/attorneys/${encodeURIComponent(attorneyName)}`);
+    router.push(`/users/${encodeURIComponent(attorneyName)}`);
   };
 
   const getUtilizationBadgeColor = (util) => {
