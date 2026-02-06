@@ -196,9 +196,9 @@ const AttorneyDetailView = ({ attorneyName }) => {
     });
 
     const defaultTarget = {
-      billableTarget: attorneyTargets[currentMonthKey]?.billableTarget ?? 100,
-      opsTarget: attorneyTargets[currentMonthKey]?.opsTarget ?? 50,
-      totalTarget: attorneyTargets[currentMonthKey]?.totalTarget ?? 150
+      billableTarget: attorneyTargets[currentMonthKey]?.billableHours ?? 100,
+      opsTarget: attorneyTargets[currentMonthKey]?.opsHours ?? 50,
+      totalTarget: attorneyTargets[currentMonthKey]?.totalHours ?? 150
     };
 
     if (activeMonths.size === 0) {
@@ -215,9 +215,9 @@ const AttorneyDetailView = ({ attorneyName }) => {
       const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
 
       const monthTarget = attorneyTargets[monthKey];
-      const billableTarget = monthTarget?.billableTarget ?? defaultTarget.billableTarget;
-      const opsTarget = monthTarget?.opsTarget ?? defaultTarget.opsTarget;
-      const monthTotalTarget = monthTarget?.totalTarget ?? defaultTarget.totalTarget;
+      const billableTarget = monthTarget?.billableHours ?? defaultTarget.billableTarget;
+      const opsTarget = monthTarget?.opsHours ?? defaultTarget.opsTarget;
+      const monthTotalTarget = monthTarget?.totalHours ?? defaultTarget.totalTarget;
 
       // Check if month needs pro-rating
       const rangeStartsAfterMonthStart = startDate && startDate > monthStart;
@@ -273,9 +273,9 @@ const AttorneyDetailView = ({ attorneyName }) => {
         avgHoursPerTransaction: 0,
         lastActivity: null,
         firstActivity: null,
-        utilization: 0,
-        billableUtilization: 0,
-        opsUtilization: 0,
+        utilization: calculatedTargets.totalTarget > 0 ? 0 : null,
+        billableUtilization: calculatedTargets.billableTarget > 0 ? 0 : null,
+        opsUtilization: calculatedTargets.opsTarget > 0 ? 0 : null,
       };
     }
 
@@ -327,15 +327,15 @@ const AttorneyDetailView = ({ attorneyName }) => {
       }
     });
 
-    const utilization = calculatedTargets.totalTarget > 0 
+    const utilization = calculatedTargets.totalTarget > 0
       ? Math.round((stats.totalHours / calculatedTargets.totalTarget) * 100)
-      : 0;
+      : null;
     const billableUtilization = calculatedTargets.billableTarget > 0
       ? Math.round((stats.billableHours / calculatedTargets.billableTarget) * 100)
-      : 0;
+      : null;
     const opsUtilization = calculatedTargets.opsTarget > 0
       ? Math.round((stats.opsHours / calculatedTargets.opsTarget) * 100)
-      : 0;
+      : null;
 
     return {
       ...stats,
@@ -587,51 +587,51 @@ const AttorneyDetailView = ({ attorneyName }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Overall Utilization */}
             <div className="text-center">
-              <div className={`text-4xl font-bold ${getUtilizationColor(attorneyStats.utilization)}`}>
-                {attorneyStats.utilization}%
+              <div className={`text-4xl font-bold ${attorneyStats.utilization === null ? 'text-gray-400' : getUtilizationColor(attorneyStats.utilization)}`}>
+                {attorneyStats.utilization === null ? '-' : attorneyStats.utilization}%
               </div>
               <div className="text-sm text-gray-500 mt-1">Overall Utilization</div>
               <div className="text-xs text-gray-400 mt-1">
                 {formatHours(attorneyStats.totalHours)}h / {formatHours(calculatedTargets.totalTarget)}h target
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                <div 
-                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.utilization)}`}
-                  style={{ width: `${Math.min(attorneyStats.utilization, 100)}%` }}
+                <div
+                  className={`h-2 rounded-full ${attorneyStats.utilization === null ? 'bg-gray-300' : getProgressBarColor(attorneyStats.utilization)}`}
+                  style={{ width: `${Math.min(attorneyStats.utilization || 0, 100)}%` }}
                 />
               </div>
             </div>
 
             {/* Billable Utilization */}
             <div className="text-center">
-              <div className={`text-4xl font-bold ${getUtilizationColor(attorneyStats.billableUtilization)}`}>
-                {attorneyStats.billableUtilization}%
+              <div className={`text-4xl font-bold ${attorneyStats.billableUtilization === null ? 'text-gray-400' : getUtilizationColor(attorneyStats.billableUtilization)}`}>
+                {attorneyStats.billableUtilization === null ? '-' : attorneyStats.billableUtilization}%
               </div>
               <div className="text-sm text-gray-500 mt-1">Billable Utilization</div>
               <div className="text-xs text-gray-400 mt-1">
                 {formatHours(attorneyStats.billableHours)}h / {formatHours(calculatedTargets.billableTarget)}h target
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                <div 
-                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.billableUtilization)}`}
-                  style={{ width: `${Math.min(attorneyStats.billableUtilization, 100)}%` }}
+                <div
+                  className={`h-2 rounded-full ${attorneyStats.billableUtilization === null ? 'bg-gray-300' : getProgressBarColor(attorneyStats.billableUtilization)}`}
+                  style={{ width: `${Math.min(attorneyStats.billableUtilization || 0, 100)}%` }}
                 />
               </div>
             </div>
 
             {/* Ops Utilization */}
             <div className="text-center">
-              <div className={`text-4xl font-bold ${getUtilizationColor(attorneyStats.opsUtilization)}`}>
-                {attorneyStats.opsUtilization}%
+              <div className={`text-4xl font-bold ${attorneyStats.opsUtilization === null ? 'text-gray-400' : getUtilizationColor(attorneyStats.opsUtilization)}`}>
+                {attorneyStats.opsUtilization === null ? '-' : attorneyStats.opsUtilization}%
               </div>
               <div className="text-sm text-gray-500 mt-1">Ops Utilization</div>
               <div className="text-xs text-gray-400 mt-1">
                 {formatHours(attorneyStats.opsHours)}h / {formatHours(calculatedTargets.opsTarget)}h target
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                <div 
-                  className={`h-2 rounded-full ${getProgressBarColor(attorneyStats.opsUtilization)}`}
-                  style={{ width: `${Math.min(attorneyStats.opsUtilization, 100)}%` }}
+                <div
+                  className={`h-2 rounded-full ${attorneyStats.opsUtilization === null ? 'bg-gray-300' : getProgressBarColor(attorneyStats.opsUtilization)}`}
+                  style={{ width: `${Math.min(attorneyStats.opsUtilization || 0, 100)}%` }}
                 />
               </div>
             </div>

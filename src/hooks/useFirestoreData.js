@@ -105,28 +105,58 @@ export const useClients = () => {
 
 /**
  * Get billable entries for a specific user from the shared cache.
+ * Supports lookup by display name or Firestore document ID.
  */
-export const useUserBillableEntries = (userId) => {
-  const { allBillableEntries, loading, error } = useFirestoreCache();
+export const useUserBillableEntries = (userNameOrId) => {
+  const { allBillableEntries, users, loading, error } = useFirestoreCache();
 
   const data = useMemo(() => {
-    if (!userId) return [];
-    return allBillableEntries.filter(e => e.userId === userId);
-  }, [allBillableEntries, userId]);
+    if (!userNameOrId) return [];
+
+    // Build a set of matching userIds: check both direct ID match and display name match
+    const matchingIds = new Set();
+    users.forEach(user => {
+      if (user.id === userNameOrId || (user.name || user.id) === userNameOrId) {
+        matchingIds.add(user.id);
+      }
+    });
+
+    // Fallback: if no user matched, try direct ID match on entries
+    if (matchingIds.size === 0) {
+      matchingIds.add(userNameOrId);
+    }
+
+    return allBillableEntries.filter(e => matchingIds.has(e.userId));
+  }, [allBillableEntries, users, userNameOrId]);
 
   return { data, loading, error };
 };
 
 /**
  * Get ops entries for a specific user from the shared cache.
+ * Supports lookup by display name or Firestore document ID.
  */
-export const useUserOpsEntries = (userId) => {
-  const { allOpsEntries, loading, error } = useFirestoreCache();
+export const useUserOpsEntries = (userNameOrId) => {
+  const { allOpsEntries, users, loading, error } = useFirestoreCache();
 
   const data = useMemo(() => {
-    if (!userId) return [];
-    return allOpsEntries.filter(e => e.userId === userId);
-  }, [allOpsEntries, userId]);
+    if (!userNameOrId) return [];
+
+    // Build a set of matching userIds: check both direct ID match and display name match
+    const matchingIds = new Set();
+    users.forEach(user => {
+      if (user.id === userNameOrId || (user.name || user.id) === userNameOrId) {
+        matchingIds.add(user.id);
+      }
+    });
+
+    // Fallback: if no user matched, try direct ID match on entries
+    if (matchingIds.size === 0) {
+      matchingIds.add(userNameOrId);
+    }
+
+    return allOpsEntries.filter(e => matchingIds.has(e.userId));
+  }, [allOpsEntries, users, userNameOrId]);
 
   return { data, loading, error };
 };

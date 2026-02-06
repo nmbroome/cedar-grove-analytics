@@ -31,7 +31,7 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { useAllBillableEntries, useAllOpsEntries, useClients } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries, useAllOpsEntries, useClients, useUsers } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
@@ -84,7 +84,17 @@ const ClientDetailView = ({ clientName }) => {
   const { data: allBillableEntries, loading: billableLoading, error: billableError } = useAllBillableEntries();
   const { data: allOpsEntries, loading: opsLoading, error: opsError } = useAllOpsEntries();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
+  const { users: firebaseUsers } = useUsers();
   const { rates: attorneyRates, loading: ratesLoading, error: ratesError, getRate } = useAttorneyRates();
+
+  // Build userId -> display name map
+  const userMap = useMemo(() => {
+    const map = {};
+    (firebaseUsers || []).forEach(user => {
+      map[user.id] = user.name || user.id;
+    });
+    return map;
+  }, [firebaseUsers]);
   
   // Date range state
   const [dateRange, setDateRange] = useState('all-time');
@@ -205,17 +215,17 @@ const ClientDetailView = ({ clientName }) => {
       
       // Calculate gross billables using attorney rate * hours
       const entryDate = getEntryDate(entry);
-      const attorneyName = entry.userId;
+      const attorneyName = userMap[entry.userId] || entry.userId;
       if (attorneyName && billable > 0) {
         const rate = getRate(attorneyName, entryDate);
         stats.grossBillables += rate * billable;
       }
-      
+
       if (entry.billingCategory || entry.category) {
         stats.transactionTypes.add(entry.billingCategory || entry.category);
       }
       if (entry.userId) {
-        stats.attorneys.add(entry.userId);
+        stats.attorneys.add(userMap[entry.userId] || entry.userId);
       }
 
       const entryDate2 = getEntryDate(entry);
@@ -235,14 +245,14 @@ const ClientDetailView = ({ clientName }) => {
         ? stats.totalHours / stats.transactionCount 
         : 0,
     };
-  }, [clientEntries, getRate]);
+  }, [clientEntries, getRate, userMap]);
 
   // Attorney breakdown data
   const attorneyBreakdown = useMemo(() => {
     const breakdown = {};
-    
+
     clientEntries.forEach(entry => {
-      const attorney = entry.userId || 'Unknown';
+      const attorney = userMap[entry.userId] || entry.userId || 'Unknown';
       if (!breakdown[attorney]) {
         breakdown[attorney] = {
           name: attorney,
@@ -270,16 +280,16 @@ const ClientDetailView = ({ clientName }) => {
     });
 
     return Object.values(breakdown).sort((a, b) => b.hours - a.hours);
-  }, [clientEntries, getRate]);
+  }, [clientEntries, getRate, userMap]);
 
   // Transaction type breakdown data
   const transactionBreakdown = useMemo(() => {
     const breakdown = {};
-    
+
     clientEntries.forEach(entry => {
       const category = entry.billingCategory || entry.category || 'Other';
       const billable = entry.billableHours || 0;
-      
+
       if (billable > 0) {
         if (!breakdown[category]) {
           breakdown[category] = {
@@ -293,9 +303,9 @@ const ClientDetailView = ({ clientName }) => {
         breakdown[category].hours += billable;
         breakdown[category].takeHomeEarnings += entry.earnings || 0;
         breakdown[category].count += 1;
-        
+
         // Calculate gross billables
-        const attorney = entry.userId;
+        const attorney = userMap[entry.userId] || entry.userId;
         if (attorney) {
           const entryDate = getEntryDate(entry);
           const rate = getRate(attorney, entryDate);
@@ -311,7 +321,7 @@ const ClientDetailView = ({ clientName }) => {
       ...t,
       percentage: totalHours > 0 ? Math.round((t.hours / totalHours) * 100) : 0,
     }));
-  }, [clientEntries, getRate]);
+  }, [clientEntries, getRate, userMap]);
 
   // Monthly trend data
   const monthlyTrend = useMemo(() => {
@@ -343,7 +353,7 @@ const ClientDetailView = ({ clientName }) => {
       monthlyData[monthKey].count += 1;
       
       // Calculate gross billables
-      const attorney = entry.userId;
+      const attorney = userMap[entry.userId] || entry.userId;
       if (attorney && billableHours > 0) {
         const rate = getRate(attorney, entryDate);
         monthlyData[monthKey].grossBillables += rate * billableHours;
@@ -351,7 +361,7 @@ const ClientDetailView = ({ clientName }) => {
     });
 
     return Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
-  }, [clientEntries, getRate]);
+  }, [clientEntries, getRate, userMap]);
 
   // Recent entries (sorted by date, most recent first)
   const recentEntries = useMemo(() => {
@@ -731,7 +741,8 @@ const ClientDetailView = ({ clientName }) => {
                   {recentEntries.map((entry, idx) => {
                     const entryDate = getEntryDate(entry);
                     const billableHours = entry.billableHours || 0;
-                    const rate = entry.userId ? getRate(entry.userId, entryDate) : 0;
+                    const entryUserName = userMap[entry.userId] || entry.userId;
+                    const rate = entryUserName ? getRate(entryUserName, entryDate) : 0;
                     const grossBillables = rate * billableHours;
                     return (
                       <tr key={idx} className="hover:bg-gray-50">
@@ -739,7 +750,7 @@ const ClientDetailView = ({ clientName }) => {
                           {entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {entry.userId}
+                          {entryUserName}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <span className="inline-flex px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">

@@ -130,6 +130,24 @@ export const useAnalyticsData = ({
 
     let entries = allBillableEntries;
 
+    // Debug: count David Popkin entries before filtering
+    const dpEntriesBefore = entries.filter(e => {
+      const name = userMap[e.userId] || e.userId;
+      return name === 'David Popkin';
+    });
+    if (dpEntriesBefore.length > 0) {
+      console.log(`[DEBUG] David Popkin billable entries BEFORE date filter: ${dpEntriesBefore.length}`);
+      dpEntriesBefore.forEach(e => {
+        const d = getEntryDate(e);
+        console.log(`[DEBUG]   entry date: ${d}, valid: ${!isNaN(d?.getTime())}, month: ${e.month}, year: ${e.year}, hours: ${e.billableHours}`);
+      });
+    } else {
+      console.log(`[DEBUG] David Popkin has NO billable entries in allBillableEntries (total entries: ${entries.length})`);
+      // Check if his userId is in the entries at all
+      const dpUserIds = Object.entries(userMap).filter(([, name]) => name === 'David Popkin').map(([id]) => id);
+      console.log(`[DEBUG] David Popkin userIds from userMap: ${JSON.stringify(dpUserIds)}`);
+    }
+
     // Filter by date range
     if (dateRange !== 'all-time') {
       const { startDate: rangeStart, endDate: rangeEnd } = dateRangeInfo;
@@ -140,6 +158,17 @@ export const useAnalyticsData = ({
           return entryDate >= rangeStart && entryDate <= rangeEnd;
         });
       }
+    }
+
+    // Debug: count David Popkin entries after date filter
+    const dpEntriesAfter = entries.filter(e => {
+      const name = userMap[e.userId] || e.userId;
+      return name === 'David Popkin';
+    });
+    console.log(`[DEBUG] David Popkin billable entries AFTER date filter (${dateRange}): ${dpEntriesAfter.length}`);
+    if (dpEntriesBefore.length > 0 && dpEntriesAfter.length === 0) {
+      const { startDate: rangeStart, endDate: rangeEnd } = dateRangeInfo;
+      console.log(`[DEBUG] Date range: ${rangeStart?.toISOString()} to ${rangeEnd?.toISOString()}`);
     }
 
     // Filter by selected users (global filter)
@@ -195,12 +224,45 @@ export const useAnalyticsData = ({
     };
   }, [dateRangeInfo, userTargets]);
 
+  // Calculate the months spanned by the selected date range (for target calculation)
+  const dateRangeMonths = useMemo(() => {
+    const { startDate, endDate } = dateRangeInfo;
+    const months = [];
+    if (!startDate || !endDate) return months;
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    while (cursor <= end) {
+      months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return months;
+  }, [dateRangeInfo]);
+
   // Process user data with proper target calculations
   const attorneyData = useMemo(() => {
     const userStats = {};
     const userMonthlyActivity = {};
 
     const { startDate, endDate, currentMonthKey, now } = dateRangeInfo;
+
+    // Seed all users from the database so they appear even with zero hours
+    firebaseUsers.forEach(user => {
+      const userName = user.name || user.id;
+
+      // Respect global attorney filter
+      if (globalAttorneyFilter.length > 0 && !globalAttorneyFilter.includes(userName)) {
+        return;
+      }
+
+      userMonthlyActivity[userName] = {
+        months: new Set(),
+        billable: 0,
+        ops: 0,
+        earnings: 0,
+        transactions: {},
+        clients: {}
+      };
+    });
 
     // First pass: collect billable hours per user
     filteredBillableEntries.forEach(entry => {
@@ -272,7 +334,7 @@ export const useAnalyticsData = ({
       userMonthlyActivity[userName].ops += opsHours;
     });
 
-    // Third pass: calculate targets for each user based on their active months
+    // Third pass: calculate targets for each user based on date range months
     Object.entries(userMonthlyActivity).forEach(([userName, data]) => {
       let totalBillableTarget = 0;
       let totalOpsTarget = 0;
@@ -280,15 +342,18 @@ export const useAnalyticsData = ({
 
       const userTargetData = userTargets[userName] || {};
       const defaultTarget = getDefaultTarget(userName);
-      const activeMonths = Array.from(data.months);
 
-      // If no active months, use defaults for one month
-      if (activeMonths.length === 0) {
+      // Use date range months for target calculation so users with zero hours
+      // still get proper pro-rated targets for the selected period
+      const monthsForTargets = dateRangeMonths.length > 0 ? dateRangeMonths : Array.from(data.months);
+
+      // If no months at all, use defaults for one month
+      if (monthsForTargets.length === 0) {
         totalBillableTarget = defaultTarget.billableHours;
         totalOpsTarget = defaultTarget.opsHours;
         totalTarget = defaultTarget.totalHours;
       } else {
-        activeMonths.forEach(monthKey => {
+        monthsForTargets.forEach(monthKey => {
           const [year, month] = monthKey.split('-').map(Number);
           const monthStart = new Date(year, month - 1, 1);
           const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
@@ -361,7 +426,7 @@ export const useAnalyticsData = ({
     });
 
     return visibleUserData;
-  }, [filteredBillableEntries, filteredOpsEntries, userMap, dateRangeInfo, userTargets, getUserRole, getDefaultTarget]);
+  }, [filteredBillableEntries, filteredOpsEntries, userMap, dateRangeInfo, userTargets, getUserRole, getDefaultTarget, firebaseUsers, globalAttorneyFilter, dateRangeMonths]);
 
   // Create a separate dataset that includes hidden users for totals calculation
   const allAttorneyDataIncludingHidden = useMemo(() => {

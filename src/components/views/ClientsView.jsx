@@ -6,6 +6,7 @@ import { DateRangeIndicator } from '../shared';
 import { ClientsTable } from '../tables';
 import { ClientHoursChart, ServiceBreadthChart } from '../charts';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
+import { useUsers } from '@/hooks/useFirestoreData';
 import { getEntryDate } from '@/utils/dateHelpers';
 
 const ClientsView = ({
@@ -20,6 +21,16 @@ const ClientsView = ({
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [showInactive, setShowInactive] = useState(false);
   const { getRate, loading: ratesLoading } = useAttorneyRates();
+  const { users: firebaseUsers } = useUsers();
+
+  // Build userId -> display name map
+  const userMap = useMemo(() => {
+    const map = {};
+    (firebaseUsers || []).forEach(user => {
+      map[user.id] = user.name || user.id;
+    });
+    return map;
+  }, [firebaseUsers]);
 
   // Calculate gross billables and billable hours per client from filteredEntries
   const clientsWithBillables = useMemo(() => {
@@ -34,7 +45,7 @@ const ClientsView = ({
       filteredBillableEntries.forEach(entry => {
         const clientName = entry.client || 'Unknown';
         const billableHours = entry.billableHours || 0;
-        const attorneyName = entry.userId;
+        const attorneyName = userMap[entry.userId] || entry.userId;
         const category = entry.billingCategory || 'Other';
         
         // Only process entries with billable hours
@@ -110,7 +121,7 @@ const ClientsView = ({
         byCategory: calculated.byCategory || client.byCategory || {},
       };
     });
-  }, [clientData, filteredBillableEntries, getRate]);
+  }, [clientData, filteredBillableEntries, getRate, userMap]);
 
   const handleSort = (key) => {
     let direction = 'desc';

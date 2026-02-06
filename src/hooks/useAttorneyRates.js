@@ -33,7 +33,16 @@ function findRate(ratesMap, monthKey) {
  * Returns a map of userId -> { monthKey -> rate }
  */
 export function useAttorneyRates() {
-  const { allRates, loading, error } = useFirestoreCache();
+  const { allRates, users, loading, error } = useFirestoreCache();
+
+  // Build userId -> display name map for resolving entry.userId to display name
+  const userIdToName = useMemo(() => {
+    const map = {};
+    (users || []).forEach(user => {
+      map[user.id] = user.name || user.id;
+    });
+    return map;
+  }, [users]);
 
   const getRate = useCallback((userName, date) => {
     if (!userName || !allRates[userName]) {
@@ -67,7 +76,8 @@ export function useAttorneyRates() {
   }, [allRates]);
 
   const calculateGrossBillables = useCallback((entry) => {
-    const userName = entry.userId;
+    // Resolve userId (Firestore doc ID) to display name for rate lookup
+    const userName = userIdToName[entry.userId] || entry.userId;
     const billableHours = entry.billableHours || 0;
 
     if (!userName || billableHours <= 0) return 0;
@@ -85,7 +95,7 @@ export function useAttorneyRates() {
 
     const rate = getRate(userName, entryDate);
     return rate * billableHours;
-  }, [getRate]);
+  }, [getRate, userIdToName]);
 
   return {
     rates: allRates,

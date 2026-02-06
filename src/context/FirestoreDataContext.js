@@ -63,12 +63,13 @@ export const FirestoreDataProvider = ({ children }) => {
         });
 
         // Build rates map from user profile rates[] array
+        // Key by display name so lookups work consistently across the app
         if (Array.isArray(data.rates)) {
-          ratesMap[userId] = {};
+          ratesMap[userName] = {};
           data.rates.forEach(rateEntry => {
             const monthNum = getMonthNumber(rateEntry.month);
             const monthKey = `${rateEntry.year}-${String(monthNum).padStart(2, '0')}`;
-            ratesMap[userId][monthKey] = {
+            ratesMap[userName][monthKey] = {
               rate: rateEntry.rate || 0,
               month: monthNum,
               year: rateEntry.year,
@@ -77,12 +78,13 @@ export const FirestoreDataProvider = ({ children }) => {
         }
 
         // Build targets map from user profile targets[] array
+        // Key by display name so lookups work consistently across the app
         if (Array.isArray(data.targets)) {
-          targetsMap[userId] = {};
+          targetsMap[userName] = {};
           data.targets.forEach(targetEntry => {
             const monthNum = getMonthNumber(targetEntry.month);
             const monthKey = `${targetEntry.year}-${String(monthNum).padStart(2, '0')}`;
-            targetsMap[userId][monthKey] = {
+            targetsMap[userName][monthKey] = {
               billableHours: targetEntry.billableHours ?? 100,
               opsHours: targetEntry.opsHours ?? 50,
               totalHours: targetEntry.totalHours ?? 150,
@@ -111,6 +113,19 @@ export const FirestoreDataProvider = ({ children }) => {
           const month = data.month || '';
           const year = data.year || new Date().getFullYear();
           const entries = data.entries || [];
+
+          // Debug: trace David Popkin's data
+          const userDoc = usersSnap.docs.find(d => d.id === userId);
+          const debugName = userDoc?.data()?.name || userId;
+          if (debugName === 'David Popkin') {
+            console.log(`[DEBUG] David Popkin ${type} doc: ${doc.id}, month: ${month}, year: ${year}, entries count: ${entries.length}`);
+            if (entries.length > 0) {
+              console.log(`[DEBUG] First entry sample:`, JSON.stringify(entries[0], (key, val) => {
+                if (val && typeof val === 'object' && val.seconds) return `Timestamp(${new Date(val.seconds * 1000).toISOString()})`;
+                return val;
+              }));
+            }
+          }
 
           if (type === 'billables') {
             entries.forEach((entry, idx) => {

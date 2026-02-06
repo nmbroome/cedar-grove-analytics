@@ -10,14 +10,24 @@ import {
   User,
   Download
 } from 'lucide-react';
-import { useAllBillableEntries } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries, useUsers } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 
 const BillingSummariesView = () => {
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllBillableEntries();
+  const { users: firebaseUsers } = useUsers();
   const { getRate, rates, loading: ratesLoading } = useAttorneyRates();
+
+  // Build userId -> display name map
+  const userMap = useMemo(() => {
+    const map = {};
+    (firebaseUsers || []).forEach(user => {
+      map[user.id] = user.name || user.id;
+    });
+    return map;
+  }, [firebaseUsers]);
   
   // Selected month and client state
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -82,7 +92,7 @@ const BillingSummariesView = () => {
       })
       .map(entry => {
         const entryDate = getEntryDate(entry);
-        const attorneyName = entry.userId;
+        const attorneyName = userMap[entry.userId] || entry.userId;
         const billableHours = entry.billableHours || 0;
         
         // Get the rate for this attorney and month
@@ -100,7 +110,7 @@ const BillingSummariesView = () => {
         };
       })
       .sort((a, b) => a.date - b.date);
-  }, [allEntries, selectedMonth, selectedClient, getRate]);
+  }, [allEntries, selectedMonth, selectedClient, getRate, userMap]);
 
   // Calculate totals
   const totals = useMemo(() => {
