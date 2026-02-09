@@ -96,6 +96,15 @@ export const useUsers = () => {
 };
 
 /**
+ * Get data validation warnings from the shared cache.
+ * Returns warnings keyed by user display name.
+ */
+export const useDataWarnings = () => {
+  const { dataWarnings } = useFirestoreCache();
+  return dataWarnings || {};
+};
+
+/**
  * Get all clients from the shared cache.
  */
 export const useClients = () => {

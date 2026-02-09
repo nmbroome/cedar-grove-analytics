@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { DateRangeIndicator } from '../shared';
 import { AttorneysTable } from '../tables';
 import { BillableVsOpsChart } from '../charts';
+import { useDataWarnings } from '@/hooks/useFirestoreData';
 
 const AttorneysView = ({
   dateRangeLabel,
@@ -12,6 +13,7 @@ const AttorneysView = ({
   attorneyData,
   calculateUtilization,
 }) => {
+  const dataWarnings = useDataWarnings();
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
   const handleSort = (key) => {
@@ -75,11 +77,12 @@ const AttorneysView = ({
         allAttorneyNames={allAttorneyNames}
       />
 
-      <AttorneysTable 
+      <AttorneysTable
         attorneys={getSortedAttorneys()}
         sortConfig={sortConfig}
         onSort={handleSort}
         calculateUtilization={calculateUtilization}
+        dataWarnings={dataWarnings}
       />
 
       <BillableVsOpsChart 

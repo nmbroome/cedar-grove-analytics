@@ -3,19 +3,20 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, 
+import {
+  ArrowLeft,
   User,
-  Clock, 
-  DollarSign, 
-  Users, 
+  Clock,
+  DollarSign,
+  Users,
   Briefcase,
   Calendar,
   Target,
   TrendingUp,
   TrendingDown,
   FileText,
-  Building2
+  Building2,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -32,7 +33,7 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { useUserBillableEntries, useUserOpsEntries, useUsers } from '@/hooks/useFirestoreData';
+import { useUserBillableEntries, useUserOpsEntries, useUsers, useDataWarnings } from '@/hooks/useFirestoreData';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import {
   getEntryDate,
@@ -92,6 +93,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
   const { data: opsEntries, loading: opsLoading, error: opsError } = useUserOpsEntries(attorneyName);
   const { users } = useUsers();
   const { allTargets } = useFirestoreCache();
+  const dataWarnings = useDataWarnings();
 
   // Date range state
   const [dateRange, setDateRange] = useState('current-month');
@@ -577,6 +579,47 @@ const AttorneyDetailView = ({ attorneyName }) => {
             <span className="ml-2 text-blue-600">({attorneyEntries.length} entries)</span>
           </span>
         </div>
+
+        {/* Data Warnings */}
+        {dataWarnings[attorneyName] && dataWarnings[attorneyName].length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-amber-800">
+              <span className="font-medium">Data issues detected:</span>
+              <ul className="mt-1 space-y-1">
+                {dataWarnings[attorneyName].map((w, i) => (
+                  <li key={i}>
+                    {w.message}
+                    {w.type === 'date-mismatch' && w.mismatchedRows && w.mismatchedRows.length > 0 && (
+                      <div className="mt-1 ml-2">
+                        <table className="text-xs border-collapse">
+                          <thead>
+                            <tr className="text-amber-700">
+                              <th className="pr-3 py-0.5 text-left font-medium">Row</th>
+                              <th className="pr-3 py-0.5 text-left font-medium">Date</th>
+                              <th className="pr-3 py-0.5 text-left font-medium">{w.collection === 'billables' ? 'Client' : 'Description'}</th>
+                              <th className="pr-3 py-0.5 text-right font-medium">Hours</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {w.mismatchedRows.map((row, j) => (
+                              <tr key={j} className="text-amber-800">
+                                <td className="pr-3 py-0.5">{row.row}</td>
+                                <td className="pr-3 py-0.5">{row.date}</td>
+                                <td className="pr-3 py-0.5 max-w-[200px] truncate">{row.client || row.description || '—'}</td>
+                                <td className="pr-3 py-0.5 text-right">{row.hours}h</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         {/* Utilization Summary Card */}
         <div className="bg-white rounded-lg shadow p-6">

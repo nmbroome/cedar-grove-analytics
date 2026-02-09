@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 
-const AttorneysTable = ({ 
-  attorneys, 
-  sortConfig, 
+const AttorneysTable = ({
+  attorneys,
+  sortConfig,
   onSort,
-  calculateUtilization 
+  calculateUtilization,
+  dataWarnings = {},
 }) => {
   const router = useRouter();
 
@@ -76,20 +78,31 @@ const AttorneysTable = ({
           {attorneys.map((attorney, idx) => {
             const utilization = calculateUtilization(attorney);
             const total = attorney.billable + attorney.ops;
+            const warnings = dataWarnings[attorney.name];
             return (
-              <tr 
-                key={idx} 
+              <tr
+                key={idx}
                 className="hover:bg-blue-50 cursor-pointer transition-colors"
                 onClick={() => handleAttorneyClick(attorney.name)}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <div>
+                  <div className="flex items-center gap-1.5">
                     <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
                       {attorney.name}
                     </span>
                     {attorney.role && attorney.role !== 'Attorney' && (
-                      <span className="ml-2 text-xs text-gray-500 font-normal">
+                      <span className="text-xs text-gray-500 font-normal">
                         ({attorney.role})
+                      </span>
+                    )}
+                    {warnings && warnings.length > 0 && (
+                      <span className="relative group">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                        <span className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-max max-w-sm p-2 bg-gray-900 text-white text-xs rounded shadow-lg">
+                          {warnings.map((w, i) => (
+                            <span key={i} className="block">{w.message}</span>
+                          ))}
+                        </span>
                       </span>
                     )}
                   </div>

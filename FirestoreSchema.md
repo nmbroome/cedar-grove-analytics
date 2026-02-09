@@ -27,7 +27,19 @@ Each sheet has a header row (row 9) with the following columns:
 
 A single sheet row may contain billable data, ops data, both, or an 83(b) election entry. The sync script parses each row and writes to the appropriate collections based on which columns have data.
 
-Rows 1–8 contain summary totals (billable hours, ops hours, earnings, rate, etc.) and are not synced as entries.
+Rows 1–8 contain summary totals that are synced as `sheetTotals` metadata on the Firestore documents for dashboard validation:
+
+| Row | Column A Label | Column B Value | Column E Label | Column F Value |
+|-----|---------------|----------------|----------------|----------------|
+| 1 | Total Billable Hours | 87.40 | Ops Hours | 102.7 |
+| 2 | Billable Earnings | $29,497.50 | Total Hours (Ops/Billables) | 190.10 |
+| 3 | Reimbursements | $686 | | |
+| 4 | Rate | $337.50 | | |
+| 5 | 83(b) Fee Earnings | $162.50 | | |
+| 6 | Total Payment | $30,346.20 | | |
+| 7–8 | *(blank / section header)* | | | |
+
+**Note:** The Rate field (row 4) represents the attorney's take-home rate, not their billing rate, and is intentionally **not synced**. Some sheets do not have ops or 83(b) sections — those values will be `0`.
 
 ---
 
@@ -136,6 +148,14 @@ Only rows that have at least one of: client, billable date, or billable hours ar
   syncedAt: Timestamp,                   // Firestore Timestamp — when this doc was last written
   entryCount: 218,                       // number — length of entries array
 
+  // Sheet summary totals (from rows 1–8 of the spreadsheet, used for dashboard validation)
+  sheetTotals: {
+    totalBillableHours: 87.40,           // number — from row 1 col B
+    billableEarnings: 29497.50,          // number — from row 2 col B
+    reimbursements: 686.00,              // number — from row 3 col B
+    totalPayment: 30346.20,              // number — from row 6 col B
+  },
+
   // Entry array
   entries: [
     {
@@ -161,6 +181,7 @@ Only rows that have at least one of: client, billable date, or billable hours ar
 - `matter`: May be empty string if no matter is specified for that entry.
 - `reimbursements`: Defaults to `0` if the cell is empty.
 - `sheetRowNumber`: The actual row number in the spreadsheet (1-indexed, accounting for the header row at row 9). Used only for debugging and tracing back to the source data.
+- `sheetTotals`: Summary values from the spreadsheet header (rows 1–8). Used by the dashboard to validate that computed entry sums match the spreadsheet's own totals. The `totalPayment` field represents the total of billable earnings + reimbursements + 83(b) fees. Not present on documents synced before this feature was added.
 
 ---
 
@@ -181,6 +202,12 @@ Only rows that have at least one of: ops description, ops date, or ops hours are
   year: 2026,
   syncedAt: Timestamp,
   entryCount: 157,
+
+  // Sheet summary totals (from rows 1–8 of the spreadsheet, used for dashboard validation)
+  sheetTotals: {
+    opsHours: 102.70,                    // number — from row 1 col F
+    totalHours: 190.10,                  // number — from row 2 col F (billable + ops combined)
+  },
 
   // Entry array
   entries: [
@@ -224,6 +251,11 @@ Only rows that have at least one of: company name, individual name, or flat fee 
   entryCount: 1,
   totalFlatFees: 250.00,              // number — sum of all flat fees in the entries array
 
+  // Sheet summary totals (from rows 1–8 of the spreadsheet, used for dashboard validation)
+  sheetTotals: {
+    eightThreeBFeeEarnings: 162.50,    // number — from row 5 col B
+  },
+
   // Entry array
   entries: [
     {
@@ -261,9 +293,26 @@ The dashboard aggregates data client-side from the raw entry arrays. There are n
 | Daily trend line chart | `billables` + `ops` entries (group by date) | 0 (already loaded) |
 | Matter-level drill-down | `billables` entries array | 0 (already loaded) |
 | 83(b) election details | `eightThreeB/{year}_{month}` | 0–1 |
+| Data validation warnings | `billables` + `ops` + `eightThreeB` sheetTotals | 0 (already loaded) |
 | Cross-month trend (e.g., Q1) | Multiple `billables` + `ops` docs | 4–6 |
 
-A typical month view for one user requires 3 reads: user profile, billables document, and ops document. The 83(b) document is an additional read only when the month has filings.
+A typical month view for one user requires 4 reads: user profile, billables document, ops document, and eightThreeB document. The dashboard fetches all three subcollections for each user on initial load.
+
+### Data Validation (Warnings)
+
+The dashboard compares computed entry sums against the `sheetTotals` stored on each document and displays warnings on the team members table and attorney detail pages when mismatches are detected. The following checks are performed:
+
+| Warning Type | Comparison |
+|---|---|
+| Date mismatch | Entry-level date vs parent document's month/year |
+| Billable hours mismatch | Sum of entry `hours` vs `sheetTotals.totalBillableHours` |
+| Billable earnings mismatch | Sum of entry `earnings` vs `sheetTotals.billableEarnings` |
+| Ops hours mismatch | Sum of entry `hours` vs `sheetTotals.opsHours` |
+| 83(b) fee earnings mismatch | Sum of entry `flatFee` vs `sheetTotals.eightThreeBFeeEarnings` |
+| Total hours mismatch | (billable hours + ops hours) vs `sheetTotals.totalHours` |
+| Total payment mismatch | (billable earnings + reimbursements + 83(b) fees) vs `sheetTotals.totalPayment` |
+
+Warnings only appear when `sheetTotals` are present on the document (i.e., after the sync script has been re-run to populate them).
 
 ---
 
@@ -274,11 +323,12 @@ A typical month view for one user requires 3 reads: user profile, billables docu
 ```
 Google Sheet → Apps Script → Firestore
                   │
-                  ├── 1. Parse sheet rows
-                  ├── 2. Separate billable, ops, and 83(b) entries
-                  ├── 3. Delete-and-replace: overwrite billables/{year}_{month}
-                  ├── 4. Delete-and-replace: overwrite ops/{year}_{month}
-                  └── 5. Delete-and-replace: overwrite eightThreeB/{year}_{month}  (if entries exist)
+                  ├── 1. Parse sheet summary totals (rows 1–8)
+                  ├── 2. Parse sheet entry rows (rows 10+)
+                  ├── 3. Separate billable, ops, and 83(b) entries
+                  ├── 4. Delete-and-replace: overwrite billables/{year}_{month}  (with sheetTotals)
+                  ├── 5. Delete-and-replace: overwrite ops/{year}_{month}  (with sheetTotals)
+                  └── 6. Delete-and-replace: overwrite eightThreeB/{year}_{month}  (with sheetTotals, if entries exist)
 ```
 
 ### Year Detection
@@ -347,7 +397,7 @@ Rows with data in columns 15–17 (Company, Name, Flat Fee) represent 83(b) elec
 ### Skipped Rows
 
 - Rows where all relevant columns are empty are skipped entirely.
-- Rows 1–8 (summary/header area) are never processed.
+- Rows 1–8 (summary area) are parsed for `sheetTotals` metadata only — they are not processed as entries.
 - Rows after the last populated row in the sheet are ignored.
 - Rows with `$0` earnings and no other data are skipped.
 

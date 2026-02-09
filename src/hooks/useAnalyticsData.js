@@ -130,24 +130,6 @@ export const useAnalyticsData = ({
 
     let entries = allBillableEntries;
 
-    // Debug: count David Popkin entries before filtering
-    const dpEntriesBefore = entries.filter(e => {
-      const name = userMap[e.userId] || e.userId;
-      return name === 'David Popkin';
-    });
-    if (dpEntriesBefore.length > 0) {
-      console.log(`[DEBUG] David Popkin billable entries BEFORE date filter: ${dpEntriesBefore.length}`);
-      dpEntriesBefore.forEach(e => {
-        const d = getEntryDate(e);
-        console.log(`[DEBUG]   entry date: ${d}, valid: ${!isNaN(d?.getTime())}, month: ${e.month}, year: ${e.year}, hours: ${e.billableHours}`);
-      });
-    } else {
-      console.log(`[DEBUG] David Popkin has NO billable entries in allBillableEntries (total entries: ${entries.length})`);
-      // Check if his userId is in the entries at all
-      const dpUserIds = Object.entries(userMap).filter(([, name]) => name === 'David Popkin').map(([id]) => id);
-      console.log(`[DEBUG] David Popkin userIds from userMap: ${JSON.stringify(dpUserIds)}`);
-    }
-
     // Filter by date range
     if (dateRange !== 'all-time') {
       const { startDate: rangeStart, endDate: rangeEnd } = dateRangeInfo;
@@ -158,17 +140,6 @@ export const useAnalyticsData = ({
           return entryDate >= rangeStart && entryDate <= rangeEnd;
         });
       }
-    }
-
-    // Debug: count David Popkin entries after date filter
-    const dpEntriesAfter = entries.filter(e => {
-      const name = userMap[e.userId] || e.userId;
-      return name === 'David Popkin';
-    });
-    console.log(`[DEBUG] David Popkin billable entries AFTER date filter (${dateRange}): ${dpEntriesAfter.length}`);
-    if (dpEntriesBefore.length > 0 && dpEntriesAfter.length === 0) {
-      const { startDate: rangeStart, endDate: rangeEnd } = dateRangeInfo;
-      console.log(`[DEBUG] Date range: ${rangeStart?.toISOString()} to ${rangeEnd?.toISOString()}`);
     }
 
     // Filter by selected users (global filter)

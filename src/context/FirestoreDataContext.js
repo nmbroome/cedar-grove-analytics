@@ -5,7 +5,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
 import { useAuth } from './AuthContext';
 import { normalizeBillableEntry, normalizeOpsEntry } from '@/hooks/useFirestoreData';
-import { getMonthNumber } from '@/utils/dateHelpers';
+import { getMonthNumber, getEntryDate } from '@/utils/dateHelpers';
 
 const FirestoreDataContext = createContext({});
 
@@ -20,6 +20,7 @@ export const FirestoreDataProvider = ({ children }) => {
   const [clients, setClients] = useState([]);
   const [allRates, setAllRates] = useState({});
   const [allTargets, setAllTargets] = useState({});
+  const [dataWarnings, setDataWarnings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -94,53 +95,274 @@ export const FirestoreDataProvider = ({ children }) => {
         }
       });
 
-      // Fetch billables and ops subcollections for all users in parallel
+      // Fetch billables, ops, and eightThreeB subcollections for all users in parallel
       const userIds = usersSnap.docs.map(doc => doc.id);
       const entryFetches = userIds.flatMap(userId => [
         getDocs(collection(db, 'users', userId, 'billables')).then(snap => ({ userId, type: 'billables', snap })),
         getDocs(collection(db, 'users', userId, 'ops')).then(snap => ({ userId, type: 'ops', snap })),
+        getDocs(collection(db, 'users', userId, 'eightThreeB')).then(snap => ({ userId, type: 'eightThreeB', snap })),
       ]);
 
       const entryResults = await Promise.all(entryFetches);
 
-      // Process billable and ops entries
+      // Process billable, ops, and 83(b) entries, validating dates and totals against parent document
       const billableEntries = [];
       const opsEntries = [];
+      const warnings = {}; // keyed by userName
+
+      // Helper: round to 2 decimal places for comparison
+      const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+      // Helper: add a warning for a user
+      const addWarning = (userName, warning) => {
+        if (!warnings[userName]) warnings[userName] = [];
+        warnings[userName].push(warning);
+      };
+
+      // Build userId -> userName lookup from already-processed userList
+      const userNameLookup = {};
+      userList.forEach(u => { userNameLookup[u.id] = u.name; });
 
       entryResults.forEach(({ userId, type, snap }) => {
+        const userName = userNameLookup[userId] || userId;
+
         snap.docs.forEach(doc => {
           const data = doc.data();
           const month = data.month || '';
           const year = data.year || new Date().getFullYear();
           const entries = data.entries || [];
+          const docMonthNum = getMonthNumber(month); // 1-indexed
+          const sheetTotals = data.sheetTotals || null;
 
-          // Debug: trace David Popkin's data
-          const userDoc = usersSnap.docs.find(d => d.id === userId);
-          const debugName = userDoc?.data()?.name || userId;
-          if (debugName === 'David Popkin') {
-            console.log(`[DEBUG] David Popkin ${type} doc: ${doc.id}, month: ${month}, year: ${year}, entries count: ${entries.length}`);
-            if (entries.length > 0) {
-              console.log(`[DEBUG] First entry sample:`, JSON.stringify(entries[0], (key, val) => {
-                if (val && typeof val === 'object' && val.seconds) return `Timestamp(${new Date(val.seconds * 1000).toISOString()})`;
-                return val;
-              }));
+          if (type === 'billables') {
+            const mismatchedRows = [];
+            let computedHours = 0;
+            let computedEarnings = 0;
+            let computedReimbursements = 0;
+
+            entries.forEach((entry, idx) => {
+              const normalized = normalizeBillableEntry(entry, userId, month, year);
+              billableEntries.push({ id: `${userId}_${doc.id}_${idx}`, ...normalized });
+
+              computedHours += normalized.billableHours || 0;
+              computedEarnings += normalized.earnings || 0;
+              computedReimbursements += normalized.reimbursements || 0;
+
+              // Validate entry date against document month/year
+              const entryDate = getEntryDate(normalized);
+              if (entryDate && !isNaN(entryDate.getTime())) {
+                if (entryDate.getMonth() + 1 !== docMonthNum || entryDate.getFullYear() !== year) {
+                  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  mismatchedRows.push({
+                    row: normalized.sheetRowNumber || (idx + 10),
+                    date: `${monthNames[entryDate.getMonth()]} ${entryDate.getDate()}, ${entryDate.getFullYear()}`,
+                    client: normalized.client || '',
+                    hours: normalized.billableHours || 0,
+                  });
+                }
+              }
+            });
+
+            if (mismatchedRows.length > 0) {
+              addWarning(userName, {
+                type: 'date-mismatch',
+                collection: 'billables',
+                month,
+                year,
+                count: mismatchedRows.length,
+                total: entries.length,
+                mismatchedRows,
+                message: `${mismatchedRows.length} of ${entries.length} billable ${entries.length === 1 ? 'entry has a' : 'entries have'} date${mismatchedRows.length === 1 ? '' : 's'} outside ${month} ${year}`,
+              });
             }
+
+            // Validate computed sums against sheet totals (if available)
+            if (sheetTotals) {
+              const computedHoursRounded = round2(computedHours);
+              const computedEarningsRounded = round2(computedEarnings);
+
+              if (sheetTotals.totalBillableHours > 0 && computedHoursRounded !== sheetTotals.totalBillableHours) {
+                addWarning(userName, {
+                  type: 'hours-mismatch',
+                  collection: 'billables',
+                  month,
+                  year,
+                  message: `Billable hours mismatch in ${month} ${year}: entries sum to ${computedHoursRounded}h but sheet total is ${sheetTotals.totalBillableHours}h`,
+                });
+              }
+
+              if (sheetTotals.billableEarnings > 0 && computedEarningsRounded !== sheetTotals.billableEarnings) {
+                addWarning(userName, {
+                  type: 'earnings-mismatch',
+                  collection: 'billables',
+                  month,
+                  year,
+                  message: `Billable earnings mismatch in ${month} ${year}: entries sum to $${computedEarningsRounded.toLocaleString()} but sheet total is $${sheetTotals.billableEarnings.toLocaleString()}`,
+                });
+              }
+            }
+          } else if (type === 'ops') {
+            const mismatchedRows = [];
+            let computedOpsHours = 0;
+
+            entries.forEach((entry, idx) => {
+              const normalized = normalizeOpsEntry(entry, userId, month, year);
+              opsEntries.push({ id: `${userId}_${doc.id}_${idx}`, ...normalized });
+
+              computedOpsHours += normalized.opsHours || 0;
+
+              const entryDate = getEntryDate(normalized);
+              if (entryDate && !isNaN(entryDate.getTime())) {
+                if (entryDate.getMonth() + 1 !== docMonthNum || entryDate.getFullYear() !== year) {
+                  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  mismatchedRows.push({
+                    row: normalized.sheetRowNumber || (idx + 10),
+                    date: `${monthNames[entryDate.getMonth()]} ${entryDate.getDate()}, ${entryDate.getFullYear()}`,
+                    description: normalized.description || '',
+                    hours: normalized.opsHours || 0,
+                  });
+                }
+              }
+            });
+
+            if (mismatchedRows.length > 0) {
+              addWarning(userName, {
+                type: 'date-mismatch',
+                collection: 'ops',
+                month,
+                year,
+                count: mismatchedRows.length,
+                total: entries.length,
+                mismatchedRows,
+                message: `${mismatchedRows.length} of ${entries.length} ops ${entries.length === 1 ? 'entry has a' : 'entries have'} date${mismatchedRows.length === 1 ? '' : 's'} outside ${month} ${year}`,
+              });
+            }
+
+            // Validate computed ops hours against sheet totals (if available)
+            if (sheetTotals) {
+              const computedOpsRounded = round2(computedOpsHours);
+
+              if (sheetTotals.opsHours > 0 && computedOpsRounded !== sheetTotals.opsHours) {
+                addWarning(userName, {
+                  type: 'hours-mismatch',
+                  collection: 'ops',
+                  month,
+                  year,
+                  message: `Ops hours mismatch in ${month} ${year}: entries sum to ${computedOpsRounded}h but sheet total is ${sheetTotals.opsHours}h`,
+                });
+              }
+
+              // Cross-validate total hours (billable + ops) against sheet total
+              // We need to look up the billable sheetTotals for the same month to get computed billable hours
+              // This is done after all entries are processed — see totalHours validation below
+            }
+          } else if (type === 'eightThreeB') {
+            // 83(b) entries — validate fee total against sheet totals
+            let computedFlatFees = 0;
+            entries.forEach((entry) => {
+              computedFlatFees += (parseFloat(entry.flatFee) || 0);
+            });
+
+            if (sheetTotals) {
+              const computedFeesRounded = round2(computedFlatFees);
+
+              if (sheetTotals.eightThreeBFeeEarnings > 0 && computedFeesRounded !== sheetTotals.eightThreeBFeeEarnings) {
+                addWarning(userName, {
+                  type: 'earnings-mismatch',
+                  collection: 'eightThreeB',
+                  month,
+                  year,
+                  message: `83(b) fee earnings mismatch in ${month} ${year}: entries sum to $${computedFeesRounded.toLocaleString()} but sheet total is $${sheetTotals.eightThreeBFeeEarnings.toLocaleString()}`,
+                });
+              }
+            }
+          }
+        });
+      });
+
+      // Cross-validate total hours (billable + ops) and total payment per user per month
+      // Build a map of sheet totals per user per month from the entry results
+      const userMonthSheetTotals = {}; // { userName: { "2026_January": { billables: {...}, ops: {...}, eightThreeB: {...} } } }
+      const userMonthComputedTotals = {}; // { userName: { "2026_January": { billableHours, billableEarnings, opsHours, reimbursements, eightThreeBFees } } }
+
+      entryResults.forEach(({ userId, type, snap }) => {
+        const userName = userNameLookup[userId] || userId;
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          const month = data.month || '';
+          const year = data.year || new Date().getFullYear();
+          const docKey = `${year}_${month}`;
+          const entries = data.entries || [];
+          const sheetTotals = data.sheetTotals || null;
+
+          if (!userMonthSheetTotals[userName]) userMonthSheetTotals[userName] = {};
+          if (!userMonthSheetTotals[userName][docKey]) userMonthSheetTotals[userName][docKey] = {};
+          if (sheetTotals) {
+            userMonthSheetTotals[userName][docKey][type] = sheetTotals;
+          }
+
+          if (!userMonthComputedTotals[userName]) userMonthComputedTotals[userName] = {};
+          if (!userMonthComputedTotals[userName][docKey]) {
+            userMonthComputedTotals[userName][docKey] = {
+              billableHours: 0, billableEarnings: 0, opsHours: 0, reimbursements: 0, eightThreeBFees: 0,
+            };
           }
 
           if (type === 'billables') {
-            entries.forEach((entry, idx) => {
-              billableEntries.push({
-                id: `${userId}_${doc.id}_${idx}`,
-                ...normalizeBillableEntry(entry, userId, month, year),
-              });
+            entries.forEach(entry => {
+              userMonthComputedTotals[userName][docKey].billableHours += parseFloat(entry.hours) || 0;
+              userMonthComputedTotals[userName][docKey].billableEarnings += parseFloat(typeof entry.earnings === 'string' ? entry.earnings.replace(/[$,]/g, '') : entry.earnings) || 0;
+              userMonthComputedTotals[userName][docKey].reimbursements += parseFloat(typeof entry.reimbursements === 'string' ? entry.reimbursements.replace(/[$,]/g, '') : entry.reimbursements) || 0;
             });
-          } else {
-            entries.forEach((entry, idx) => {
-              opsEntries.push({
-                id: `${userId}_${doc.id}_${idx}`,
-                ...normalizeOpsEntry(entry, userId, month, year),
-              });
+          } else if (type === 'ops') {
+            entries.forEach(entry => {
+              userMonthComputedTotals[userName][docKey].opsHours += parseFloat(entry.hours) || 0;
             });
+          } else if (type === 'eightThreeB') {
+            entries.forEach(entry => {
+              userMonthComputedTotals[userName][docKey].eightThreeBFees += parseFloat(entry.flatFee) || 0;
+            });
+          }
+        });
+      });
+
+      // Check total hours and total payment cross-collection
+      Object.entries(userMonthSheetTotals).forEach(([userName, months]) => {
+        Object.entries(months).forEach(([docKey, sheetTotalsByType]) => {
+          const computed = userMonthComputedTotals[userName]?.[docKey];
+          if (!computed) return;
+
+          const [yearStr, month] = docKey.split('_');
+          const year = parseInt(yearStr, 10);
+
+          // Total hours check (from ops sheetTotals which has the combined total)
+          const opsSheetTotals = sheetTotalsByType.ops;
+          if (opsSheetTotals?.totalHours > 0) {
+            const computedTotalHours = round2(computed.billableHours + computed.opsHours);
+            if (computedTotalHours !== opsSheetTotals.totalHours) {
+              addWarning(userName, {
+                type: 'total-hours-mismatch',
+                month,
+                year,
+                message: `Total hours mismatch in ${month} ${year}: entries sum to ${computedTotalHours}h but sheet total is ${opsSheetTotals.totalHours}h`,
+              });
+            }
+          }
+
+          // Total payment check (from billables sheetTotals)
+          const billablesSheetTotals = sheetTotalsByType.billables;
+          if (billablesSheetTotals?.totalPayment > 0) {
+            const computedTotalPayment = round2(
+              computed.billableEarnings + computed.reimbursements + computed.eightThreeBFees
+            );
+            if (computedTotalPayment !== billablesSheetTotals.totalPayment) {
+              addWarning(userName, {
+                type: 'total-payment-mismatch',
+                month,
+                year,
+                message: `Total payment mismatch in ${month} ${year}: computed $${computedTotalPayment.toLocaleString()} (earnings + reimbursements + 83(b) fees) but sheet total is $${billablesSheetTotals.totalPayment.toLocaleString()}`,
+              });
+            }
           }
         });
       });
@@ -154,6 +376,7 @@ export const FirestoreDataProvider = ({ children }) => {
       setClients(clientList);
       setAllRates(ratesMap);
       setAllTargets(targetsMap);
+      setDataWarnings(warnings);
       setError(null);
       lastFetchedAt.current = Date.now();
     } catch (err) {
@@ -199,6 +422,7 @@ export const FirestoreDataProvider = ({ children }) => {
     clients,
     allRates,
     allTargets,
+    dataWarnings,
     loading,
     error,
     refetch,
