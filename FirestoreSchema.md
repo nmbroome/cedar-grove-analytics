@@ -68,7 +68,7 @@ User IDs are full names as stored in Firestore: `"Michael Ohta"`, etc. These are
 
 ## Document: `users/{userId}`
 
-The user profile document. Stores identity, role, billing rate, and performance targets. This document is created and maintained manually or via an admin interface — the sync script does not read or write to it.
+The user profile document. Stores identity, role, billing rate, and performance targets. This document is created and maintained via the admin User Management page (`/admin/user-management`) — the sync script does not read or write to it.
 
 ### Document Schema
 
@@ -76,7 +76,7 @@ The user profile document. Stores identity, role, billing rate, and performance 
 {
   name: "Michael Ohta",                   // string — display name
   role: "Attorney",                        // string — "Attorney", "Legal Operations Associate", etc.
-  email: "michael@cedargrove.law",         // string — login email (optional)
+  email: "michael@cedargrove.law",         // string — login email (used for access control)
   employmentType: "FTE",                   // string — "FTE" (full-time) or "PTE" (part-time)
 
   // Billing rates (one entry per active month)
@@ -117,7 +117,11 @@ Current roles include:
 - `"Attorney"` — licensed attorneys who bill client hours
 - `"Legal Operations Associate"` — operations staff who track ops hours
 
-The role lives on the user document, not on individual entry documents. The dashboard reads the user profile once and applies the role for display, filtering, and grouping.
+The role is a free-text field on the user document, not on individual entry documents. The dashboard reads the user profile once and applies the role for display, filtering, and grouping.
+
+### Email & Access Control
+
+The `email` field on the user document is used for access control. When a non-admin user logs in, the dashboard matches their Firebase Auth email against user documents to determine which attorney detail page they can access. Non-admin users are automatically redirected to their own attorney page on login. Admin users can access all pages.
 
 ### Employment Types
 

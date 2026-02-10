@@ -17,25 +17,6 @@ export const useAuth = () => useContext(AuthContext);
 // Allowed email domain
 const ALLOWED_DOMAIN = 'cedargrovellp.com';
 
-// Nickname mappings - bidirectional (both names map to all variations)
-const NICKNAME_MAP = {
-  'nicholas': ['nick', 'nicholas'],
-  'nick': ['nick', 'nicholas'],
-  // Add more mappings as needed:
-  // 'william': ['will', 'bill', 'william'],
-  // 'will': ['will', 'bill', 'william'],
-  // 'bill': ['will', 'bill', 'william'],
-  // 'robert': ['rob', 'bob', 'robert'],
-  // 'rob': ['rob', 'bob', 'robert'],
-  // 'bob': ['rob', 'bob', 'robert'],
-};
-
-// Get all possible name variations for matching
-const getNameVariations = (name) => {
-  if (!name) return [];
-  const lower = name.toLowerCase();
-  return NICKNAME_MAP[lower] || [lower];
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -155,29 +136,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Extract first name from email (e.g., "nicholas@cedargrovellp.com" -> "nicholas")
-  const getFirstNameFromEmail = (email) => {
-    if (!email) return null;
-    const localPart = email.split('@')[0];
-    if (!localPart) return null;
-    return localPart.toLowerCase();
-  };
-
-  // Get current user's first name from email (lowercase)
-  const userFirstName = user?.email ? getFirstNameFromEmail(user.email) : null;
+  // Current user's email (lowercased for comparison)
+  const userEmail = user?.email ? user.email.toLowerCase() : null;
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
+    <AuthContext.Provider value={{
+      user,
       isAdmin,
       isAuthorized,
-      loading, 
-      signInWithGoogle, 
+      loading,
+      signInWithGoogle,
       signOut,
       isAllowedDomain,
-      getFirstNameFromEmail,
-      userFirstName,
-      getNameVariations,
+      userEmail,
     }}>
       {children}
     </AuthContext.Provider>

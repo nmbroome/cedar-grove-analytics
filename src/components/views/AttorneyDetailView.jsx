@@ -485,21 +485,21 @@ const AttorneyDetailView = ({ attorneyName }) => {
 
   // Utilization color helper
   const getUtilizationColor = (util) => {
-    if (util >= 95 && util <= 105) return 'text-green-600';
-    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'text-yellow-600';
+    if (util > 90 && util < 110) return 'text-green-600';
+    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const getUtilizationBgColor = (util) => {
-    if (util >= 95 && util <= 105) return 'bg-green-100 text-green-800';
-    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-100 text-yellow-800';
+    if (util > 90 && util < 110) return 'bg-green-100 text-green-800';
+    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
   };
 
   // Progress bar color helper
   const getProgressBarColor = (util) => {
-    if (util >= 95 && util <= 105) return 'bg-green-500';
-    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-500';
+    if (util > 90 && util < 110) return 'bg-green-500';
+    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 

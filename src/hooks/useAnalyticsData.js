@@ -51,6 +51,16 @@ export const useAnalyticsData = ({
     return map;
   }, [firebaseUsers]);
 
+  // Create user employment type map (from Firestore user profile)
+  const userEmploymentTypeMap = useMemo(() => {
+    const map = {};
+    firebaseUsers.forEach(user => {
+      const name = user.name || user.id;
+      map[name] = user.employmentType || 'FTE';
+    });
+    return map;
+  }, [firebaseUsers]);
+
   // Helper function to get role for a user
   const getUserRole = useCallback((name) => {
     return userRoleMap[name] || 'Attorney';
@@ -379,6 +389,7 @@ export const useAnalyticsData = ({
         billableTarget: Math.round(totalBillableTarget * 10) / 10,
         opsTarget: Math.round(totalOpsTarget * 10) / 10,
         role: getUserRole(userName),
+        employmentType: userEmploymentTypeMap[userName] || 'FTE',
         transactions: data.transactions,
         clients: data.clients,
         topTransactions: Object.entries(data.transactions)
@@ -397,7 +408,7 @@ export const useAnalyticsData = ({
     });
 
     return visibleUserData;
-  }, [filteredBillableEntries, filteredOpsEntries, userMap, dateRangeInfo, userTargets, getUserRole, getDefaultTarget, firebaseUsers, globalAttorneyFilter, dateRangeMonths]);
+  }, [filteredBillableEntries, filteredOpsEntries, userMap, dateRangeInfo, userTargets, getUserRole, userEmploymentTypeMap, getDefaultTarget, firebaseUsers, globalAttorneyFilter, dateRangeMonths]);
 
   // Create a separate dataset that includes hidden users for totals calculation
   const allAttorneyDataIncludingHidden = useMemo(() => {

@@ -3,29 +3,28 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 
-export default function ProtectedRoute({ 
-  children, 
+export default function ProtectedRoute({
+  children,
   requireAdmin = false,
   allowedAttorneyName = null // If set, only this attorney (or admins) can access
 }) {
-  const { user, isAdmin, isAuthorized, loading, userFirstName, getNameVariations } = useAuth();
+  const { user, isAdmin, isAuthorized, loading, userEmail } = useAuth();
+  const { users } = useFirestoreCache();
   const router = useRouter();
 
-  // Check if user can access this attorney's page using nickname variations
+  // Check if the logged-in user's email matches the email on this attorney's user doc
   const canAccessAttorneyPage = () => {
     if (isAdmin) return true;
     if (!allowedAttorneyName) return true;
-    if (!userFirstName) return false;
-    
-    // Extract first name from the attorney page parameter (e.g., "Nick Stone" -> "nick")
-    const attorneyFirstName = allowedAttorneyName.split(' ')[0].toLowerCase();
-    
-    // Get all name variations for the user's email first name
-    const userNameVariations = getNameVariations(userFirstName);
-    
-    // Check if the attorney's first name matches any of the user's name variations
-    return userNameVariations.includes(attorneyFirstName);
+    if (!userEmail) return false;
+
+    // Find the user doc for this attorney page and compare emails
+    const attorneyUser = users.find(u => (u.name || u.id) === allowedAttorneyName);
+    if (!attorneyUser || !attorneyUser.email) return false;
+
+    return attorneyUser.email.toLowerCase() === userEmail;
   };
 
   useEffect(() => {
@@ -35,7 +34,7 @@ export default function ProtectedRoute({
         router.push('/login');
         return;
       }
-      
+
       // If admin is required but user is not admin
       if (requireAdmin && !isAdmin) {
         router.push('/login?error=admin_required');
@@ -44,11 +43,10 @@ export default function ProtectedRoute({
 
       // If trying to access another attorney's page
       if (allowedAttorneyName && !canAccessAttorneyPage()) {
-        // Redirect non-admins to login with access denied
         router.push('/login?error=access_denied');
       }
     }
-  }, [user, isAdmin, isAuthorized, loading, router, requireAdmin, allowedAttorneyName, userFirstName]);
+  }, [user, isAdmin, isAuthorized, loading, router, requireAdmin, allowedAttorneyName, userEmail, users]);
 
   if (loading) {
     return (

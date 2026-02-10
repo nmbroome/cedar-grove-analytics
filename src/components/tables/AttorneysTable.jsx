@@ -23,8 +23,8 @@ const AttorneysTable = ({
   };
 
   const getUtilizationBadgeColor = (util) => {
-    if (util >= 95 && util <= 105) return 'bg-green-100 text-green-800';
-    if ((util >= 90 && util < 95) || (util > 105 && util <= 110)) return 'bg-yellow-100 text-yellow-800';
+    if (util > 90 && util < 110) return 'bg-green-100 text-green-800';
+    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
   };
 

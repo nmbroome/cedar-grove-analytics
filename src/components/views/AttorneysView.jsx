@@ -27,10 +27,18 @@ const AttorneysView = ({
 
   const getSortedAttorneys = () => {
     const attorneys = [...attorneyData];
-    
+
     attorneys.sort((a, b) => {
+      // Primary sort: FTE before PTE
+      const aType = a.employmentType || 'FTE';
+      const bType = b.employmentType || 'FTE';
+      if (aType !== bType) {
+        return aType === 'FTE' ? -1 : 1;
+      }
+
+      // Secondary sort: user-selected column
       let aVal, bVal;
-      
+
       switch (sortConfig.key) {
         case 'name':
           aVal = a.name.toLowerCase();
@@ -60,12 +68,12 @@ const AttorneysView = ({
           aVal = a.name.toLowerCase();
           bVal = b.name.toLowerCase();
       }
-      
+
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     return attorneys;
   };
 

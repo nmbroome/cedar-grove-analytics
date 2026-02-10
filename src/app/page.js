@@ -2,70 +2,50 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import CedarGroveAnalytics from '@/components/AnalyticsDashboard';
 
 function DashboardContent() {
-  const { isAdmin, loading, userFirstName, isAuthorized, getNameVariations } = useAuth();
+  const { isAdmin, loading, userEmail, isAuthorized } = useAuth();
+  const { users, loading: usersLoading } = useFirestoreCache();
   const router = useRouter();
-  const [checkingAttorney, setCheckingAttorney] = useState(true);
   const [matchedAttorneyName, setMatchedAttorneyName] = useState(null);
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const findMatchingAttorney = async () => {
-      if (loading || !isAuthorized || isAdmin) {
-        setCheckingAttorney(false);
-        return;
-      }
+    if (loading || usersLoading || !isAuthorized || isAdmin) {
+      setChecked(true);
+      return;
+    }
 
-      if (!userFirstName) {
-        setCheckingAttorney(false);
-        return;
-      }
+    if (!userEmail || !users || users.length === 0) {
+      setChecked(true);
+      return;
+    }
 
-      try {
-        // Get all name variations for the user's email first name
-        const nameVariations = getNameVariations(userFirstName);
-        
-        // Query users collection to find matching user
-        const attorneysSnapshot = await getDocs(collection(db, 'users'));
-        
-        let foundAttorney = null;
-        attorneysSnapshot.docs.forEach(doc => {
-          const attorneyFullName = doc.id; // e.g., "Nick Stone"
-          const attorneyFirstName = attorneyFullName.split(' ')[0].toLowerCase();
-          
-          // Check if any of the user's name variations match the attorney's first name
-          if (nameVariations.includes(attorneyFirstName)) {
-            foundAttorney = attorneyFullName;
-          }
-        });
+    // Find user doc whose email matches the logged-in user's email
+    const matchedUser = users.find(
+      u => u.email && u.email.toLowerCase() === userEmail
+    );
 
-        if (foundAttorney) {
-          setMatchedAttorneyName(foundAttorney);
-        }
-      } catch (error) {
-        console.error('Error finding matching attorney:', error);
-      } finally {
-        setCheckingAttorney(false);
-      }
-    };
+    if (matchedUser) {
+      setMatchedAttorneyName(matchedUser.name || matchedUser.id);
+    }
 
-    findMatchingAttorney();
-  }, [loading, isAdmin, userFirstName, isAuthorized, getNameVariations]);
+    setChecked(true);
+  }, [loading, usersLoading, isAdmin, userEmail, isAuthorized, users]);
 
   useEffect(() => {
     // Redirect non-admins to their attorney page once we've found a match
-    if (!loading && !checkingAttorney && isAuthorized && !isAdmin && matchedAttorneyName) {
+    if (checked && isAuthorized && !isAdmin && matchedAttorneyName) {
       router.push(`/users/${encodeURIComponent(matchedAttorneyName)}`);
     }
-  }, [loading, checkingAttorney, isAdmin, matchedAttorneyName, isAuthorized, router]);
+  }, [checked, isAdmin, matchedAttorneyName, isAuthorized, router]);
 
   // Show loading while checking or redirecting
-  if (loading || checkingAttorney || (!isAdmin && matchedAttorneyName)) {
+  if (loading || usersLoading || !checked || (!isAdmin && matchedAttorneyName)) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">

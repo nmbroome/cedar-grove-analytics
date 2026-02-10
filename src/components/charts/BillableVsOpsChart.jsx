@@ -7,11 +7,18 @@ import { PerBarTooltip } from '../tooltips';
 const BillableVsOpsChart = ({ data, title = "Billable vs Ops Time by Attorney" }) => {
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
 
+  const sortedData = [...data].sort((a, b) => {
+    const aType = a.employmentType || 'FTE';
+    const bType = b.employmentType || 'FTE';
+    if (aType !== bType) return aType === 'FTE' ? -1 : 1;
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+
   return (
     <div className="bg-white p-6 rounded-lg shadow">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
       <ResponsiveContainer width="100%" height={350}>
-        <BarChart data={data} barGap={0} barCategoryGap="20%">
+        <BarChart data={sortedData} barGap={0} barCategoryGap="20%">
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
           <YAxis />

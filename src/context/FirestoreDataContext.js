@@ -257,26 +257,6 @@ export const FirestoreDataProvider = ({ children }) => {
               // We need to look up the billable sheetTotals for the same month to get computed billable hours
               // This is done after all entries are processed — see totalHours validation below
             }
-          } else if (type === 'eightThreeB') {
-            // 83(b) entries — validate fee total against sheet totals
-            let computedFlatFees = 0;
-            entries.forEach((entry) => {
-              computedFlatFees += (parseFloat(entry.flatFee) || 0);
-            });
-
-            if (sheetTotals) {
-              const computedFeesRounded = round2(computedFlatFees);
-
-              if (sheetTotals.eightThreeBFeeEarnings > 0 && computedFeesRounded !== sheetTotals.eightThreeBFeeEarnings) {
-                addWarning(userName, {
-                  type: 'earnings-mismatch',
-                  collection: 'eightThreeB',
-                  month,
-                  year,
-                  message: `83(b) fee earnings mismatch in ${month} ${year}: entries sum to $${computedFeesRounded.toLocaleString()} but sheet total is $${sheetTotals.eightThreeBFeeEarnings.toLocaleString()}`,
-                });
-              }
-            }
           }
         });
       });
@@ -350,21 +330,7 @@ export const FirestoreDataProvider = ({ children }) => {
             }
           }
 
-          // Total payment check (from billables sheetTotals)
-          const billablesSheetTotals = sheetTotalsByType.billables;
-          if (billablesSheetTotals?.totalPayment > 0) {
-            const computedTotalPayment = round2(
-              computed.billableEarnings + computed.reimbursements + computed.eightThreeBFees
-            );
-            if (computedTotalPayment !== billablesSheetTotals.totalPayment) {
-              addWarning(userName, {
-                type: 'total-payment-mismatch',
-                month,
-                year,
-                message: `Total payment mismatch in ${month} ${year}: computed $${computedTotalPayment.toLocaleString()} (earnings + reimbursements + 83(b) fees) but sheet total is $${billablesSheetTotals.totalPayment.toLocaleString()}`,
-              });
-            }
-          }
+
         });
       });
 
