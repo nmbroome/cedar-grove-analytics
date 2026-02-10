@@ -61,6 +61,7 @@ export const FirestoreDataProvider = ({ children }) => {
           name: userName,
           role: data.role || 'Attorney',
           email: data.email || '',
+          employmentType: data.employmentType || 'FTE',
         });
 
         // Build rates map from user profile rates[] array

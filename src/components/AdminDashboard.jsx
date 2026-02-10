@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Target, Users, LogOut, ArrowLeft, Shield, FileText, DollarSign } from 'lucide-react';
+import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -16,18 +16,11 @@ const AdminDashboard = () => {
 
   const adminLinks = [
     {
-      title: 'Utilization Targets',
-      description: 'Set monthly billable and ops hour targets for each attorney',
-      href: '/admin/targets',
-      icon: Target,
-      color: 'bg-blue-500',
-    },
-    {
-      title: 'Manage Admins',
-      description: 'Add or remove administrator access for users',
-      href: '/admin/users',
+      title: 'User Management',
+      description: 'Manage team members, roles, employment types, and utilization targets',
+      href: '/admin/user-management',
       icon: Users,
-      color: 'bg-purple-500',
+      color: 'bg-blue-500',
     },
     {
       title: 'Billing Summaries',

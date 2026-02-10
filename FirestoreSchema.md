@@ -77,6 +77,7 @@ The user profile document. Stores identity, role, billing rate, and performance 
   name: "Michael Ohta",                   // string — display name
   role: "Attorney",                        // string — "Attorney", "Legal Operations Associate", etc.
   email: "michael@cedargrove.law",         // string — login email (optional)
+  employmentType: "FTE",                   // string — "FTE" (full-time) or "PTE" (part-time)
 
   // Billing rates (one entry per active month)
   rates: [
@@ -117,6 +118,13 @@ Current roles include:
 - `"Legal Operations Associate"` — operations staff who track ops hours
 
 The role lives on the user document, not on individual entry documents. The dashboard reads the user profile once and applies the role for display, filtering, and grouping.
+
+### Employment Types
+
+- `"FTE"` — Full-time employee
+- `"PTE"` — Part-time employee
+
+The employment type is set via the admin User Management page. New users default to `"PTE"`. Existing users without the field default to `"FTE"` at read time.
 
 ### Rate and Targets
 
