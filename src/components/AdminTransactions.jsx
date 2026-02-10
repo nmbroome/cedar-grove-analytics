@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LogOut, DollarSign, ArrowDownCircle, ArrowUpCircle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, LogOut, DollarSign, ArrowDownCircle, ArrowUpCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
-import transactionsData from '@/transactions.json';
 
 const FILTER_OPTIONS = [
   { key: 'all', label: 'All Transactions' },
@@ -17,8 +18,47 @@ const FILTER_OPTIONS = [
 const AdminTransactions = () => {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
   const [filter, setFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'postedAt', direction: 'desc' });
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'transactions'));
+      const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setTransactions(docs);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncStatus(null);
+    try {
+      const res = await fetch('/api/sync-transactions', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatus({ type: 'success', message: `Synced ${data.synced} transactions` });
+        await fetchTransactions();
+      } else {
+        setSyncStatus({ type: 'error', message: data.error || 'Sync failed' });
+      }
+    } catch (err) {
+      setSyncStatus({ type: 'error', message: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -38,7 +78,7 @@ const AdminTransactions = () => {
   };
 
   const filteredAndSorted = useMemo(() => {
-    let items = transactionsData.transactions || [];
+    let items = transactions;
 
     if (filter === 'expenses') {
       items = items.filter((t) => t.amount < 0);
@@ -68,20 +108,19 @@ const AdminTransactions = () => {
     });
 
     return items;
-  }, [filter, sortConfig]);
+  }, [transactions, filter, sortConfig]);
 
   const summaryStats = useMemo(() => {
-    const all = transactionsData.transactions || [];
-    const expenses = all.filter((t) => t.amount < 0);
-    const payments = all.filter((t) => t.amount > 0);
+    const expenses = transactions.filter((t) => t.amount < 0);
+    const payments = transactions.filter((t) => t.amount > 0);
     return {
-      totalCount: all.length,
+      totalCount: transactions.length,
       expenseCount: expenses.length,
       expenseTotal: expenses.reduce((sum, t) => sum + t.amount, 0),
       paymentCount: payments.length,
       paymentTotal: payments.reduce((sum, t) => sum + t.amount, 0),
     };
-  }, []);
+  }, [transactions]);
 
   const formatPostedDate = (dateStr) => {
     if (!dateStr) return '—';
@@ -113,6 +152,19 @@ const AdminTransactions = () => {
                   <p className="text-sm text-gray-600">Mercury bank transactions</p>
                 </div>
               </div>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                <span>{syncing ? 'Syncing...' : 'Sync from Mercury'}</span>
+              </button>
+              {syncStatus && (
+                <span className={`text-sm ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                  {syncStatus.message}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
@@ -145,6 +197,11 @@ const AdminTransactions = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-gray-500 text-sm">Loading transactions...</div>
+          </div>
+        ) : <>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -307,6 +364,7 @@ const AdminTransactions = () => {
             </table>
           </div>
         </div>
+        </>}
       </div>
     </div>
   );
