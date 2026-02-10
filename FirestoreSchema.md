@@ -48,12 +48,18 @@ Rows 1–8 contain summary totals that are synced as `sheetTotals` metadata on t
 ```
 firestore-root/
 │
-└── users/{userId}/                       # User profile document (name, role, email)
-    ├── rates/{year}_{month}              # Billing rate for one month
-    ├── targets/{year}_{month}            # Performance targets for one month
-    ├── billables/{year}_{month}          # All billable entries for one month
-    ├── ops/{year}_{month}                # All ops entries for one month
-    └── eightThreeB/{year}_{month}        # 83(b) election entries for one month
+├── users/{userId}/                       # User profile document (name, role, email)
+│   ├── rates/{year}_{month}              # Billing rate for one month
+│   ├── targets/{year}_{month}            # Performance targets for one month
+│   ├── billables/{year}_{month}          # All billable entries for one month
+│   ├── ops/{year}_{month}                # All ops entries for one month
+│   └── eightThreeB/{year}_{month}        # 83(b) election entries for one month
+│
+├── invoices/all                          # All client invoices in a single document (entries array)
+│
+├── clientAliases/all                     # Counterparty-to-client name mappings (for invoice matching)
+│
+└── transactions/{mercuryId}              # Bank transactions synced from Mercury API
 ```
 
 ### Document ID Format
@@ -412,6 +418,180 @@ Rows with data in columns 15–17 (Company, Name, Flat Fee) represent 83(b) elec
 - Rows 1–8 (summary area) are parsed for `sheetTotals` metadata only — they are not processed as entries.
 - Rows after the last populated row in the sheet are ignored.
 - Rows with `$0` earnings and no other data are skipped.
+
+---
+
+## Document: `invoices/all`
+
+Stores all client invoice records in a single document as an entries array. Synced from the "Payment Status" sheet tab in the Invoices Google Sheets workbook.
+
+### Data Source
+
+The "Payment Status" sheet has a summary header in row 1 (skipped during sync) and invoice rows starting at row 2. Each row tracks one invoice sent to a client, including its payment status, reminder dates, and receipt dates.
+
+### Document Schema
+
+```javascript
+{
+  // Metadata
+  entryCount: 148,                         // number — length of entries array
+  syncedAt: "2026-02-10T12:00:00.000Z",   // string — ISO 8601 timestamp of last sync
+
+  // Entry array
+  entries: [
+    {
+      client: "BuildQ, Inc.",              // string — client name
+      amount: 4115.00,                     // number — invoice amount (parsed from "$4,115" format)
+      year: 2025,                          // number | null — year the invoice pertains to
+      dateSent: "12/3",                    // string | null — date invoice was sent (M/D format)
+      status: "Paid",                      // string | null — "Paid", "Not Paid", or "Payment Initiated"
+      lastReminder: "1/6/2026",           // string | null — date of last payment reminder
+      dateReceived: "2/9/2026",           // string | null — date payment was received
+      notes: "Not reminder until end of feb", // string | null — freeform notes
+      sheetRowNumber: 9                    // number — original row in the spreadsheet (for debugging)
+    }
+    // ... one object per invoice row
+  ]
+}
+```
+
+### Field Notes
+
+- `amount`: Parsed from the spreadsheet's currency format (e.g., `"$4,115"` → `4115`). Stored as a plain number.
+- `year`: The billing year the invoice belongs to (e.g., `2025` or `2026`). Some invoices from a prior year appear in the current year's workbook.
+- `dateSent`: The date the invoice was sent to the client. Format varies — may be `M/D` (e.g., `2/3`) or `M/D/YYYY` (e.g., `1/6/2026`). Stored as-is from the sheet.
+- `status`: One of `"Paid"`, `"Not Paid"`, or `"Payment Initiated"`.
+- `lastReminder`: Date a payment reminder was last sent. May be `M/D` or `M/D/YYYY` format, or null if no reminder was sent.
+- `dateReceived`: Date payment was received. May be `M/D` or `M/D/YYYY` format, or null if not yet paid.
+- `notes`: Freeform notes (e.g., payment method details, follow-up instructions). May be null.
+- `sheetRowNumber`: The actual row number in the spreadsheet (1-indexed). Used for debugging and tracing back to the source data.
+- A single client may have multiple entries in the array (one per billing period or invoice sent).
+
+### Sync Architecture
+
+```
+Google Sheet ("Payment Status" tab) → Apps Script → Firestore
+                                          │
+                                          ├── 1. Read all rows from row 2 onward
+                                          ├── 2. Skip rows with no client name
+                                          ├── 3. Parse currency amounts, trim strings
+                                          └── 4. Overwrite invoices/all with entries array + metadata
+```
+
+- **Sync trigger**: Manual — run `syncInvoices()` or `forceSyncInvoices()` from Apps Script.
+- **Strategy**: Full overwrite. The entire `invoices/all` document is replaced with the parsed entries array and metadata in a single write.
+- **Cost per sync**: 1 write.
+
+---
+
+## Document: `clientAliases/all`
+
+Stores human-confirmed mappings between Mercury transaction counterparty names and invoice client names. Used by the invoice matching feature on `/admin/invoices` to automatically suggest transaction matches for unpaid invoices.
+
+### Document Schema
+
+```javascript
+{
+  aliases: {
+    "gusto": ["Get Sonar, Inc.", "Safebox LLC"],  // one counterparty → multiple clients
+    "goodrec": ["Just Play Apps, Inc."],
+    "shopsel, inc": ["Cherry-Pick.com, Inc."],
+    // key = lowercase counterparty name
+    // value = array of invoice client names this counterparty pays for
+  }
+}
+```
+
+### Field Notes
+
+- **Keys** are always lowercase (case-insensitive matching).
+- **Values** are arrays of client names exactly as they appear on invoices. A single counterparty can pay for multiple different clients (e.g., "GUSTO" processes payments for several companies).
+- The document is created on first alias confirmation and grows as more matches are confirmed.
+
+### How It's Used
+
+1. **On page load**: The invoices page fetches this document alongside invoices and transactions.
+2. **Matching algorithm**: For each unpaid invoice, transactions are ranked as candidates:
+   - **Alias match** (highest priority): counterparty name (lowercased) exists as a key and the array includes the invoice's client name.
+   - **Name match**: case-insensitive substring match between counterparty name and client name.
+   - **Amount match**: transaction amount equals invoice amount.
+3. **On confirm**: When a human selects and confirms a match, the counterparty→client pair is added to this document (appended to the array if the key exists, or created as a new array entry).
+
+### Data Lifecycle
+
+- **Created by**: Admin user confirming a match on `/admin/invoices`
+- **Updated by**: Each subsequent match confirmation (adds to alias arrays)
+- **Read by**: Invoice matching logic on `/admin/invoices`
+- **Not affected by**: Invoice or transaction syncs (aliases are independent of sync data)
+
+---
+
+## Collection: `transactions/{mercuryId}`
+
+Stores bank transactions synced from Mercury's API. Each document represents a single transaction and uses Mercury's transaction UUID as the Firestore document ID. Data is synced via the `/api/sync-transactions` API route, triggered by the "Sync from Mercury" button on the admin transactions page (`/admin/transactions`).
+
+### Document Schema
+
+```javascript
+{
+  id: "a1f97ca2-0089-11f1-804c-274d5cc3c97c",  // string — Mercury transaction UUID
+  amount: -4300.00,                               // number — negative = expense, positive = payment
+  status: "sent",                                  // string — "sent", "pending", "failed", "cancelled"
+  createdAt: "2026-02-02T22:50:55.274196Z",       // string — ISO 8601 timestamp
+  postedAt: "2026-02-02T22:50:55.297172Z",        // string | null — when the transaction posted
+  estimatedDeliveryDate: "2026-02-02T22:50:55Z",  // string | null — estimated delivery
+  counterpartyId: "a1f59948-0089-11f1-804c-...",  // string — Mercury counterparty UUID
+  counterpartyName: "AMBA Administrat",            // string | null — counterparty display name
+  counterpartyNickname: null,                      // string | null — user-assigned nickname
+  bankDescription: "AMBA Administrat; debitpmt; Cedar Grove LLP", // string | null
+  note: "Rio Finance January 2026",               // string | null — user-added note in Mercury
+  externalMemo: "From Cedar Grove LLP via mercury.com", // string | null
+  dashboardLink: "https://mercury.com/transactions/...", // string | null — link to Mercury dashboard
+  kind: "other",                                   // string — "other", "externalTransfer", etc.
+  merchant: null,                                  // object | null — merchant info for card transactions
+  mercuryCategory: null,                           // string | null — Mercury's auto-category
+  checkNumber: null,                               // string | null — for check transactions
+  feeId: null,                                     // string | null — associated fee transaction
+  reasonForFailure: null,                          // string | null — failure reason if status is "failed"
+  failedAt: null,                                  // string | null — ISO 8601 timestamp of failure
+  accountId: "51275c28-043f-11f0-a6df-...",        // string — Mercury account UUID
+  details: {},                                     // object — additional transaction details
+  compliantWithReceiptPolicy: true,                // boolean
+  hasGeneratedReceipt: false,                      // boolean
+  attachments: [],                                 // array — receipt/document attachments
+  relatedTransactions: [],                         // array — linked transaction IDs
+  categoryData: null,                              // object | null — categorization metadata
+  trackingNumber: "042000010619411",               // string | null — wire/ACH tracking number
+  requestId: null,                                 // string | null — originating request ID
+  currencyExchangeInfo: null,                      // object | null — for foreign currency transactions
+  creditAccountPeriodId: null                      // string | null — credit account period
+}
+```
+
+### Sync Architecture
+
+```
+Mercury API → Next.js API Route → Firestore
+                    │
+                    ├── 1. GET /api/v1/account/{accountId}/transactions (paginated, 500 per page)
+                    ├── 2. Authenticate with Bearer token (MERCURY_API_TOKEN env var)
+                    ├── 3. Collect all transactions across pages
+                    └── 4. Batch upsert into transactions/{mercuryId} (500 per batch)
+```
+
+- **Sync trigger**: Manual — admin clicks "Sync from Mercury" button on `/admin/transactions`
+- **Upsert strategy**: Uses Mercury's `id` as the Firestore document ID. `batch.set()` overwrites the full document, so re-running the sync is safe and idempotent.
+- **API route**: `POST /api/sync-transactions` — uses Firebase Admin SDK (server-side only)
+- **Environment variables**: `MERCURY_API_TOKEN` (Bearer token), `FIREBASE_SERVICE_ACCOUNT_KEY` (service account JSON)
+
+### Dashboard Usage
+
+| Dashboard View | Data Source |
+|---|---|
+| Transaction list table | `transactions` collection (all docs) |
+| Summary cards (expense/payment totals) | Computed client-side from `amount` field |
+| Filter by expenses/payments | `amount < 0` (expenses) or `amount > 0` (payments) |
+| Sort by date, amount, status, counterparty | Client-side sorting on fetched documents |
 
 ---
 

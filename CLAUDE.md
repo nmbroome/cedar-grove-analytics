@@ -78,6 +78,13 @@ attorneys/{attorneyName}/
 clients/{clientId}      — clientName, status, clientType, channel, contactEmail, website
 
 admins/{email}          — document existence = admin role
+
+transactions/{mercuryId} — id, amount, status, postedAt, createdAt, estimatedDeliveryDate,
+                           counterpartyId, counterpartyName, counterpartyNickname,
+                           bankDescription, note, externalMemo, dashboardLink,
+                           kind, merchant, mercuryCategory, checkNumber,
+                           reasonForFailure, failedAt, accountId
+                           (synced from Mercury API via /api/sync-transactions)
 ```
 
 Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`/`opsHours` in hooks.

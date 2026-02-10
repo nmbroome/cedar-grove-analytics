@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign } from 'lucide-react';
+import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -28,6 +28,13 @@ const AdminDashboard = () => {
       href: '/billing-summaries',
       icon: FileText,
       color: 'bg-green-500',
+    },
+    {
+      title: 'Invoices',
+      description: 'View invoice payment status and outstanding balances',
+      href: '/admin/invoices',
+      icon: Receipt,
+      color: 'bg-amber-500',
     },
     {
       title: 'Transactions',
