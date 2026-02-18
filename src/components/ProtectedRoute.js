@@ -8,9 +8,10 @@ import { useFirestoreCache } from '@/context/FirestoreDataContext';
 export default function ProtectedRoute({
   children,
   requireAdmin = false,
+  denyPartialAdmin = false,
   allowedAttorneyName = null // If set, only this attorney (or admins) can access
 }) {
-  const { user, isAdmin, isAuthorized, loading, userEmail } = useAuth();
+  const { user, isAdmin, isPartialAdmin, isAuthorized, loading, userEmail } = useAuth();
   const { users } = useFirestoreCache();
   const router = useRouter();
 
@@ -35,9 +36,15 @@ export default function ProtectedRoute({
         return;
       }
 
-      // If admin is required but user is not admin
-      if (requireAdmin && !isAdmin) {
+      // If admin is required but user is not admin (partial admins are allowed through)
+      if (requireAdmin && !isAdmin && !isPartialAdmin) {
         router.push('/login?error=admin_required');
+        return;
+      }
+
+      // If page denies partial admins and user is not a full admin
+      if (denyPartialAdmin && isPartialAdmin && !isAdmin) {
+        router.push('/admin');
         return;
       }
 
@@ -46,7 +53,7 @@ export default function ProtectedRoute({
         router.push('/login?error=access_denied');
       }
     }
-  }, [user, isAdmin, isAuthorized, loading, router, requireAdmin, allowedAttorneyName, userEmail, users]);
+  }, [user, isAdmin, isPartialAdmin, isAuthorized, loading, router, requireAdmin, denyPartialAdmin, allowedAttorneyName, userEmail, users]);
 
   if (loading) {
     return (
@@ -64,8 +71,13 @@ export default function ProtectedRoute({
     return null;
   }
 
-  // Don't render if admin is required but user is not admin
-  if (requireAdmin && !isAdmin) {
+  // Don't render if admin is required but user is not admin or partial admin
+  if (requireAdmin && !isAdmin && !isPartialAdmin) {
+    return null;
+  }
+
+  // Don't render if page denies partial admins
+  if (denyPartialAdmin && isPartialAdmin && !isAdmin) {
     return null;
   }
 

@@ -6,7 +6,7 @@ import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt } from 
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -103,7 +103,7 @@ const AdminDashboard = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {adminLinks.map((link) => (
+          {adminLinks.filter(link => isAdmin || link.href !== '/admin/user-management').map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -136,7 +136,7 @@ const AdminDashboard = () => {
             </div>
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-sm text-gray-600">Role</div>
-              <div className="font-medium text-gray-900 mt-1">Administrator</div>
+              <div className="font-medium text-gray-900 mt-1">{isAdmin ? 'Administrator' : 'Viewer'}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-sm text-gray-600">Session</div>

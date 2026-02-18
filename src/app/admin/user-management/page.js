@@ -3,7 +3,7 @@ import AdminUserManagement from '@/components/AdminUserManagement';
 
 export default function AdminUserManagementPage() {
   return (
-    <ProtectedRoute requireAdmin={true}>
+    <ProtectedRoute requireAdmin={true} denyPartialAdmin={true}>
       <AdminUserManagement />
     </ProtectedRoute>
   );

@@ -56,6 +56,18 @@ function DashboardContent() {
     );
   }
 
+  // Non-admins without a matched attorney page see a simple message
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="text-xl text-gray-700">No attorney profile found for your account.</div>
+          <div className="mt-2 text-gray-500">Contact an administrator for assistance.</div>
+        </div>
+      </div>
+    );
+  }
+
   // Only admins see the full dashboard
   return <CedarGroveAnalytics />;
 }
