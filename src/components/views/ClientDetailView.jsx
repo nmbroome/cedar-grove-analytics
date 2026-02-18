@@ -31,7 +31,7 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { useAllBillableEntries, useAllOpsEntries, useClients, useUsers } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries, useClients, useUsers } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
@@ -82,7 +82,6 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, hours }) => {
 const ClientDetailView = ({ clientName }) => {
   const router = useRouter();
   const { data: allBillableEntries, loading: billableLoading, error: billableError } = useAllBillableEntries();
-  const { data: allOpsEntries, loading: opsLoading, error: opsError } = useAllOpsEntries();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
   const { users: firebaseUsers } = useUsers();
   const { rates: attorneyRates, loading: ratesLoading, error: ratesError, getRate } = useAttorneyRates();
@@ -102,14 +101,14 @@ const ClientDetailView = ({ clientName }) => {
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
 
-  const loading = billableLoading || opsLoading || clientsLoading || ratesLoading;
-  const error = billableError || opsError || clientsError || ratesError;
+  const loading = billableLoading || clientsLoading || ratesLoading;
+  const error = billableError || clientsError || ratesError;
 
   // Get client metadata from Firebase
   const clientMetadata = useMemo(() => {
     if (!firebaseClients) return null;
-    return firebaseClients.find(c => 
-      (c.clientName || c.id) === clientName
+    return firebaseClients.find(c =>
+      c.clientName === clientName
     );
   }, [firebaseClients, clientName]);
 
@@ -152,15 +151,11 @@ const ClientDetailView = ({ clientName }) => {
     return { startDate, endDate };
   }, [dateRange, customDateStart, customDateEnd]);
 
-  // Merge and filter entries for this client
+  // Filter billable entries for this client (ops entries have no client association)
   const clientEntries = useMemo(() => {
-    const billable = (allBillableEntries || []).filter(entry =>
+    let entries = (allBillableEntries || []).filter(entry =>
       (entry.client || 'Unknown') === clientName
     );
-    const ops = (allOpsEntries || []).filter(entry =>
-      (entry.client || 'Unknown') === clientName
-    );
-    let entries = [...billable, ...ops];
 
     // Apply date filter
     if (dateRange !== 'all-time' && dateRangeInfo.startDate) {
@@ -171,7 +166,7 @@ const ClientDetailView = ({ clientName }) => {
     }
 
     return entries;
-  }, [allBillableEntries, allOpsEntries, clientName, dateRange, dateRangeInfo]);
+  }, [allBillableEntries, clientName, dateRange, dateRangeInfo]);
 
   // Process client statistics
   const clientStats = useMemo(() => {

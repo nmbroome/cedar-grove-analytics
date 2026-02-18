@@ -352,31 +352,30 @@ const AttorneyDetailView = ({ attorneyName }) => {
     };
   }, [attorneyEntries, filteredBillableEntries, filteredOpsEntries, calculatedTargets]);
 
-  // Client breakdown data
+  // Client breakdown data (billable entries only — ops entries have no client)
   const clientBreakdown = useMemo(() => {
     const breakdown = {};
-    
-    attorneyEntries.forEach(entry => {
+
+    filteredBillableEntries.forEach(entry => {
       const client = entry.client || 'Unknown';
+      const billableHours = entry.billableHours || 0;
       if (!breakdown[client]) {
         breakdown[client] = {
           name: client,
           hours: 0,
           billableHours: 0,
-          opsHours: 0,
           earnings: 0,
           count: 0,
         };
       }
-      breakdown[client].billableHours += entry.billableHours || 0;
-      breakdown[client].opsHours += entry.opsHours || 0;
-      breakdown[client].hours += (entry.billableHours || 0) + (entry.opsHours || 0);
+      breakdown[client].billableHours += billableHours;
+      breakdown[client].hours += billableHours;
       breakdown[client].earnings += entry.earnings || 0;
       breakdown[client].count += 1;
     });
 
     return Object.values(breakdown).sort((a, b) => b.hours - a.hours);
-  }, [attorneyEntries]);
+  }, [filteredBillableEntries]);
 
   // Transaction type breakdown data (billable entries only)
   const transactionBreakdown = useMemo(() => {

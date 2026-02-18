@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
 import { useAuth } from './AuthContext';
 import { normalizeBillableEntry, normalizeOpsEntry } from '@/hooks/useFirestoreData';
@@ -41,9 +41,9 @@ export const FirestoreDataProvider = ({ children }) => {
       await waitForAuth();
 
       // Fetch users and clients in parallel
-      const [usersSnap, clientsSnap] = await Promise.all([
+      const [usersSnap, clientsDoc] = await Promise.all([
         getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'clients')),
+        getDoc(doc(db, 'clients', 'all')),
       ]);
 
       // Process users and build rates/targets maps from profile arrays
@@ -335,7 +335,7 @@ export const FirestoreDataProvider = ({ children }) => {
       });
 
       // Process clients
-      const clientList = clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const clientList = clientsDoc.exists() ? (clientsDoc.data().clients || []) : [];
 
       setAllBillableEntries(billableEntries);
       setAllOpsEntries(opsEntries);

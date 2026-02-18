@@ -75,7 +75,10 @@ attorneys/{attorneyName}/
   rates/{monthKey}      — billableRate, month, year
   targets/{monthKey}    — billableTarget, opsTarget, totalTarget
 
-clients/{clientId}      — clientName, status, clientType, channel, contactEmail, website
+clients/all             — { clients: [array of client objects], lastSyncedAt, totalClients }
+                           Each client: clientName, status, clientType, channel, contactEmail,
+                           website, elDate, notes, isIdeal, diverseFounder, clientContact,
+                           billingContact, billingContactEmail, phoneNumber, location
 
 admins/{email}          — document existence = admin role
 

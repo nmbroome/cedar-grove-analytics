@@ -652,7 +652,7 @@ export const useAnalyticsData = ({
         return activeStatuses.includes(status) || (!inactiveStatuses.includes(status) && status !== '');
       })
       .map(client => {
-        const clientName = client.clientName || client.id;
+        const clientName = client.clientName || 'Unknown';
         const stats = entryStats[clientName] || {
           totalHours: 0,
           totalEarnings: 0,
