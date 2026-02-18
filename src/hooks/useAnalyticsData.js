@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { useAllBillableEntries, useAllOpsEntries, useUsers, useClients } from './useFirestoreData';
+import { useAllBillableEntries, useAllOpsEntries, useAllDownloadEvents, useUsers, useClients } from './useFirestoreData';
 import { useAttorneyRates } from './useAttorneyRates';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import {
@@ -26,10 +26,11 @@ export const useAnalyticsData = ({
   const { data: allOpsEntries, loading: opsLoading, error: opsError } = useAllOpsEntries();
   const { users: firebaseUsers, loading: usersLoading, error: usersError } = useUsers();
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
+  const { data: allDownloadEvents, loading: downloadsLoading } = useAllDownloadEvents();
   const { getRate, loading: ratesLoading } = useAttorneyRates();
   const { allTargets: userTargets } = useFirestoreCache();
 
-  const loading = billableLoading || opsLoading || usersLoading || clientsLoading || ratesLoading;
+  const loading = billableLoading || opsLoading || usersLoading || clientsLoading || downloadsLoading || ratesLoading;
   const error = billableError || opsError || usersError || clientsError;
 
   // Create user name map (userId -> display name)
@@ -591,6 +592,63 @@ export const useAnalyticsData = ({
     })).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredBillableEntries, userMap]);
 
+  // Process download data (from driveDownloads events, grouped by file)
+  const downloadData = useMemo(() => {
+    if (!allDownloadEvents || allDownloadEvents.length === 0) return [];
+
+    const { startDate, endDate } = dateRangeInfo;
+
+    // Filter events by date range
+    const filtered = allDownloadEvents.filter(event => {
+      if (!event.date) return false;
+      if (dateRange === 'all-time') return true;
+      // event.date is "YYYY-MM-DD" string — compare directly
+      const eventDate = new Date(event.date + 'T00:00:00');
+      return eventDate >= startDate && eventDate <= endDate;
+    });
+
+    // Group by file name
+    const fileStats = {};
+    filtered.forEach(event => {
+      const file = event.file;
+      if (!file) return;
+
+      if (!fileStats[file]) {
+        fileStats[file] = {
+          file,
+          downloads: 0,
+          lastDownload: '',
+          type: event.type || '',
+          folder: event.folder || '',
+          owner: event.owner || '',
+          users: {},
+        };
+      }
+
+      fileStats[file].downloads += 1;
+
+      // Track latest download (ts is ISO string)
+      if (event.ts > fileStats[file].lastDownload) {
+        fileStats[file].lastDownload = event.ts;
+      }
+
+      // Track download count per user
+      if (event.user) {
+        fileStats[file].users[event.user] = (fileStats[file].users[event.user] || 0) + 1;
+      }
+    });
+
+    return Object.values(fileStats)
+      .map(stat => ({
+        ...stat,
+        topUsers: Object.entries(stat.users)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([user, count]) => ({ user, count })),
+      }))
+      .sort((a, b) => b.downloads - a.downloads);
+  }, [allDownloadEvents, dateRangeInfo, dateRange]);
+
   // Process ops data (from ops entries only)
   const opsData = useMemo(() => {
     const opsStats = {};
@@ -841,6 +899,7 @@ export const useAnalyticsData = ({
     attorneyData,
     transactionData,
     matterData,
+    downloadData,
     opsData,
     clientData,
     clientCounts,

@@ -20,6 +20,7 @@ export const FirestoreDataProvider = ({ children }) => {
   const [clients, setClients] = useState([]);
   const [allRates, setAllRates] = useState({});
   const [allTargets, setAllTargets] = useState({});
+  const [allDownloadEvents, setAllDownloadEvents] = useState([]);
   const [dataWarnings, setDataWarnings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,10 +41,11 @@ export const FirestoreDataProvider = ({ children }) => {
     try {
       await waitForAuth();
 
-      // Fetch users and clients in parallel
-      const [usersSnap, clientsDoc] = await Promise.all([
+      // Fetch users, clients, and downloads in parallel
+      const [usersSnap, clientsDoc, downloadsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDoc(doc(db, 'clients', 'all')),
+        getDocs(collection(db, 'driveDownloads')),
       ]);
 
       // Process users and build rates/targets maps from profile arrays
@@ -337,10 +339,30 @@ export const FirestoreDataProvider = ({ children }) => {
       // Process clients
       const clientList = clientsDoc.exists() ? (clientsDoc.data().clients || []) : [];
 
+      // Process download events — flatten all month docs into a single array
+      const downloadEvents = [];
+      downloadsSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const events = data.events || [];
+        events.forEach(event => {
+          downloadEvents.push({
+            ts: event.ts || '',
+            date: event.date || '',
+            user: event.user || '',
+            file: event.file || '',
+            type: event.type || '',
+            docId: event.docId || null,
+            owner: event.owner || null,
+            folder: event.folder || '',
+          });
+        });
+      });
+
       setAllBillableEntries(billableEntries);
       setAllOpsEntries(opsEntries);
       setUsers(userList);
       setClients(clientList);
+      setAllDownloadEvents(downloadEvents);
       setAllRates(ratesMap);
       setAllTargets(targetsMap);
       setDataWarnings(warnings);
@@ -385,6 +407,7 @@ export const FirestoreDataProvider = ({ children }) => {
   const value = {
     allBillableEntries,
     allOpsEntries,
+    allDownloadEvents,
     users,
     clients,
     allRates,

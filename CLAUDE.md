@@ -91,6 +91,13 @@ transactions/{mercuryId} — id, amount, status, postedAt, createdAt, estimatedD
                            kind, merchant, mercuryCategory, checkNumber,
                            reasonForFailure, failedAt, accountId
                            (synced from Mercury API via /api/sync-transactions)
+
+driveDownloads/{monthKey}  — month, totalDownloads, uniqueUsers, uniqueFiles, lastUpdated,
+                              events: [{ ts, date, user, file, type, docId, owner, folder }]
+                              One doc per month (e.g. "2026-02"). Synced twice daily from
+                              Google Drive activity across 5 tracked folders:
+                              Administrative, Attorney Employment, Engagements,
+                              Legal Memos, New Client Onboarding.
 ```
 
 Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`/`opsHours` in hooks.

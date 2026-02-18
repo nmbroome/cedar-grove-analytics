@@ -6,3 +6,4 @@ export { default as ClientsView } from './ClientsView';
 export { default as ClientDetailView } from './ClientDetailView';
 export { default as AttorneyDetailView } from './AttorneyDetailView';
 export { default as BillingSummariesView } from './BillingSummariesView';
+export { default as DownloadsView } from './DownloadsView';

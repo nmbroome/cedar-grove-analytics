@@ -112,6 +112,11 @@ export const useClients = () => {
   return { clients, loading, error };
 };
 
+export const useAllDownloadEvents = () => {
+  const { allDownloadEvents, loading, error } = useFirestoreCache();
+  return { data: allDownloadEvents || [], loading, error };
+};
+
 /**
  * Get billable entries for a specific user from the shared cache.
  * Supports lookup by display name or Firestore document ID.

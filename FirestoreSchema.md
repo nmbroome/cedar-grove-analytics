@@ -55,11 +55,19 @@ firestore-root/
 │   ├── ops/{year}_{month}                # All ops entries for one month
 │   └── eightThreeB/{year}_{month}        # 83(b) election entries for one month
 │
+├── clients/all                           # All client records in a single document (clients array)
+│
+├── matters/{autoId}                      # Matter records for billing matter dropdowns
+│
+├── admins/{email}                        # Admin role — document existence = admin
+│
 ├── invoices/all                          # All client invoices in a single document (entries array)
 │
 ├── clientAliases/all                     # Counterparty-to-client name mappings (for invoice matching)
 │
-└── transactions/{mercuryId}              # Bank transactions synced from Mercury API
+├── transactions/{mercuryId}              # Bank transactions synced from Mercury API
+│
+└── driveDownloads/{monthKey}             # Google Drive download events per month
 ```
 
 ### Document ID Format
@@ -592,6 +600,163 @@ Mercury API → Next.js API Route → Firestore
 | Summary cards (expense/payment totals) | Computed client-side from `amount` field |
 | Filter by expenses/payments | `amount < 0` (expenses) or `amount > 0` (payments) |
 | Sort by date, amount, status, counterparty | Client-side sorting on fetched documents |
+
+---
+
+## Document: `clients/all`
+
+Stores all client records in a single document as an array. Synced from a Google Sheets Apps Script that reads the firm's client tracking sheet and writes to Firestore.
+
+### Document Schema
+
+```javascript
+{
+  clients: [
+    {
+      clientName: "Acme Corp",              // string — client display name (primary identifier)
+      status: "Active",                      // string — "Active", "Inactive", etc.
+      clientType: "Corporation",             // string — entity type
+      channel: "Referral",                   // string — acquisition channel
+      contactEmail: "ceo@acme.com",         // string — primary contact email
+      website: "https://acme.com",          // string — client website
+      elDate: "2025-03-15",                 // string — engagement letter date
+      notes: "Annual retainer client",      // string — freeform notes
+      isIdeal: true,                         // boolean — ideal client flag
+      diverseFounder: false,                 // boolean — diverse founder flag
+      clientContact: "Jane Smith",          // string — primary contact name
+      billingContact: "John Doe",           // string — billing contact name
+      billingContactEmail: "billing@acme.com", // string — billing contact email
+      phoneNumber: "555-0123",              // string — phone number
+      location: "San Francisco, CA"         // string — client location
+    }
+    // ... one object per client
+  ],
+  lastSyncedAt: "2026-02-18T19:00:00.000Z", // string — ISO 8601 timestamp of last sync
+  totalClients: 47                            // number — length of clients array
+}
+```
+
+### Field Notes
+
+- `clientName` is the primary identifier used throughout the dashboard for lookups and display.
+- All fields are optional except `clientName`.
+- The dashboard fetches this single document on load and filters/searches the clients array client-side.
+
+### Sync Architecture
+
+- **Sync trigger**: Google Sheets Apps Script (manual or scheduled)
+- **Strategy**: Full overwrite — the entire `clients/all` document is replaced on each sync.
+- **Cost per sync**: 0 reads, 1 write.
+
+---
+
+## Collection: `matters/{autoId}`
+
+Stores matter records used to populate matter dropdowns in the time-tracking Google Sheets. Each document represents one matter and uses a Firestore auto-generated ID. Managed by a Google Sheets Apps Script — the dashboard reads but does not write to this collection.
+
+### Document Schema
+
+```javascript
+{
+  name: "YC Application Questions",       // string — matter name
+  clientName: "C47 Inc.",                  // string — associated client name
+  createdAt: Timestamp,                    // Firestore Timestamp — when the matter was created
+  lastUsedAt: Timestamp,                   // Firestore Timestamp — when the matter was last used
+  createdBy: "Michael Ohta"               // string — user who created the matter
+}
+```
+
+### Field Notes
+
+- `name` is the matter name displayed in dropdowns and referenced in billable entries (`entry.matter`).
+- `clientName` ties the matter to a client. All billable entries for a given matter should share the same client.
+- `lastUsedAt` is updated by the Apps Script when an entry references this matter, allowing stale matters to be identified.
+
+### Sync Architecture
+
+- **Managed by**: Google Sheets Apps Script (creates new matters when users enter a new matter name in the sheet)
+- **Dashboard usage**: Read-only — the Matters tab aggregates billable entry data grouped by `entry.matter`, cross-referencing this collection for client names.
+
+---
+
+## Collection: `admins/{email}`
+
+Stores admin role assignments. Document existence determines admin status — there are no fields required on the document itself.
+
+### Schema
+
+```javascript
+// Document ID: user's email address (e.g., "michael@cedargrovellp.com")
+// Document body: can be empty — existence is the only check
+{}
+```
+
+### How It's Used
+
+- On login, the dashboard checks `getDoc(doc(db, 'admins', userEmail))`.
+- If the document exists, the user is granted admin access (all pages, admin panel).
+- If it does not exist, the user is restricted to their own attorney detail page.
+- Admin documents are created/deleted manually via the Firebase console or admin UI.
+
+---
+
+## Collection: `driveDownloads/{monthKey}`
+
+Stores Google Drive download events grouped by month. Each document contains all download events for one calendar month across 5 tracked Drive folders. Synced twice daily from Google Drive activity via a Google Apps Script.
+
+### Document ID Format
+
+Month string in `YYYY-MM` format (e.g., `2026-01`, `2026-02`).
+
+### Document Schema
+
+```javascript
+{
+  month: "2026-02",                          // string — month identifier
+  totalDownloads: 87,                        // number — total download events this month
+  uniqueUsers: 6,                            // number — distinct users who downloaded
+  uniqueFiles: 42,                           // number — distinct files downloaded
+  lastUpdated: "2026-02-18T19:00:05.123Z",  // string — ISO 8601 timestamp of last sync
+
+  events: [
+    {
+      ts: "2026-02-01T09:14:22.000Z",       // string — ISO timestamp of the download
+      date: "2026-02-01",                    // string — date only (YYYY-MM-DD, for grouping by day)
+      user: "jane@cedargrovellp.com",        // string — email of the user who downloaded
+      file: "Engagement Letter - Acme Corp.docx", // string — file name
+      type: "document",                      // string — Drive file type ("document", "spreadsheet", "pdf", "presentation", etc.)
+      docId: "1aBcDeFgHiJkLmNoPqRsT",       // string | null — Google Drive file ID
+      owner: "john@cedargrovellp.com",       // string | null — email of the file owner
+      folder: "Engagements"                  // string — tracked folder label
+    }
+    // ... one object per download event
+  ]
+}
+```
+
+### Tracked Folders
+
+Events are scoped to 5 tracked Google Drive folders:
+
+| Label | Description |
+|---|---|
+| Administrative | Administrative documents |
+| Attorney Employment | Employment-related files |
+| Engagements | Client engagement letters and materials |
+| Legal Memos | Legal research memos |
+| New Client Onboarding | New client intake documents |
+
+### Querying
+
+The dashboard fetches the month documents that span the selected date range, then filters the `events` array client-side by date.
+
+### Sync Architecture
+
+- **Schedule**: Twice daily (7 AM and 7 PM ET)
+- **Scheduled sync window**: 1st of current month → now (overwrites current month doc)
+- **Backfill**: Jan 1, 2026 → now (overwrites all month docs in range)
+- **Cost per sync**: 0 reads, 1–3 writes (one per month touched)
+- **Cost per dashboard load**: 1–3 reads depending on date range
 
 ---
 

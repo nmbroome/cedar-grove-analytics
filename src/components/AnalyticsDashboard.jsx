@@ -8,7 +8,7 @@ import { getDateRangeLabel } from '@/utils/dateHelpers';
 import { useAnalyticsData } from '@/hooks/useAnalyticsData';
 import { useAuth } from '@/context/AuthContext';
 import { DateRangeDropdown, AttorneyFilterDropdown } from './shared';
-import { OverviewView, AttorneysView, TransactionsView, OpsView, ClientsView } from './views';
+import { OverviewView, AttorneysView, TransactionsView, OpsView, ClientsView, DownloadsView } from './views';
 
 const AnalyticsDashboard = () => {
   const { user, isAdmin, signOut } = useAuth();
@@ -40,6 +40,7 @@ const AnalyticsDashboard = () => {
     attorneyData,
     transactionData,
     matterData,
+    downloadData,
     opsData,
     clientData,
     clientCounts,
@@ -171,6 +172,7 @@ const AnalyticsDashboard = () => {
             { key: 'transactions', label: 'Transactions' },
             { key: 'ops', label: 'Ops' },
             { key: 'clients', label: 'Clients' },
+            { key: 'downloads', label: 'Downloads' },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -241,6 +243,15 @@ const AnalyticsDashboard = () => {
             clientData={clientData}
             clientCounts={clientCounts}
             filteredBillableEntries={filteredBillableEntries}
+          />
+        )}
+
+        {selectedView === 'downloads' && (
+          <DownloadsView
+            dateRangeLabel={dateRangeLabel}
+            globalAttorneyFilter={effectiveAttorneyFilter}
+            allAttorneyNames={allAttorneyNames}
+            downloadData={downloadData}
           />
         )}
       </div>
