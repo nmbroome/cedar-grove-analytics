@@ -39,6 +39,7 @@ const AnalyticsDashboard = () => {
     filteredOpsEntries,
     attorneyData,
     transactionData,
+    matterData,
     opsData,
     clientData,
     clientCounts,
@@ -219,7 +220,7 @@ const AnalyticsDashboard = () => {
             dateRangeLabel={dateRangeLabel}
             globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
-            transactionData={transactionData}
+            matterData={matterData}
           />
         )}
 

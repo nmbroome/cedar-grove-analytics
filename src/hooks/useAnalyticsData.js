@@ -521,6 +521,76 @@ export const useAnalyticsData = ({
     })).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredBillableEntries, transactionAttorneyFilter, userMap]);
 
+  // Process matter data (from billable entries only, grouped by matter name)
+  const matterData = useMemo(() => {
+    const matterStats = {};
+
+    filteredBillableEntries.forEach(entry => {
+      const matter = entry.matter || '';
+      if (!matter) return; // Skip entries with no matter
+
+      const billableHours = entry.billableHours || 0;
+      const earnings = entry.earnings || 0;
+      const userName = userMap[entry.userId] || entry.userId;
+
+      if (billableHours > 0) {
+        if (!matterStats[matter]) {
+          matterStats[matter] = {
+            matter,
+            clientName: entry.client || 'Unknown',
+            totalHours: 0,
+            totalEarnings: 0,
+            count: 0,
+            byAttorney: {},
+            byCategory: {},
+            entries: []
+          };
+        }
+
+        matterStats[matter].totalHours += billableHours;
+        matterStats[matter].totalEarnings += earnings;
+        matterStats[matter].count += 1;
+
+        if (!matterStats[matter].byAttorney[userName]) {
+          matterStats[matter].byAttorney[userName] = { count: 0, hours: 0, earnings: 0 };
+        }
+        matterStats[matter].byAttorney[userName].count += 1;
+        matterStats[matter].byAttorney[userName].hours += billableHours;
+        matterStats[matter].byAttorney[userName].earnings += earnings;
+
+        const category = entry.billingCategory || 'Other';
+        if (!matterStats[matter].byCategory[category]) {
+          matterStats[matter].byCategory[category] = { count: 0, hours: 0, earnings: 0 };
+        }
+        matterStats[matter].byCategory[category].count += 1;
+        matterStats[matter].byCategory[category].hours += billableHours;
+        matterStats[matter].byCategory[category].earnings += earnings;
+
+        if (matterStats[matter].entries.length < 50) {
+          matterStats[matter].entries.push({
+            attorney: userName,
+            client: entry.client || 'Unknown',
+            hours: billableHours,
+            earnings: earnings,
+            date: entry.date || '',
+            notes: entry.notes || ''
+          });
+        }
+      }
+    });
+
+    return Object.values(matterStats).map(stat => ({
+      ...stat,
+      avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0,
+      entries: stat.entries.sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        const dateA = a.date.seconds ? new Date(a.date.seconds * 1000) : new Date(a.date);
+        const dateB = b.date.seconds ? new Date(b.date.seconds * 1000) : new Date(b.date);
+        return dateB - dateA;
+      })
+    })).sort((a, b) => b.totalHours - a.totalHours);
+  }, [filteredBillableEntries, userMap]);
+
   // Process ops data (from ops entries only)
   const opsData = useMemo(() => {
     const opsStats = {};
@@ -770,6 +840,7 @@ export const useAnalyticsData = ({
     filteredOpsEntries,
     attorneyData,
     transactionData,
+    matterData,
     opsData,
     clientData,
     clientCounts,

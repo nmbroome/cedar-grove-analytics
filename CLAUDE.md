@@ -80,6 +80,9 @@ clients/all             — { clients: [array of client objects], lastSyncedAt, 
                            website, elDate, notes, isIdeal, diverseFounder, clientContact,
                            billingContact, billingContactEmail, phoneNumber, location
 
+matters/{autoId}         — name, clientName, createdAt, lastUsedAt, createdBy
+                           (managed by Google Sheets Apps Script for matter dropdowns)
+
 admins/{email}          — document existence = admin role
 
 transactions/{mercuryId} — id, amount, status, postedAt, createdAt, estimatedDeliveryDate,

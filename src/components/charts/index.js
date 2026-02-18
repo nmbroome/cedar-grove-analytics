@@ -5,3 +5,4 @@ export { default as OpsDistributionPieChart } from './OpsDistributionPieChart';
 export { default as OpsZoomableSunburst } from './OpsZoomableSunburst';
 export { default as ClientHoursChart } from './ClientHoursChart';
 export { default as ServiceBreadthChart } from './ServiceBreadthChart';
+export { default as MatterCategorySunburst } from './MatterCategorySunburst';
