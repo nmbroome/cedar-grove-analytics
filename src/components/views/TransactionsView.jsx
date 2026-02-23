@@ -2,41 +2,38 @@
 
 import { useState } from 'react';
 import { DateRangeIndicator } from '../shared';
-import { MattersTable } from '../tables';
+import { TransactionsTable } from '../tables';
 import { MatterCategorySunburst } from '../charts';
 
 const TransactionsView = ({
   dateRangeLabel,
   globalAttorneyFilter,
   allAttorneyNames,
+  transactionData,
   matterData,
 }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
 
   const handleSort = (key) => {
     let direction = 'desc';
-    if (key === 'matter' || key === 'clientName') direction = 'asc';
+    if (key === 'type') direction = 'asc';
     if (sortConfig.key === key) {
       direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
     }
     setSortConfig({ key, direction });
   };
 
-  const getSortedMatters = () => {
-    const matters = [...matterData];
-    const totalHours = matters.reduce((sum, m) => sum + m.totalHours, 0);
+  const getSortedTransactions = () => {
+    const items = [...transactionData];
+    const totalHours = items.reduce((sum, t) => sum + t.totalHours, 0);
 
-    matters.sort((a, b) => {
+    items.sort((a, b) => {
       let aVal, bVal;
 
       switch (sortConfig.key) {
-        case 'matter':
-          aVal = a.matter.toLowerCase();
-          bVal = b.matter.toLowerCase();
-          break;
-        case 'clientName':
-          aVal = a.clientName.toLowerCase();
-          bVal = b.clientName.toLowerCase();
+        case 'type':
+          aVal = a.type.toLowerCase();
+          bVal = b.type.toLowerCase();
           break;
         case 'avgHours':
           aVal = parseFloat(a.avgHours);
@@ -68,10 +65,10 @@ const TransactionsView = ({
       return 0;
     });
 
-    return matters;
+    return items;
   };
 
-  const totalHours = matterData.reduce((sum, m) => sum + m.totalHours, 0);
+  const totalHours = transactionData.reduce((sum, t) => sum + t.totalHours, 0);
 
   return (
     <div className="space-y-6">
@@ -81,8 +78,8 @@ const TransactionsView = ({
         allAttorneyNames={allAttorneyNames}
       />
 
-      <MattersTable
-        matters={getSortedMatters()}
+      <TransactionsTable
+        transactions={getSortedTransactions()}
         sortConfig={sortConfig}
         onSort={handleSort}
         totalHours={totalHours}

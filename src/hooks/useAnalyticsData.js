@@ -472,6 +472,7 @@ export const useAnalyticsData = ({
       const billableHours = entry.billableHours || 0;
       const earnings = entry.earnings || 0;
       const userName = userMap[entry.userId] || entry.userId;
+      const matter = entry.matter || '';
 
       if (billableHours > 0) {
         if (!transactionStats[category]) {
@@ -479,7 +480,8 @@ export const useAnalyticsData = ({
             type: category,
             totalHours: 0,
             totalEarnings: 0,
-            count: 0,
+            entryCount: 0,
+            matters: {},
             byAttorney: {},
             entries: []
           };
@@ -487,7 +489,23 @@ export const useAnalyticsData = ({
 
         transactionStats[category].totalHours += billableHours;
         transactionStats[category].totalEarnings += earnings;
-        transactionStats[category].count += 1;
+        transactionStats[category].entryCount += 1;
+
+        // Track matters within each category
+        if (matter) {
+          if (!transactionStats[category].matters[matter]) {
+            transactionStats[category].matters[matter] = {
+              matter,
+              clientName: entry.client || 'Unknown',
+              totalHours: 0,
+              totalEarnings: 0,
+              count: 0
+            };
+          }
+          transactionStats[category].matters[matter].totalHours += billableHours;
+          transactionStats[category].matters[matter].totalEarnings += earnings;
+          transactionStats[category].matters[matter].count += 1;
+        }
 
         if (!transactionStats[category].byAttorney[userName]) {
           transactionStats[category].byAttorney[userName] = { count: 0, hours: 0, earnings: 0 };
@@ -509,17 +527,22 @@ export const useAnalyticsData = ({
       }
     });
 
-    return Object.values(transactionStats).map(stat => ({
-      ...stat,
-      avgHours: stat.count > 0 ? (stat.totalHours / stat.count).toFixed(1) : 0,
-      avgEarnings: stat.count > 0 ? (stat.totalEarnings / stat.count).toFixed(2) : 0,
-      entries: stat.entries.sort((a, b) => {
-        if (!a.date || !b.date) return 0;
-        const dateA = a.date.seconds ? new Date(a.date.seconds * 1000) : new Date(a.date);
-        const dateB = b.date.seconds ? new Date(b.date.seconds * 1000) : new Date(b.date);
-        return dateB - dateA;
-      })
-    })).sort((a, b) => b.totalHours - a.totalHours);
+    return Object.values(transactionStats).map(stat => {
+      const matterCount = Object.keys(stat.matters).length;
+      return {
+        ...stat,
+        count: matterCount || stat.entryCount,
+        matterCount,
+        avgHours: matterCount > 0 ? (stat.totalHours / matterCount).toFixed(1) : (stat.entryCount > 0 ? (stat.totalHours / stat.entryCount).toFixed(1) : 0),
+        avgEarnings: matterCount > 0 ? (stat.totalEarnings / matterCount).toFixed(2) : (stat.entryCount > 0 ? (stat.totalEarnings / stat.entryCount).toFixed(2) : 0),
+        entries: stat.entries.sort((a, b) => {
+          if (!a.date || !b.date) return 0;
+          const dateA = a.date.seconds ? new Date(a.date.seconds * 1000) : new Date(a.date);
+          const dateB = b.date.seconds ? new Date(b.date.seconds * 1000) : new Date(b.date);
+          return dateB - dateA;
+        })
+      };
+    }).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredBillableEntries, transactionAttorneyFilter, userMap]);
 
   // Process matter data (from billable entries only, grouped by matter name)

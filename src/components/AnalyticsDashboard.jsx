@@ -222,6 +222,7 @@ const AnalyticsDashboard = () => {
             dateRangeLabel={dateRangeLabel}
             globalAttorneyFilter={effectiveAttorneyFilter}
             allAttorneyNames={allAttorneyNames}
+            transactionData={transactionData}
             matterData={matterData}
           />
         )}

@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 import { TransactionRowTooltip } from '../tooltips';
 
-const TransactionsTable = ({ 
-  transactions, 
-  sortConfig, 
+const TransactionsTable = ({
+  transactions,
+  sortConfig,
   onSort,
-  totalHours 
+  totalHours
 }) => {
   const [hoveredTransaction, setHoveredTransaction] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -23,37 +24,37 @@ const TransactionsTable = ({
       <table className="min-w-full divide-y divide-gray-200 table-fixed">
         <thead className="bg-gray-50">
           <tr>
-            <th 
+            <th
               onClick={() => onSort('type')}
               className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Transaction Type {getSortIndicator('type')}
             </th>
-            <th 
+            <th
               onClick={() => onSort('avgHours')}
               className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Avg Hours {getSortIndicator('avgHours')}
             </th>
-            <th 
+            <th
               onClick={() => onSort('count')}
               className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Count {getSortIndicator('count')}
+              Matters {getSortIndicator('count')}
             </th>
-            <th 
+            <th
               onClick={() => onSort('totalHours')}
               className="w-[14%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Total Hours {getSortIndicator('totalHours')}
             </th>
-            <th 
+            <th
               onClick={() => onSort('totalEarnings')}
               className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Total Earnings {getSortIndicator('totalEarnings')}
             </th>
-            <th 
+            <th
               onClick={() => onSort('percentage')}
               className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
@@ -65,8 +66,8 @@ const TransactionsTable = ({
           {transactions.map((txn, idx) => {
             const percentage = totalHours > 0 ? ((txn.totalHours / totalHours) * 100).toFixed(1) : 0;
             return (
-              <tr 
-                key={idx} 
+              <tr
+                key={idx}
                 className="hover:bg-blue-50 cursor-pointer transition-colors"
                 onMouseEnter={(e) => {
                   setHoveredTransaction(txn);
@@ -77,8 +78,13 @@ const TransactionsTable = ({
                 }}
                 onMouseLeave={() => setHoveredTransaction(null)}
               >
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
-                  {txn.type}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <Link
+                    href={`/categories/${encodeURIComponent(txn.type)}`}
+                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    {txn.type}
+                  </Link>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {txn.avgHours}h
@@ -100,10 +106,10 @@ const TransactionsTable = ({
           })}
         </tbody>
       </table>
-      
+
       {hoveredTransaction && (
-        <TransactionRowTooltip 
-          transaction={hoveredTransaction} 
+        <TransactionRowTooltip
+          transaction={hoveredTransaction}
           position={tooltipPosition}
         />
       )}
