@@ -115,6 +115,24 @@ const AdminInvoices = () => {
     fetchData();
   }, [fetchData]);
 
+  // Restore confirmed matches from persisted matchedTransactionId on invoice entries
+  useEffect(() => {
+    if (invoices.length === 0 || transactions.length === 0) return;
+    const txnMap = new Map(transactions.map((t) => [t.id, t]));
+    const restored = {};
+    for (const inv of invoices) {
+      if (inv.matchedTransactionId) {
+        const txn = txnMap.get(inv.matchedTransactionId);
+        if (txn) {
+          restored[inv.sheetRowNumber] = { txn, matchType: 'alias' };
+        }
+      }
+    }
+    if (Object.keys(restored).length > 0) {
+      setConfirmedMatches(restored);
+    }
+  }, [invoices, transactions]);
+
   const handleLogout = async () => {
     await signOut();
     router.push('/');
@@ -278,7 +296,7 @@ const AdminInvoices = () => {
     return candidateMap;
   }, [filteredAndSorted, transactions, aliases]);
 
-  // Confirm a match: save the alias to Firestore
+  // Confirm a match: save alias + persist match on the invoice + mark as Paid
   const handleConfirmMatch = async (invoice, transactionId) => {
     const txn = transactions.find((t) => t.id === transactionId);
     if (!txn) return;
@@ -296,11 +314,28 @@ const AdminInvoices = () => {
         updatedAliases[cpLower] = [...existing, invoice.client];
       }
 
-      // Write to Firestore
-      await setDoc(doc(db, 'clientAliases', 'all'), { aliases: updatedAliases });
+      // Update the invoice entry with matched transaction ID and set status to Paid
+      const updatedInvoices = invoices.map((inv) => {
+        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+          return {
+            ...inv,
+            matchedTransactionId: transactionId,
+            status: 'Paid',
+            dateReceived: txn.postedAt || txn.createdAt || inv.dateReceived,
+          };
+        }
+        return inv;
+      });
+
+      // Write both updates to Firestore in parallel
+      await Promise.all([
+        setDoc(doc(db, 'clientAliases', 'all'), { aliases: updatedAliases }),
+        setDoc(doc(db, 'invoices', 'all'), { entries: updatedInvoices }, { merge: true }),
+      ]);
 
       // Update local state
       setAliases(updatedAliases);
+      setInvoices(updatedInvoices);
       setConfirmedMatches((prev) => ({
         ...prev,
         [invoice.sheetRowNumber]: { txn, matchType: 'alias' },
@@ -311,14 +346,29 @@ const AdminInvoices = () => {
         return next;
       });
     } catch (err) {
-      console.error('Error saving alias:', err);
+      console.error('Error saving match:', err);
     } finally {
       setSavingAlias(null);
     }
   };
 
-  // Dismiss a confirmed match display
-  const handleDismissMatch = (sheetRowNumber) => {
+  // Dismiss a confirmed match: clear persisted match and revert status
+  const handleDismissMatch = async (sheetRowNumber) => {
+    try {
+      const updatedInvoices = invoices.map((inv) => {
+        if (inv.sheetRowNumber === sheetRowNumber) {
+          const { matchedTransactionId, ...rest } = inv;
+          return { ...rest, status: '', dateReceived: '' };
+        }
+        return inv;
+      });
+
+      await setDoc(doc(db, 'invoices', 'all'), { entries: updatedInvoices }, { merge: true });
+      setInvoices(updatedInvoices);
+    } catch (err) {
+      console.error('Error removing match:', err);
+    }
+
     setConfirmedMatches((prev) => {
       const next = { ...prev };
       delete next[sheetRowNumber];
