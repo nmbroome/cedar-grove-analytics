@@ -185,8 +185,9 @@ const ClientsView = ({
   if (ratesLoading) {
     return (
       <div className="space-y-6">
-        <DateRangeIndicator 
+        <DateRangeIndicator
           dateRangeLabel={dateRangeLabel}
+          entryCount={clientData?.length || 0}
           globalAttorneyFilter={globalAttorneyFilter}
           allAttorneyNames={allAttorneyNames}
         />
@@ -200,8 +201,9 @@ const ClientsView = ({
 
   return (
     <div className="space-y-6">
-      <DateRangeIndicator 
+      <DateRangeIndicator
         dateRangeLabel={dateRangeLabel}
+        entryCount={clientData?.length || 0}
         globalAttorneyFilter={globalAttorneyFilter}
         allAttorneyNames={allAttorneyNames}
       />

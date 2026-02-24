@@ -74,6 +74,7 @@ const TransactionsView = ({
     <div className="space-y-6">
       <DateRangeIndicator
         dateRangeLabel={dateRangeLabel}
+        entryCount={transactionData?.length || 0}
         globalAttorneyFilter={globalAttorneyFilter}
         allAttorneyNames={allAttorneyNames}
       />

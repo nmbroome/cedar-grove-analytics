@@ -57,8 +57,9 @@ const OpsView = ({
   if (opsData.length === 0) {
     return (
       <div className="space-y-6">
-        <DateRangeIndicator 
+        <DateRangeIndicator
           dateRangeLabel={dateRangeLabel}
+          entryCount={opsData?.length || 0}
           globalAttorneyFilter={globalAttorneyFilter}
           allAttorneyNames={allAttorneyNames}
         />
@@ -71,8 +72,9 @@ const OpsView = ({
 
   return (
     <div className="space-y-6">
-      <DateRangeIndicator 
+      <DateRangeIndicator
         dateRangeLabel={dateRangeLabel}
+        entryCount={opsData?.length || 0}
         globalAttorneyFilter={globalAttorneyFilter}
         allAttorneyNames={allAttorneyNames}
       />

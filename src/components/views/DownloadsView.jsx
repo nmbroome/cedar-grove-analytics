@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { DateRangeIndicator } from '../shared';
 import { DownloadsTable } from '../tables';
+import { TopDownloadsChart } from '../charts';
 
 const DownloadsView = ({
   dateRangeLabel,
@@ -57,6 +58,7 @@ const DownloadsView = ({
     <div className="space-y-6">
       <DateRangeIndicator
         dateRangeLabel={dateRangeLabel}
+        entryCount={downloadData?.length || 0}
         globalAttorneyFilter={globalAttorneyFilter}
         allAttorneyNames={allAttorneyNames}
       />
@@ -66,6 +68,8 @@ const DownloadsView = ({
         sortConfig={sortConfig}
         onSort={handleSort}
       />
+
+      <TopDownloadsChart data={getSortedDownloads()} />
     </div>
   );
 };

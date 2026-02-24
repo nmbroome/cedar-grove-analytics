@@ -28,7 +28,7 @@ const TransactionsTable = ({
               onClick={() => onSort('type')}
               className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Transaction Type {getSortIndicator('type')}
+              Billing Category {getSortIndicator('type')}
             </th>
             <th
               onClick={() => onSort('avgHours')}

@@ -79,8 +79,9 @@ const AttorneysView = ({
 
   return (
     <div className="space-y-6">
-      <DateRangeIndicator 
+      <DateRangeIndicator
         dateRangeLabel={dateRangeLabel}
+        entryCount={attorneyData?.length || 0}
         globalAttorneyFilter={globalAttorneyFilter}
         allAttorneyNames={allAttorneyNames}
       />
