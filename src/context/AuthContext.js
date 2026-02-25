@@ -10,6 +10,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase/config';
 import { isPartialAdminEmail } from '@/utils/partialAdminAccess';
+import { hasDownloadsAccessEmail } from '@/utils/downloadsAccess';
 
 const AuthContext = createContext({});
 
@@ -145,6 +146,7 @@ export const AuthProvider = ({ children }) => {
       user,
       isAdmin,
       isPartialAdmin: isPartialAdminEmail(userEmail),
+      hasDownloadsAccess: hasDownloadsAccessEmail(userEmail),
       isAuthorized,
       loading,
       signInWithGoogle,

@@ -3,16 +3,25 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Settings, LogIn, LogOut, Shield } from 'lucide-react';
+import { Settings, LogIn, LogOut, Shield, User } from 'lucide-react';
 import { getDateRangeLabel } from '@/utils/dateHelpers';
 import { useAnalyticsData } from '@/hooks/useAnalyticsData';
 import { useAuth } from '@/context/AuthContext';
+import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import { DateRangeDropdown, AttorneyFilterDropdown } from './shared';
 import { OverviewView, AttorneysView, TransactionsView, OpsView, ClientsView, DownloadsView } from './views';
 
-const AnalyticsDashboard = () => {
-  const { user, isAdmin, signOut } = useAuth();
+const AnalyticsDashboard = ({ downloadsOnly = false }) => {
+  const { user, isAdmin, signOut, userEmail } = useAuth();
+  const { users } = useFirestoreCache();
   const router = useRouter();
+
+  // For downloads-only users, find their attorney page name for the "My Analytics" link
+  const matchedUserName = useMemo(() => {
+    if (!downloadsOnly || !userEmail || !users) return null;
+    const matched = users.find(u => u.email && u.email.toLowerCase() === userEmail);
+    return matched ? (matched.name || matched.id) : null;
+  }, [downloadsOnly, userEmail, users]);
 
   // Date range state
   const [dateRange, setDateRange] = useState('current-month');
@@ -28,7 +37,7 @@ const AnalyticsDashboard = () => {
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
 
   // View state
-  const [selectedView, setSelectedView] = useState('overview');
+  const [selectedView, setSelectedView] = useState(downloadsOnly ? 'downloads' : 'overview');
 
   // Fetch and process data
   const {
@@ -105,8 +114,8 @@ const AnalyticsDashboard = () => {
     );
   }
 
-  // No data state
-  if ((!filteredBillableEntries || filteredBillableEntries.length === 0) && (!filteredOpsEntries || filteredOpsEntries.length === 0)) {
+  // No data state (skip for downloads-only users who don't need billable/ops entries)
+  if (!downloadsOnly && (!filteredBillableEntries || filteredBillableEntries.length === 0) && (!filteredOpsEntries || filteredOpsEntries.length === 0)) {
     return (
       <div className="min-h-screen bg-cg-background p-6">
         <div className="max-w-7xl mx-auto">
@@ -145,7 +154,7 @@ const AnalyticsDashboard = () => {
   return (
     <div className="min-h-screen bg-cg-background p-6">
       <div className="max-w-7xl mx-auto">
-        <Header 
+        <Header
           showDateDropdown={showDateDropdown}
           setShowDateDropdown={setShowDateDropdown}
           dateRange={dateRange}
@@ -162,6 +171,8 @@ const AnalyticsDashboard = () => {
           isAdmin={isAdmin}
           user={user}
           onLogout={handleLogout}
+          downloadsOnly={downloadsOnly}
+          matchedUserName={matchedUserName}
         />
 
         {/* Navigation Tabs */}
@@ -173,7 +184,7 @@ const AnalyticsDashboard = () => {
             { key: 'ops', label: 'Ops' },
             { key: 'clients', label: 'Clients' },
             { key: 'downloads', label: 'Downloads' },
-          ].map((tab) => (
+          ].filter(tab => !downloadsOnly || tab.key === 'downloads').map((tab) => (
             <button
               key={tab.key}
               onClick={() => setSelectedView(tab.key)}
@@ -278,22 +289,26 @@ const Header = ({
   isAdmin,
   user,
   onLogout,
+  downloadsOnly = false,
+  matchedUserName = null,
 }) => {
   return (
     <div className="mb-8 flex justify-between items-start">
       <div>
         <h1 className="text-3xl font-bold text-cg-black">Cedar Grove Analytics</h1>
       </div>
-      
+
       <div className="flex items-center gap-4">
-        <AttorneyFilterDropdown
-          allAttorneyNames={allAttorneyNames}
-          globalAttorneyFilter={globalAttorneyFilter}
-          setGlobalAttorneyFilter={setGlobalAttorneyFilter}
-          showDropdown={showAttorneyDropdown}
-          setShowDropdown={setShowAttorneyDropdown}
-        />
-        
+        {!downloadsOnly && (
+          <AttorneyFilterDropdown
+            allAttorneyNames={allAttorneyNames}
+            globalAttorneyFilter={globalAttorneyFilter}
+            setGlobalAttorneyFilter={setGlobalAttorneyFilter}
+            showDropdown={showAttorneyDropdown}
+            setShowDropdown={setShowAttorneyDropdown}
+          />
+        )}
+
         <DateRangeDropdown
           dateRange={dateRange}
           setDateRange={setDateRange}
@@ -305,21 +320,32 @@ const Header = ({
           setShowDropdown={setShowDateDropdown}
         />
 
-        {/* Admin Button */}
-        <Link
-          href="/admin"
-          className="flex items-center gap-2 px-4 py-2 bg-cg-dark text-white hover:bg-gray-700 rounded-lg transition-colors"
-        >
-          <Shield className="w-4 h-4" />
-          <span className="text-sm font-medium">Admin</span>
-        </Link>
+        {downloadsOnly ? (
+          matchedUserName && (
+            <Link
+              href={`/users/${encodeURIComponent(matchedUserName)}`}
+              className="flex items-center gap-2 px-4 py-2 bg-cg-dark text-white hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <User className="w-4 h-4" />
+              <span className="text-sm font-medium">My Analytics</span>
+            </Link>
+          )
+        ) : (
+          <Link
+            href="/admin"
+            className="flex items-center gap-2 px-4 py-2 bg-cg-dark text-white hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Shield className="w-4 h-4" />
+            <span className="text-sm font-medium">Admin</span>
+          </Link>
+        )}
 
         {/* User status / Logout */}
         {user && !user.isAnonymous && (
           <div className="flex items-center gap-3">
             {user.photoURL && (
-              <img 
-                src={user.photoURL} 
+              <img
+                src={user.photoURL}
                 alt={user.displayName || 'User'}
                 className="w-8 h-8 rounded-full"
               />
