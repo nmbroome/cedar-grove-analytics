@@ -615,7 +615,7 @@ export const useAnalyticsData = ({
     })).sort((a, b) => b.totalHours - a.totalHours);
   }, [filteredBillableEntries, userMap]);
 
-  // Process download data (from driveDownloads events, grouped by file)
+  // Process download data (from driveDownloads events, grouped by folder then file)
   const downloadData = useMemo(() => {
     if (!allDownloadEvents || allDownloadEvents.length === 0) return [];
 
@@ -625,49 +625,76 @@ export const useAnalyticsData = ({
     const filtered = allDownloadEvents.filter(event => {
       if (!event.date) return false;
       if (dateRange === 'all-time') return true;
-      // event.date is "YYYY-MM-DD" string — compare directly
       const eventDate = new Date(event.date + 'T00:00:00');
       return eventDate >= startDate && eventDate <= endDate;
     });
 
-    // Group by file name
-    const fileStats = {};
+    // Group by folderPath -> file
+    const folderStats = {};
     filtered.forEach(event => {
       const file = event.file;
       if (!file) return;
 
-      if (!fileStats[file]) {
-        fileStats[file] = {
+      const folderPath = event.folderPath || event.folder || 'Unknown';
+      const folderName = event.folderName || event.folder || 'Unknown';
+      const folder = event.folder || 'Unknown';
+
+      if (!folderStats[folderPath]) {
+        folderStats[folderPath] = {
+          folderPath,
+          folderName,
+          folder,
+          downloads: 0,
+          lastDownload: '',
+          users: {},
+          files: {},
+        };
+      }
+
+      folderStats[folderPath].downloads += 1;
+      if (event.ts > folderStats[folderPath].lastDownload) {
+        folderStats[folderPath].lastDownload = event.ts;
+      }
+      if (event.user) {
+        folderStats[folderPath].users[event.user] = (folderStats[folderPath].users[event.user] || 0) + 1;
+      }
+
+      // Track file-level stats within folder
+      if (!folderStats[folderPath].files[file]) {
+        folderStats[folderPath].files[file] = {
           file,
           downloads: 0,
           lastDownload: '',
           type: event.type || '',
-          folder: event.folder || '',
           owner: event.owner || '',
           users: {},
         };
       }
 
-      fileStats[file].downloads += 1;
-
-      // Track latest download (ts is ISO string)
-      if (event.ts > fileStats[file].lastDownload) {
-        fileStats[file].lastDownload = event.ts;
+      folderStats[folderPath].files[file].downloads += 1;
+      if (event.ts > folderStats[folderPath].files[file].lastDownload) {
+        folderStats[folderPath].files[file].lastDownload = event.ts;
       }
-
-      // Track download count per user
       if (event.user) {
-        fileStats[file].users[event.user] = (fileStats[file].users[event.user] || 0) + 1;
+        folderStats[folderPath].files[file].users[event.user] =
+          (folderStats[folderPath].files[file].users[event.user] || 0) + 1;
       }
     });
 
-    return Object.values(fileStats)
+    return Object.values(folderStats)
       .map(stat => ({
         ...stat,
-        topUsers: Object.entries(stat.users)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([user, count]) => ({ user, count })),
+        uniqueFiles: Object.keys(stat.files).length,
+        uniqueUsers: Object.keys(stat.users).length,
+        files: Object.values(stat.files)
+          .map(f => ({
+            ...f,
+            topUsers: Object.entries(f.users)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([user, count]) => ({ user, count })),
+          }))
+          .sort((a, b) => b.downloads - a.downloads),
       }))
       .sort((a, b) => b.downloads - a.downloads);
   }, [allDownloadEvents, dateRangeInfo, dateRange]);

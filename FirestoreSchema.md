@@ -702,7 +702,7 @@ Stores admin role assignments. Document existence determines admin status — th
 
 ## Collection: `driveDownloads/{monthKey}`
 
-Stores Google Drive download events grouped by month. Each document contains all download events for one calendar month across 5 tracked Drive folders. Synced twice daily from Google Drive activity via a Google Apps Script.
+Stores Google Drive download events grouped by month. Each document contains all download events for one calendar month across tracked Drive folders. Synced twice daily from Google Drive activity via a Google Apps Script.
 
 ### Document ID Format
 
@@ -724,35 +724,47 @@ Month string in `YYYY-MM` format (e.g., `2026-01`, `2026-02`).
       date: "2026-02-01",                    // string — date only (YYYY-MM-DD, for grouping by day)
       user: "jane@cedargrovellp.com",        // string — email of the user who downloaded
       file: "Engagement Letter - Acme Corp.docx", // string — file name
-      type: "document",                      // string — Drive file type ("document", "spreadsheet", "pdf", "presentation", etc.)
+      type: "document",                      // string — Drive file type ("document", "spreadsheet", "pdf", etc.)
       docId: "1aBcDeFgHiJkLmNoPqRsT",       // string | null — Google Drive file ID
       owner: "john@cedargrovellp.com",       // string | null — email of the file owner
-      folder: "Engagements"                  // string — tracked folder label
+      folder: "Form Documents",              // string — top-level tracked folder label
+      folderName: "Retainer Agreements",     // string — immediate parent folder name
+      folderPath: "Form Documents/Retainer Agreements" // string — full path from root label to parent folder
     }
     // ... one object per download event
   ]
 }
 ```
 
-### Tracked Folders
+### Folder Fields
 
-Events are scoped to 5 tracked Google Drive folders:
+Each event carries three folder fields that allow the dashboard to filter and group downloads at different levels of granularity:
 
-| Label | Description |
-|---|---|
-| Administrative | Administrative documents |
-| Attorney Employment | Employment-related files |
-| Engagements | Client engagement letters and materials |
-| Legal Memos | Legal research memos |
-| New Client Onboarding | New client intake documents |
+| Field | Description | Example |
+|---|---|---|
+| `folder` | Top-level tracked folder label — matches the `label` in `TRACKED_FOLDERS` config. Stable identifier for broad filtering. | `"Form Documents"` |
+| `folderName` | Name of the immediate parent folder containing the file. Useful for grouping by subfolder. | `"Retainer Agreements"` |
+| `folderPath` | Slash-separated path from the root label down to the file's parent folder. Useful for display and deep filtering. | `"Form Documents/Retainer Agreements"` |
+
+For files sitting directly inside the root tracked folder (no subfolder), all three fields will reference the root label:
+
+```javascript
+folder: "Form Documents",
+folderName: "Form Documents",
+folderPath: "Form Documents"
+```
+
+### Excluded Folders
+
+Specific subfolders can be excluded from scanning by adding their Drive folder IDs to the `EXCLUDED_FOLDER_IDS` constant in the sync script. Excluded folders are skipped at any depth and their files will not appear in download events.
 
 ### Querying
 
-The dashboard fetches the month documents that span the selected date range, then filters the `events` array client-side by date.
+The dashboard fetches the month documents that span the selected date range, then filters the `events` array client-side by date, `folder`, `folderName`, or `folderPath` as needed.
 
 ### Sync Architecture
 
-- **Schedule**: Twice daily (7 AM and 7 PM ET)
+- **Schedule**: Twice daily (8 AM and 8 PM ET)
 - **Scheduled sync window**: 1st of current month → now (overwrites current month doc)
 - **Backfill**: Jan 1, 2026 → now (overwrites all month docs in range)
 - **Cost per sync**: 0 reads, 1–3 writes (one per month touched)

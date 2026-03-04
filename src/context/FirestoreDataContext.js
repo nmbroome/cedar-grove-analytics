@@ -354,6 +354,8 @@ export const FirestoreDataProvider = ({ children }) => {
             docId: event.docId || null,
             owner: event.owner || null,
             folder: event.folder || '',
+            folderName: event.folderName || event.folder || '',
+            folderPath: event.folderPath || event.folder || '',
           });
         });
       });

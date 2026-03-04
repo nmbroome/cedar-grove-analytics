@@ -14,26 +14,32 @@ const DownloadTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const TopDownloadsChart = ({ data }) => {
+const TopDownloadsChart = ({ data, mode = 'files', title }) => {
+  const nameKey = mode === 'folders' ? 'folderPath' : 'file';
+  const displayTitle = title || (mode === 'folders' ? 'Top Folders by Downloads' : 'Top Documents by Downloads');
+
   const chartData = data
     .slice(0, 15)
-    .map(d => ({
-      file: d.file.length > 40 ? d.file.slice(0, 37) + '...' : d.file,
-      fullFile: d.file,
-      downloads: d.downloads,
-    }));
+    .map(d => {
+      const name = d[nameKey] || '';
+      return {
+        name: name.length > 40 ? name.slice(0, 37) + '...' : name,
+        fullName: name,
+        downloads: d.downloads,
+      };
+    });
 
   if (chartData.length === 0) return null;
 
   return (
     <div className="bg-white p-6 rounded-lg shadow">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Documents by Downloads</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">{displayTitle}</h3>
       <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 36)}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis type="number" allowDecimals={false} />
           <YAxis
-            dataKey="file"
+            dataKey="name"
             type="category"
             width={260}
             tick={{ fontSize: 12 }}
