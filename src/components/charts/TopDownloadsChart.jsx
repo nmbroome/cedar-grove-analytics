@@ -15,7 +15,7 @@ const DownloadTooltip = ({ active, payload, label }) => {
 };
 
 const TopDownloadsChart = ({ data, mode = 'files', title }) => {
-  const nameKey = mode === 'folders' ? 'folderPath' : 'file';
+  const nameKey = mode === 'folders' ? 'folderName' : 'file';
   const displayTitle = title || (mode === 'folders' ? 'Top Folders by Downloads' : 'Top Documents by Downloads');
 
   const chartData = data

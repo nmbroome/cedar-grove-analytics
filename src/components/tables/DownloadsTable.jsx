@@ -64,15 +64,15 @@ const DownloadsTable = ({
             {data.map((folder, idx) => (
               <tr
                 key={idx}
-                onClick={() => onFolderClick(folder.folderPath)}
+                onClick={() => onFolderClick(folder.folderName)}
                 className="hover:bg-blue-50 transition-colors cursor-pointer group"
                 title={`${folder.files.map(f => f.file).join('\n')}`}
               >
                 <td className="px-6 py-3 text-sm text-gray-900 truncate">
                   <div className="flex items-center gap-2">
                     <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span className="truncate group-hover:text-blue-600" title={folder.folderPath}>
-                      {folder.folderPath}
+                    <span className="truncate group-hover:text-blue-600" title={folder.folderName}>
+                      {folder.folderName}
                     </span>
                   </div>
                 </td>

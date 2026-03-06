@@ -40,8 +40,8 @@ const DownloadsView = ({
       let aVal, bVal;
       switch (folderSortConfig.key) {
         case 'name':
-          aVal = a.folderPath.toLowerCase();
-          bVal = b.folderPath.toLowerCase();
+          aVal = a.folderName.toLowerCase();
+          bVal = b.folderName.toLowerCase();
           break;
         case 'downloads':
           aVal = a.downloads;
@@ -68,7 +68,7 @@ const DownloadsView = ({
 
   const selectedFolderData = useMemo(() => {
     if (!selectedFolder) return null;
-    return downloadData.find(f => f.folderPath === selectedFolder);
+    return downloadData.find(f => f.folderName === selectedFolder);
   }, [downloadData, selectedFolder]);
 
   const sortedFiles = useMemo(() => {
@@ -124,7 +124,7 @@ const DownloadsView = ({
           </button>
 
           <div className="bg-white rounded-lg shadow px-6 py-4">
-            <h3 className="text-lg font-semibold text-gray-900">{selectedFolderData?.folderPath}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{selectedFolderData?.folderName}</h3>
             <div className="flex gap-6 mt-1 text-sm text-gray-500">
               <span>{selectedFolderData?.downloads} downloads</span>
               <span>{selectedFolderData?.uniqueFiles} files</span>

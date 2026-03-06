@@ -629,18 +629,18 @@ export const useAnalyticsData = ({
       return eventDate >= startDate && eventDate <= endDate;
     });
 
-    // Group by folderPath -> file
+    // Group by folderName (immediate parent folder) -> file
     const folderStats = {};
     filtered.forEach(event => {
       const file = event.file;
       if (!file) return;
 
-      const folderPath = event.folderPath || event.folder || 'Unknown';
       const folderName = event.folderName || event.folder || 'Unknown';
+      const folderPath = event.folderPath || folderName;
       const folder = event.folder || 'Unknown';
 
-      if (!folderStats[folderPath]) {
-        folderStats[folderPath] = {
+      if (!folderStats[folderName]) {
+        folderStats[folderName] = {
           folderPath,
           folderName,
           folder,
@@ -651,17 +651,17 @@ export const useAnalyticsData = ({
         };
       }
 
-      folderStats[folderPath].downloads += 1;
-      if (event.ts > folderStats[folderPath].lastDownload) {
-        folderStats[folderPath].lastDownload = event.ts;
+      folderStats[folderName].downloads += 1;
+      if (event.ts > folderStats[folderName].lastDownload) {
+        folderStats[folderName].lastDownload = event.ts;
       }
       if (event.user) {
-        folderStats[folderPath].users[event.user] = (folderStats[folderPath].users[event.user] || 0) + 1;
+        folderStats[folderName].users[event.user] = (folderStats[folderName].users[event.user] || 0) + 1;
       }
 
       // Track file-level stats within folder
-      if (!folderStats[folderPath].files[file]) {
-        folderStats[folderPath].files[file] = {
+      if (!folderStats[folderName].files[file]) {
+        folderStats[folderName].files[file] = {
           file,
           downloads: 0,
           lastDownload: '',
@@ -671,13 +671,13 @@ export const useAnalyticsData = ({
         };
       }
 
-      folderStats[folderPath].files[file].downloads += 1;
-      if (event.ts > folderStats[folderPath].files[file].lastDownload) {
-        folderStats[folderPath].files[file].lastDownload = event.ts;
+      folderStats[folderName].files[file].downloads += 1;
+      if (event.ts > folderStats[folderName].files[file].lastDownload) {
+        folderStats[folderName].files[file].lastDownload = event.ts;
       }
       if (event.user) {
-        folderStats[folderPath].files[file].users[event.user] =
-          (folderStats[folderPath].files[file].users[event.user] || 0) + 1;
+        folderStats[folderName].files[file].users[event.user] =
+          (folderStats[folderName].files[file].users[event.user] || 0) + 1;
       }
     });
 
