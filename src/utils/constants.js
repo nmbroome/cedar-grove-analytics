@@ -24,6 +24,7 @@ export const MONTHS = [
 export const DATE_RANGE_OPTIONS = [
   { value: 'all-time', label: 'All Time' },
   { value: 'current-week', label: 'Current Week' },
+  { value: 'last-week', label: 'Last Week' },
   { value: 'current-month', label: 'Current Month' },
   { value: 'last-month', label: 'Last Month' },
   { value: 'trailing-60', label: 'Trailing 60 Days' },

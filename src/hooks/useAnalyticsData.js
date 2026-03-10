@@ -88,10 +88,18 @@ export const useAnalyticsData = ({
           startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }
         break;
-      case 'current-week':
+      case 'current-week': {
         const dayOfWeek = now.getDay();
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
         break;
+      }
+      case 'last-week': {
+        const dow = now.getDay();
+        const thisSunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow, 0, 0, 0, 0);
+        startDate = new Date(thisSunday.getFullYear(), thisSunday.getMonth(), thisSunday.getDate() - 7, 0, 0, 0, 0);
+        endDate = new Date(thisSunday.getFullYear(), thisSunday.getMonth(), thisSunday.getDate() - 1, 23, 59, 59, 999);
+        break;
+      }
       case 'current-month':
         startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         break;
