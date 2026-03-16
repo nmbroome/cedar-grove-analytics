@@ -123,10 +123,20 @@ const AttorneyDetailView = ({ attorneyName }) => {
       case 'all-time':
         startDate = null;
         break;
-      case 'current-week':
+      case 'current-week': {
         const dayOfWeek = now.getDay();
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+        const daysSinceMonday = (dayOfWeek + 6) % 7;
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday, 0, 0, 0, 0);
         break;
+      }
+      case 'last-week': {
+        const dow = now.getDay();
+        const dSinceMonday = (dow + 6) % 7;
+        const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dSinceMonday, 0, 0, 0, 0);
+        startDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7, 0, 0, 0, 0);
+        endDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1, 23, 59, 59, 999);
+        break;
+      }
       case 'current-month':
         startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         break;
@@ -232,10 +242,12 @@ const AttorneyDetailView = ({ attorneyName }) => {
         const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
         let effectiveEnd;
 
-        if (isCurrentMonthInProgress) {
-          effectiveEnd = now;
-        } else if (endDate && endDate < monthEnd) {
+        if (endDate && endDate < monthEnd) {
+          // Explicit end date before month end (e.g., last-week, custom range)
           effectiveEnd = endDate;
+        } else if (isCurrentMonthInProgress) {
+          // Current month with no explicit early end — pro-rate to today
+          effectiveEnd = now;
         } else {
           effectiveEnd = monthEnd;
         }

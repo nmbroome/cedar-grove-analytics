@@ -230,10 +230,20 @@ export const getDateRangeLabel = (dateRange, customDateStart, customDateEnd) => 
   let endDate = new Date(now);
 
   switch (dateRange) {
-    case 'current-week':
+    case 'current-week': {
       const dayOfWeek = now.getDay();
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+      const daysSinceMonday = (dayOfWeek + 6) % 7;
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
       return `Current Week (${formatDateRange(startDate, endDate)})`;
+    }
+    case 'last-week': {
+      const dow = now.getDay();
+      const dSinceMonday = (dow + 6) % 7;
+      const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dSinceMonday);
+      startDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7);
+      endDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1);
+      return `Last Week (${formatDateRange(startDate, endDate)})`;
+    }
     case 'current-month':
       startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       return `Current Month (${formatDateRange(startDate, endDate)})`;
@@ -277,10 +287,20 @@ export const calculateDateRange = (dateRange, customDateStart, customDateEnd, al
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       }
       break;
-    case 'current-week':
+    case 'current-week': {
       const dayOfWeek = now.getDay();
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+      const daysSinceMonday = (dayOfWeek + 6) % 7;
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday, 0, 0, 0, 0);
       break;
+    }
+    case 'last-week': {
+      const dow = now.getDay();
+      const dSinceMonday = (dow + 6) % 7;
+      const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dSinceMonday, 0, 0, 0, 0);
+      startDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7, 0, 0, 0, 0);
+      endDate = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1, 23, 59, 59, 999);
+      break;
+    }
     case 'current-month':
       startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       break;

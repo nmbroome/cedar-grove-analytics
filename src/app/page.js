@@ -8,7 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import CedarGroveAnalytics from '@/components/AnalyticsDashboard';
 
 function DashboardContent() {
-  const { isAdmin, loading, userEmail, isAuthorized, hasDownloadsAccess } = useAuth();
+  const { isAdmin, loading, userEmail, isAuthorized, hasDownloadsAccess, signOut } = useAuth();
   const { users, loading: usersLoading } = useFirestoreCache();
   const router = useRouter();
   const [matchedAttorneyName, setMatchedAttorneyName] = useState(null);
@@ -68,6 +68,12 @@ function DashboardContent() {
         <div className="text-center">
           <div className="text-xl text-gray-700">No attorney profile found for your account.</div>
           <div className="mt-2 text-gray-500">Contact an administrator for assistance.</div>
+          <button
+            onClick={async () => { await signOut(); router.push('/login'); }}
+            className="mt-6 px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Logout
+          </button>
         </div>
       </div>
     );
