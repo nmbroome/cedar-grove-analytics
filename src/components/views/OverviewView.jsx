@@ -63,7 +63,7 @@ const OverviewView = ({
         <KPICard
           title="Total Billable"
           value={`${formatHours(totalBillable)}h`}
-          subtitle={`${billableProgress}% of target`}
+          subtitle={`${billableProgress}% current pace`}
           icon={Clock}
           iconColor="text-green-500"
         />
@@ -71,7 +71,7 @@ const OverviewView = ({
         <KPICard
           title="Total Ops"
           value={`${formatHours(totalOps)}h`}
-          subtitle={`${opsProgress}% of target`}
+          subtitle={`${opsProgress}% current pace`}
           icon={Users}
           iconColor="text-orange-500"
         />
