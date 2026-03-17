@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LogOut, Receipt, DollarSign, CheckCircle, Clock, Check, X } from 'lucide-react';
+import { ArrowLeft, LogOut, Receipt, DollarSign, CheckCircle, Clock, Check, X, Send, Mail } from 'lucide-react';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { db, auth } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -75,6 +76,181 @@ const AdminInvoices = () => {
   const [matchSelections, setMatchSelections] = useState({});
   const [savingAlias, setSavingAlias] = useState(null);
   const [confirmedMatches, setConfirmedMatches] = useState({});
+
+  // Gmail API integration
+  const [gmailToken, setGmailToken] = useState(null);
+  const [gmailEmail, setGmailEmail] = useState(null);
+  const [creatingDraft, setCreatingDraft] = useState(null);
+  const [draftSuccess, setDraftSuccess] = useState({});
+  const [draftError, setDraftError] = useState(null);
+  const [draftErrorMsg, setDraftErrorMsg] = useState(null);
+
+  const connectGmail = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/gmail.compose');
+    provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+    provider.setCustomParameters({ prompt: 'select_account' });
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      setGmailToken(credential.accessToken);
+      setGmailEmail(result.user?.email || null);
+      return credential.accessToken;
+    } catch (err) {
+      console.error('Gmail auth error:', err);
+      return null;
+    }
+  };
+
+  const createReminderDraft = async (inv) => {
+    setDraftError(null);
+    let token = gmailToken;
+    if (!token) {
+      token = await connectGmail();
+      if (!token) return;
+    }
+
+    setCreatingDraft(inv.sheetRowNumber);
+
+    try {
+      const apiBase = 'https://gmail.googleapis.com/gmail/v1/users/me';
+      const metaParams = 'format=metadata&metadataHeaders=Subject&metadataHeaders=To&metadataHeaders=From&metadataHeaders=Message-ID';
+      const authHeader = { Authorization: `Bearer ${token}` };
+
+      const gmailFetch = async (url) => {
+        let res = await fetch(url, { headers: authHeader });
+        if (res.status === 401) {
+          setGmailToken(null);
+          token = await connectGmail();
+          if (!token) throw new Error('Re-authentication failed');
+          authHeader.Authorization = `Bearer ${token}`;
+          res = await fetch(url, { headers: authHeader });
+        }
+        return res;
+      };
+
+      const extractHeaders = (msg) => {
+        const hdrs = msg.payload?.headers || [];
+        return {
+          threadId: msg.threadId,
+          subject: hdrs.find((h) => h.name === 'Subject')?.value || '',
+          to: hdrs.find((h) => h.name === 'To')?.value || '',
+          messageId: hdrs.find((h) => h.name === 'Message-ID')?.value || '',
+        };
+      };
+
+      let threadId, subject, to, messageId;
+      let found = false;
+
+      const searchAndExtract = async (query) => {
+        const q = encodeURIComponent(query);
+        const searchRes = await gmailFetch(`${apiBase}/messages?q=${q}&maxResults=1`);
+        if (!searchRes.ok) return false;
+        const searchData = await searchRes.json();
+        const matchId = searchData.messages?.[0]?.id;
+        if (!matchId) return false;
+        const fullRes = await gmailFetch(`${apiBase}/messages/${matchId}?${metaParams}`);
+        if (!fullRes.ok) return false;
+        ({ threadId, subject, to, messageId } = extractHeaders(await fullRes.json()));
+        return true;
+      };
+
+      // 1. Search by known subject line template
+      const dateSentParsed = parseDateSent(inv.dateSent, inv.year);
+      if (dateSentParsed) {
+        const priorMonth = new Date(dateSentParsed.getFullYear(), dateSentParsed.getMonth() - 1, 1);
+        const monthName = MONTH_NAMES[priorMonth.getMonth()];
+        const year = priorMonth.getFullYear();
+        const subjectQuery = `Cedar Grove LLP - Invoice (${monthName} ${year}) (${inv.client})`;
+        console.log('Gmail search query:', `in:sent subject:"${subjectQuery}"`);
+        found = await searchAndExtract(`in:sent subject:"${subjectQuery}"`);
+      }
+
+      // 2. Try emailId as message ID
+      if (!found && inv.emailId) {
+        const msgRes = await gmailFetch(`${apiBase}/messages/${inv.emailId}?${metaParams}`);
+        if (msgRes.ok) {
+          ({ threadId, subject, to, messageId } = extractHeaders(await msgRes.json()));
+          found = true;
+        }
+      }
+
+      // 3. Try emailId as thread ID
+      if (!found && inv.emailId) {
+        const threadRes = await gmailFetch(`${apiBase}/threads/${inv.emailId}?${metaParams}`);
+        if (threadRes.ok) {
+          const thread = await threadRes.json();
+          const firstMsg = thread.messages?.[0];
+          if (firstMsg) {
+            ({ threadId, subject, to, messageId } = extractHeaders(firstMsg));
+            found = true;
+          }
+        }
+      }
+
+      if (!found) {
+        throw new Error(`Could not find invoice email for "${inv.client}". Connected as ${gmailEmail || 'unknown'}.`);
+      }
+
+      // Build the reminder email body
+      const dueDateStr = formatDateDisplay(inv.dueDate, inv.year);
+      const dateSentStr = formatDateDisplay(inv.dateSent, inv.year);
+      const replySubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
+
+      const body = [
+        `Hi,`,
+        ``,
+        `I hope this message finds you well. I wanted to follow up on the invoice for ${formatCurrency(inv.amount)} sent on ${dateSentStr}.`,
+        ``,
+        `The payment due date is ${dueDateStr}. Could you please provide an update on the payment status?`,
+        ``,
+        `Please let me know if you have any questions or need any additional information.`,
+        ``,
+        `Best regards`,
+      ].join('\n');
+
+      const rawLines = [
+        `To: ${to}`,
+        `Subject: ${replySubject}`,
+        `In-Reply-To: ${messageId}`,
+        `References: ${messageId}`,
+        `Content-Type: text/plain; charset=UTF-8`,
+        '',
+        body,
+      ];
+      const rawEmail = rawLines.join('\r\n');
+      const encodedMessage = btoa(unescape(encodeURIComponent(rawEmail)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      const draftRes = await fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/drafts',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: {
+              raw: encodedMessage,
+              threadId,
+            },
+          }),
+        }
+      );
+
+      if (!draftRes.ok) throw new Error(`Failed to create draft: ${draftRes.status}`);
+      setDraftSuccess((prev) => ({ ...prev, [inv.sheetRowNumber]: true }));
+    } catch (err) {
+      console.error('Error creating reminder draft:', err);
+      setDraftError(inv.sheetRowNumber);
+      setDraftErrorMsg(err.message);
+    } finally {
+      setCreatingDraft(null);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -514,6 +690,26 @@ const AdminInvoices = () => {
         </div>
       </div>
 
+      {/* Gmail Connection Banner */}
+      <div className="max-w-7xl mx-auto px-4 pt-6 sm:px-6 lg:px-8">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Mail className="w-5 h-5 text-blue-500 flex-shrink-0" />
+            <p className="text-sm text-blue-700">
+              {gmailToken
+                ? <>Gmail connected as <span className="font-medium">{gmailEmail}</span> — reminder drafts will be created as replies in the original thread.</>
+                : 'Connect Gmail to create reminder email drafts directly in the invoice thread.'}
+            </p>
+          </div>
+          <button
+            onClick={connectGmail}
+            className="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
+          >
+            {gmailToken ? 'Switch Account' : 'Connect Gmail'}
+          </button>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {loading ? (
@@ -631,6 +827,9 @@ const AdminInvoices = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Date Received
                       </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Reminder
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Notes
                       </th>
@@ -663,6 +862,44 @@ const AdminInvoices = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDateDisplay(inv.dateReceived, inv.year)}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                          {inv.status === 'Paid' ? (
+                            <span className="text-gray-400 text-xs">—</span>
+                          ) : draftSuccess[inv.sheetRowNumber] ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Draft Created
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => createReminderDraft(inv)}
+                              disabled={creatingDraft === inv.sheetRowNumber}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                draftError === inv.sheetRowNumber
+                                  ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              } disabled:opacity-50`}
+                              title={draftError === inv.sheetRowNumber ? draftErrorMsg : gmailToken ? 'Create reminder draft in Gmail' : 'Connect Gmail first, then create draft'}
+                            >
+                              {creatingDraft === inv.sheetRowNumber ? (
+                                <>
+                                  <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                  Creating...
+                                </>
+                              ) : draftError === inv.sheetRowNumber ? (
+                                <>
+                                  <X className="w-3.5 h-3.5" />
+                                  Retry
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-3.5 h-3.5" />
+                                  Remind
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">
                           {inv.notes || '—'}
                         </td>
@@ -670,7 +907,7 @@ const AdminInvoices = () => {
                     ))}
                     {filteredAndSorted.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
+                        <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
                           No invoices found.
                         </td>
                       </tr>

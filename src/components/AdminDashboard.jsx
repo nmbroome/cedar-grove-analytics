@@ -31,7 +31,7 @@ const AdminDashboard = () => {
     },
     {
       title: 'Invoices',
-      description: 'View invoice payment status and outstanding balances',
+      description: 'View invoice payment status, outstanding balances, and send reminders',
       href: '/admin/invoices',
       icon: Receipt,
       color: 'bg-amber-500',
