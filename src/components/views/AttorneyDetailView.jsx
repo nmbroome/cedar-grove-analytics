@@ -281,10 +281,10 @@ const AttorneyDetailView = ({ attorneyName }) => {
         billableHours: 0,
         opsHours: 0,
         totalEarnings: 0,
-        transactionCount: 0,
+        matterCount: 0,
         uniqueTransactionTypes: 0,
         uniqueClients: 0,
-        avgHoursPerTransaction: 0,
+        avgHoursPerMatter: 0,
         lastActivity: null,
         firstActivity: null,
         utilization: calculatedTargets.totalTarget > 0 ? 0 : null,
@@ -298,7 +298,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
       billableHours: 0,
       opsHours: 0,
       totalEarnings: 0,
-      transactionCount: filteredBillableEntries.length + filteredOpsEntries.length,
+      matters: new Set(),
       transactionTypes: new Set(),
       clients: new Set(),
       lastActivity: null,
@@ -311,6 +311,9 @@ const AttorneyDetailView = ({ attorneyName }) => {
       stats.totalHours += billable;
       stats.totalEarnings += entry.earnings || 0;
 
+      if (entry.matter) {
+        stats.matters.add(entry.matter);
+      }
       if (entry.billingCategory) {
         stats.transactionTypes.add(entry.billingCategory);
       }
@@ -353,10 +356,11 @@ const AttorneyDetailView = ({ attorneyName }) => {
 
     return {
       ...stats,
+      matterCount: stats.matters.size,
       uniqueTransactionTypes: stats.transactionTypes.size,
       uniqueClients: stats.clients.size,
-      avgHoursPerTransaction: stats.transactionCount > 0 
-        ? stats.totalHours / stats.transactionCount 
+      avgHoursPerMatter: stats.matters.size > 0
+        ? stats.billableHours / stats.matters.size
         : 0,
       utilization,
       billableUtilization,
@@ -384,6 +388,24 @@ const AttorneyDetailView = ({ attorneyName }) => {
       breakdown[client].hours += billableHours;
       breakdown[client].earnings += entry.earnings || 0;
       breakdown[client].count += 1;
+    });
+
+    return Object.values(breakdown).sort((a, b) => b.hours - a.hours);
+  }, [filteredBillableEntries]);
+
+  // Matter breakdown data (billable entries only)
+  const matterBreakdown = useMemo(() => {
+    const breakdown = {};
+
+    filteredBillableEntries.forEach(entry => {
+      const matter = entry.matter;
+      if (!matter) return;
+      const billableHours = entry.billableHours || 0;
+      if (!breakdown[matter]) {
+        breakdown[matter] = { name: matter, hours: 0, count: 0 };
+      }
+      breakdown[matter].hours += billableHours;
+      breakdown[matter].count += 1;
     });
 
     return Object.values(breakdown).sort((a, b) => b.hours - a.hours);
@@ -716,20 +738,20 @@ const AttorneyDetailView = ({ attorneyName }) => {
 
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Transactions</span>
+              <span className="text-gray-600 text-sm font-medium">Matters</span>
               <FileText className="w-5 h-5 text-purple-500" />
             </div>
-            <div className="text-2xl font-bold text-gray-900">{attorneyStats.transactionCount}</div>
-            <div className="text-xs text-gray-500 mt-1">{attorneyStats.uniqueTransactionTypes} unique types</div>
+            <div className="text-2xl font-bold text-gray-900">{attorneyStats.matterCount}</div>
+            <div className="text-xs text-gray-500 mt-1">{attorneyStats.uniqueTransactionTypes} transaction types</div>
           </div>
 
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Avg Hours/Txn</span>
+              <span className="text-gray-600 text-sm font-medium">Avg Hours/Matter</span>
               <TrendingUp className="w-5 h-5 text-orange-500" />
             </div>
-            <div className="text-2xl font-bold text-gray-900">{formatHours(attorneyStats.avgHoursPerTransaction)}h</div>
-            <div className="text-xs text-gray-500 mt-1">Per transaction</div>
+            <div className="text-2xl font-bold text-gray-900">{formatHours(attorneyStats.avgHoursPerMatter)}h</div>
+            <div className="text-xs text-gray-500 mt-1">Per matter</div>
           </div>
 
           <div className="bg-white p-4 rounded-lg shadow">
@@ -800,9 +822,23 @@ const AttorneyDetailView = ({ attorneyName }) => {
                     <XAxis type="number" />
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip content={<CustomChartTooltip />} />
-                    <Legend />
-                    <Bar dataKey="billableHours" fill="#0088FE" name="Billable" stackId="hours" />
-                    <Bar dataKey="opsHours" fill="#00C49F" name="Ops" stackId="hours" />
+                    <Bar dataKey="billableHours" fill="#0088FE" name="Hours" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Top Matters */}
+            {matterBreakdown.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Matters by Hours</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={matterBreakdown.slice(0, 8)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <Tooltip content={<CustomChartTooltip />} />
+                    <Bar dataKey="hours" fill="#8B5CF6" name="Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -881,9 +917,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Entries</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Billable</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ops</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Hours</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Earnings</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">% of Total</th>
                   </tr>
@@ -901,14 +935,8 @@ const AttorneyDetailView = ({ attorneyName }) => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
                         {client.count}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 text-right font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
                         {formatHours(client.billableHours)}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
-                        {formatHours(client.opsHours)}h
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-semibold">
-                        {formatHours(client.hours)}h
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
                         {formatCurrency(client.earnings)}
