@@ -73,6 +73,7 @@ const AdminInvoices = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'dateSent', direction: 'desc' });
+  const [clientsData, setClientsData] = useState([]);
   const [matchSelections, setMatchSelections] = useState({});
   const [savingAlias, setSavingAlias] = useState(null);
   const [confirmedMatches, setConfirmedMatches] = useState({});
@@ -193,20 +194,39 @@ const AdminInvoices = () => {
       }
 
       // Build the reminder email body
-      const dueDateStr = formatDateDisplay(inv.dueDate, inv.year);
-      const dateSentStr = formatDateDisplay(inv.dateSent, inv.year);
+      const dueDateParsed = parseDateSent(inv.dueDate, inv.year);
+      const dueDateStr = dueDateParsed
+        ? `${dueDateParsed.getMonth() + 1}/${dueDateParsed.getDate()}`
+        : '[DUE DATE]';
       const replySubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
 
+      // Look up billing contact first name from clients data
+      const matchedClient = clientsData.find(
+        (c) => c.clientName && c.clientName.toLowerCase() === inv.client?.toLowerCase()
+      );
+      const billingContactFirst = matchedClient?.billingContact?.split(' ')[0] || '';
+      const greeting = billingContactFirst ? `Hi ${billingContactFirst}` : 'Hi [NAME]';
+
+      // Compute the invoice month (prior month relative to dateSent)
+      const invoiceMonthDate = dateSentParsed
+        ? new Date(dateSentParsed.getFullYear(), dateSentParsed.getMonth() - 1, 1)
+        : null;
+      const invoiceMonthLabel = invoiceMonthDate ? MONTH_NAMES[invoiceMonthDate.getMonth()] : '';
+
+      // Sender's first name
+      const senderFirstName = user?.displayName?.split(' ')[0] || '';
+
       const body = [
-        `Hi,`,
+        `${greeting}, hope you are doing well.`,
         ``,
-        `I hope this message finds you well. I wanted to follow up on the invoice for ${formatCurrency(inv.amount)} sent on ${dateSentStr}.`,
+        `I wanted to follow up on the status of your payment for the ${invoiceMonthLabel} invoice, which was due on ${dueDateStr}.`,
         ``,
-        `The payment due date is ${dueDateStr}. Could you please provide an update on the payment status?`,
+        `Please let us know if you have already processed the payment. We may have missed it on our end. Otherwise, we ask that you do so at your earliest convenience.`,
         ``,
-        `Please let me know if you have any questions or need any additional information.`,
+        `As always, please let us know if you have any questions.`,
         ``,
-        `Best regards`,
+        `Best,`,
+        senderFirstName,
       ].join('\n');
 
       const rawLines = [
@@ -254,11 +274,12 @@ const AdminInvoices = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch all three data sources in parallel
-      const [invoicesSnap, txnSnap, aliasesSnap] = await Promise.all([
+      // Fetch all data sources in parallel
+      const [invoicesSnap, txnSnap, aliasesSnap, clientsSnap] = await Promise.all([
         getDoc(doc(db, 'invoices', 'all')),
         getDocs(collection(db, 'transactions')),
         getDoc(doc(db, 'clientAliases', 'all')),
+        getDoc(doc(db, 'clients', 'all')),
       ]);
 
       // Invoices
@@ -279,6 +300,13 @@ const AdminInvoices = () => {
         setAliases(aliasesSnap.data().aliases || {});
       } else {
         setAliases({});
+      }
+
+      // Clients data (for billing contact lookup)
+      if (clientsSnap.exists()) {
+        setClientsData(clientsSnap.data().clients || []);
+      } else {
+        setClientsData([]);
       }
     } catch (err) {
       console.error('Error fetching data:', err);
