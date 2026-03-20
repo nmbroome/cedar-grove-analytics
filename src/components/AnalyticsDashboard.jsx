@@ -11,17 +11,21 @@ import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import { DateRangeDropdown, AttorneyFilterDropdown } from './shared';
 import { OverviewView, AttorneysView, TransactionsView, OpsView, ClientsView, DownloadsView } from './views';
 
-const AnalyticsDashboard = ({ downloadsOnly = false }) => {
+const TRANSACTIONS_OPS_TABS = ['transactions', 'ops'];
+
+const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false }) => {
   const { user, isAdmin, signOut, userEmail } = useAuth();
   const { users } = useFirestoreCache();
   const router = useRouter();
 
-  // For downloads-only users, find their attorney page name for the "My Analytics" link
+  const restrictedMode = downloadsOnly || transactionsOpsOnly;
+
+  // For restricted-access users, find their attorney page name for the "My Analytics" link
   const matchedUserName = useMemo(() => {
-    if (!downloadsOnly || !userEmail || !users) return null;
+    if (!restrictedMode || !userEmail || !users) return null;
     const matched = users.find(u => u.email && u.email.toLowerCase() === userEmail);
     return matched ? (matched.name || matched.id) : null;
-  }, [downloadsOnly, userEmail, users]);
+  }, [restrictedMode, userEmail, users]);
 
   // Date range state
   const [dateRange, setDateRange] = useState('current-month');
@@ -37,7 +41,9 @@ const AnalyticsDashboard = ({ downloadsOnly = false }) => {
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
 
   // View state
-  const [selectedView, setSelectedView] = useState(downloadsOnly ? 'downloads' : 'overview');
+  const [selectedView, setSelectedView] = useState(
+    downloadsOnly ? 'downloads' : transactionsOpsOnly ? 'transactions' : 'overview'
+  );
 
   // Fetch and process data
   const {
@@ -115,7 +121,7 @@ const AnalyticsDashboard = ({ downloadsOnly = false }) => {
   }
 
   // No data state (skip for downloads-only users who don't need billable/ops entries)
-  if (!downloadsOnly && (!filteredBillableEntries || filteredBillableEntries.length === 0) && (!filteredOpsEntries || filteredOpsEntries.length === 0)) {
+  if (!downloadsOnly && !transactionsOpsOnly && (!filteredBillableEntries || filteredBillableEntries.length === 0) && (!filteredOpsEntries || filteredOpsEntries.length === 0)) {
     return (
       <div className="min-h-screen bg-cg-background p-6">
         <div className="max-w-7xl mx-auto">
@@ -172,6 +178,7 @@ const AnalyticsDashboard = ({ downloadsOnly = false }) => {
           user={user}
           onLogout={handleLogout}
           downloadsOnly={downloadsOnly}
+          transactionsOpsOnly={transactionsOpsOnly}
           matchedUserName={matchedUserName}
         />
 
@@ -184,7 +191,11 @@ const AnalyticsDashboard = ({ downloadsOnly = false }) => {
             { key: 'ops', label: 'Ops' },
             { key: 'clients', label: 'Clients' },
             { key: 'downloads', label: 'Downloads' },
-          ].filter(tab => !downloadsOnly || tab.key === 'downloads').map((tab) => (
+          ].filter(tab => {
+            if (downloadsOnly) return tab.key === 'downloads';
+            if (transactionsOpsOnly) return TRANSACTIONS_OPS_TABS.includes(tab.key);
+            return true;
+          }).map((tab) => (
             <button
               key={tab.key}
               onClick={() => setSelectedView(tab.key)}
@@ -290,8 +301,11 @@ const Header = ({
   user,
   onLogout,
   downloadsOnly = false,
+  transactionsOpsOnly = false,
   matchedUserName = null,
 }) => {
+  const restrictedMode = downloadsOnly || transactionsOpsOnly;
+
   return (
     <div className="mb-8 flex justify-between items-start">
       <div>
@@ -320,7 +334,7 @@ const Header = ({
           setShowDropdown={setShowDateDropdown}
         />
 
-        {downloadsOnly ? (
+        {restrictedMode ? (
           matchedUserName && (
             <Link
               href={`/users/${encodeURIComponent(matchedUserName)}`}

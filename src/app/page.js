@@ -8,14 +8,14 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import CedarGroveAnalytics from '@/components/AnalyticsDashboard';
 
 function DashboardContent() {
-  const { isAdmin, loading, userEmail, isAuthorized, hasDownloadsAccess, signOut } = useAuth();
+  const { isAdmin, loading, userEmail, isAuthorized, hasDownloadsAccess, hasTransactionsOpsAccess, signOut } = useAuth();
   const { users, loading: usersLoading } = useFirestoreCache();
   const router = useRouter();
   const [matchedAttorneyName, setMatchedAttorneyName] = useState(null);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (loading || usersLoading || !isAuthorized || isAdmin || hasDownloadsAccess) {
+    if (loading || usersLoading || !isAuthorized || isAdmin || hasDownloadsAccess || hasTransactionsOpsAccess) {
       setChecked(true);
       return;
     }
@@ -35,17 +35,17 @@ function DashboardContent() {
     }
 
     setChecked(true);
-  }, [loading, usersLoading, isAdmin, hasDownloadsAccess, userEmail, isAuthorized, users]);
+  }, [loading, usersLoading, isAdmin, hasDownloadsAccess, hasTransactionsOpsAccess, userEmail, isAuthorized, users]);
 
   useEffect(() => {
     // Redirect non-admins to their attorney page once we've found a match
-    if (checked && isAuthorized && !isAdmin && !hasDownloadsAccess && matchedAttorneyName) {
+    if (checked && isAuthorized && !isAdmin && !hasDownloadsAccess && !hasTransactionsOpsAccess && matchedAttorneyName) {
       router.push(`/users/${encodeURIComponent(matchedAttorneyName)}`);
     }
-  }, [checked, isAdmin, hasDownloadsAccess, matchedAttorneyName, isAuthorized, router]);
+  }, [checked, isAdmin, hasDownloadsAccess, hasTransactionsOpsAccess, matchedAttorneyName, isAuthorized, router]);
 
   // Show loading while checking or redirecting
-  if (loading || usersLoading || !checked || (!isAdmin && !hasDownloadsAccess && matchedAttorneyName)) {
+  if (loading || usersLoading || !checked || (!isAdmin && !hasDownloadsAccess && !hasTransactionsOpsAccess && matchedAttorneyName)) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
@@ -59,6 +59,11 @@ function DashboardContent() {
   // Downloads-access users see the dashboard restricted to Downloads tab only
   if (!isAdmin && hasDownloadsAccess) {
     return <CedarGroveAnalytics downloadsOnly />;
+  }
+
+  // Transactions+Ops access users see the dashboard restricted to those tabs
+  if (!isAdmin && hasTransactionsOpsAccess) {
+    return <CedarGroveAnalytics transactionsOpsOnly />;
   }
 
   // Non-admins without a matched attorney page see a simple message
