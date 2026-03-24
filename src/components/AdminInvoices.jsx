@@ -456,10 +456,16 @@ const AdminInvoices = () => {
 
     for (const inv of filteredAndSorted) {
       const clientLower = (inv.client || '').toLowerCase();
+      const invSentDate = parseDateSent(inv.dateSent, inv.year);
       const candidates = [];
       const seenTxnIds = new Set();
 
       for (const txn of transactions) {
+        // Skip transactions that occurred before the invoice was sent
+        if (invSentDate) {
+          const txnDate = txn.postedAt ? new Date(txn.postedAt) : txn.createdAt ? new Date(txn.createdAt) : null;
+          if (txnDate && txnDate < invSentDate) continue;
+        }
         const cpName = txn.counterpartyName || '';
         const cpLower = cpName.toLowerCase();
         const matchTypes = [];
@@ -474,6 +480,13 @@ const AdminInvoices = () => {
         if (cpLower && clientLower) {
           if (cpLower.includes(clientLower) || clientLower.includes(cpLower)) {
             matchTypes.push('name');
+          } else {
+            // Check individual parts of the client name (e.g., "Myra Deng" matches "Deng" or "Myra")
+            const ignoredTerms = new Set(['inc', 'llc', 'llp', 'ltd', 'corp', 'the']);
+            const clientParts = clientLower.split(/\s+/).filter((p) => p.length > 2 && !ignoredTerms.has(p));
+            if (clientParts.length > 1 && clientParts.some((part) => cpLower.includes(part))) {
+              matchTypes.push('name');
+            }
           }
         }
 
