@@ -83,7 +83,7 @@ const AttorneysTable = ({
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                    <span className="font-medium text-gray-900 hover:underline">
                       {attorney.name}
                     </span>
                     {attorney.role && attorney.role !== 'Attorney' && (
@@ -124,10 +124,10 @@ const AttorneysTable = ({
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   <div className="flex flex-wrap gap-1">
-                    {attorney.topTransactions.map((txn, tIdx) => (
+                    {attorney.topTransactions.slice(0, 3).map((txn, tIdx) => (
                       <span
                         key={tIdx}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800"
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700"
                       >
                         {tIdx + 1}. {txn}
                       </span>
