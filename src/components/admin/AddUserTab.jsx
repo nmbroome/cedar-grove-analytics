@@ -34,12 +34,7 @@ const AddUserTab = ({ users, allUsers, refetch }) => {
       return;
     }
 
-    if (!email) {
-      setFormError('Email is required');
-      return;
-    }
-
-    if (!isValidEmail(email)) {
+    if (email && !isValidEmail(email)) {
       setFormError('Please enter a valid email address');
       return;
     }
@@ -51,7 +46,7 @@ const AddUserTab = ({ users, allUsers, refetch }) => {
     }
 
     // Check for duplicate email
-    if (allUsers.some(u => u.email && u.email.toLowerCase() === email)) {
+    if (email && allUsers.some(u => u.email && u.email.toLowerCase() === email)) {
       setFormError('A user with this email already exists');
       return;
     }
@@ -63,7 +58,7 @@ const AddUserTab = ({ users, allUsers, refetch }) => {
 
       await setDoc(doc(db, 'users', name), {
         name: name,
-        email: email,
+        ...(email && { email }),
         role: newRole,
         employmentType: newEmploymentType,
         rates: [],
@@ -136,7 +131,7 @@ const AddUserTab = ({ users, allUsers, refetch }) => {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
+                Email Address <span className="text-gray-400 font-normal">(optional)</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

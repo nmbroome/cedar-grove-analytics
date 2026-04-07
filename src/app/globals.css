@@ -8,6 +8,38 @@
   --color-cg-dark: #5A5A48;
   --color-cg-green: #1CA33B;
 
+  /* Semantic: Status */
+  --color-status-success: #16a34a;
+  --color-status-success-light: #dcfce7;
+  --color-status-success-text: #15803d;
+  --color-status-warning: #ca8a04;
+  --color-status-warning-light: #fef9c3;
+  --color-status-warning-text: #a16207;
+  --color-status-danger: #dc2626;
+  --color-status-danger-light: #fee2e2;
+  --color-status-danger-text: #b91c1c;
+
+  /* Semantic: Primary action (blue) */
+  --color-primary: #2563eb;
+  --color-primary-light: #dbeafe;
+  --color-primary-text: #1d4ed8;
+  --color-primary-hover: #1d4ed8;
+
+  /* Semantic: Financial/transactions (emerald) */
+  --color-financial: #059669;
+  --color-financial-light: #d1fae5;
+  --color-financial-text: #047857;
+
+  /* Semantic: Metadata/categorization (purple) */
+  --color-meta: #7c3aed;
+  --color-meta-light: #f3e8ff;
+  --color-meta-text: #6d28d9;
+
+  /* Semantic: Secondary categories (orange) */
+  --color-secondary: #ea580c;
+  --color-secondary-light: #ffedd5;
+  --color-secondary-text: #c2410c;
+
   /* Override gray scale to match the warm background tone */
   --color-gray-50: #F7F7F4;
   --color-gray-100: #ECEDE5;

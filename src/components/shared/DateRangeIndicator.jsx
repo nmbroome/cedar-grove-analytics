@@ -2,7 +2,6 @@ import { Calendar, Users } from 'lucide-react';
 
 const DateRangeIndicator = ({
   dateRangeLabel,
-  entryCount,
   globalAttorneyFilter,
   allAttorneyNames,
 }) => {
@@ -15,7 +14,6 @@ const DateRangeIndicator = ({
         <Calendar className="w-4 h-4 text-cg-green" />
         <span className="text-cg-dark">Showing data for:</span>
         <span className="font-medium text-cg-green">{dateRangeLabel}</span>
-        <span className="text-cg-green">({entryCount} entries)</span>
       </div>
       
       {isFiltered && (

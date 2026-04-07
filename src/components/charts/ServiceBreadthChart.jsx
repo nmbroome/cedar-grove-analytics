@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CustomTooltip } from '../tooltips';
+import { CHART } from '@/utils/colors';
 
 const ServiceBreadthChart = ({ data, title = "Service Breadth (Unique Transaction Types)" }) => {
   const clientsWithTransactions = data.filter(c => c.uniqueTransactions > 0).slice(0, 10);
@@ -15,7 +16,7 @@ const ServiceBreadthChart = ({ data, title = "Service Breadth (Unique Transactio
           <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
           <YAxis />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="uniqueTransactions" fill="#00C49F" name="Unique Transaction Types" />
+          <Bar dataKey="uniqueTransactions" fill={CHART.ops} name="Unique Transaction Types" />
         </BarChart>
       </ResponsiveContainer>
     </div>

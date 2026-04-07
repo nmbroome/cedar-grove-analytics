@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomTooltip } from '../tooltips';
+import { CHART } from '@/utils/colors';
 
 const TopTransactionsChart = ({ data, title = "Top Transaction Types by Time" }) => {
   return (
@@ -14,7 +15,7 @@ const TopTransactionsChart = ({ data, title = "Top Transaction Types by Time" })
           <YAxis />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
-          <Bar dataKey="totalHours" fill="#0088FE" name="Total Hours" />
+          <Bar dataKey="totalHours" fill={CHART.ops} name="Total Hours" />
         </BarChart>
       </ResponsiveContainer>
     </div>

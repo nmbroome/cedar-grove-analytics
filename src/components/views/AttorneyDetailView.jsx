@@ -43,7 +43,8 @@ import {
   countBusinessDays
 } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
-import { CHART_COLORS } from '@/utils/constants';
+import { CHART_COLORS, CHART, GRAY, LABEL_LINE_COLOR } from '@/utils/colors';
+import { getUtilizationColor, getUtilizationBgColor, getProgressBarColor } from '@/utils/statusStyles';
 import { DateRangeDropdown } from '@/components/shared';
 
 // Custom tooltip for charts - defined outside component to prevent re-creation on render
@@ -77,7 +78,7 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, hours }) => {
     <text 
       x={x} 
       y={y} 
-      fill="#374151"
+      fill={GRAY[700]}
       textAnchor={x > cx ? 'start' : 'end'} 
       dominantBaseline="central"
       fontSize={12}
@@ -516,25 +517,6 @@ const AttorneyDetailView = ({ attorneyName }) => {
 
   const dateRangeLabel = getDateRangeLabel(dateRange, customDateStart, customDateEnd);
 
-  // Utilization color helper
-  const getUtilizationColor = (util) => {
-    if (util > 90 && util < 110) return 'text-green-600';
-    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getUtilizationBgColor = (util) => {
-    if (util > 90 && util < 110) return 'bg-green-100 text-green-800';
-    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
-
-  // Progress bar color helper
-  const getProgressBarColor = (util) => {
-    if (util > 90 && util < 110) return 'bg-green-500';
-    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
 
   if (loading) {
     return (
@@ -794,7 +776,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                     <Line 
                       type="monotone" 
                       dataKey="billableHours" 
-                      stroke="#0088FE" 
+                      stroke={CHART.billable}
                       strokeWidth={2} 
                       name="Billable Hours"
                       dot={{ r: 4 }}
@@ -802,7 +784,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                     <Line 
                       type="monotone" 
                       dataKey="opsHours" 
-                      stroke="#00C49F" 
+                      stroke={CHART.ops}
                       strokeWidth={2} 
                       name="Ops Hours"
                       dot={{ r: 4 }}
@@ -822,7 +804,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                     <XAxis type="number" />
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip content={<CustomChartTooltip />} />
-                    <Bar dataKey="billableHours" fill="#0088FE" name="Hours" />
+                    <Bar dataKey="billableHours" fill={CHART.ops} name="Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -838,7 +820,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                     <XAxis type="number" />
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip content={<CustomChartTooltip />} />
-                    <Bar dataKey="hours" fill="#8B5CF6" name="Hours" />
+                    <Bar dataKey="hours" fill={CHART.ops} name="Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -863,7 +845,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                       cy="50%"
                       outerRadius={100}
                       label={renderPieLabel}
-                      labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
+                      labelLine={{ stroke: LABEL_LINE_COLOR, strokeWidth: 1 }}
                     >
                       {transactionBreakdown.slice(0, 8).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -890,7 +872,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
                       cy="50%"
                       outerRadius={100}
                       label={renderPieLabel}
-                      labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
+                      labelLine={{ stroke: LABEL_LINE_COLOR, strokeWidth: 1 }}
                     >
                       {opsBreakdown.slice(0, 8).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />

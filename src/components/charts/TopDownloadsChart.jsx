@@ -1,6 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { CHART } from '@/utils/colors';
 
 const DownloadTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -45,7 +46,7 @@ const TopDownloadsChart = ({ data, mode = 'files', title }) => {
             tick={{ fontSize: 12 }}
           />
           <Tooltip content={<DownloadTooltip />} />
-          <Bar dataKey="downloads" fill="#0088FE" name="Downloads" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="downloads" fill={CHART.ops} name="Downloads" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -8,6 +8,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
+import { getStatusBadge } from '@/utils/statusStyles';
 
 const FILTER_OPTIONS = [
   { key: 'all', label: 'All Transactions' },
@@ -309,13 +310,7 @@ const AdminTransactions = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${
-                          txn.status === 'sent'
-                            ? 'bg-green-100 text-green-700'
-                            : txn.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : txn.status === 'failed'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-gray-100 text-gray-700'
+                          getStatusBadge(txn.status)
                         }`}
                       >
                         {txn.status}

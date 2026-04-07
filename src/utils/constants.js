@@ -1,10 +1,4 @@
-export const CHART_COLORS = [
-  '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
-  '#82ca9d', '#ffc658', '#ff7c43', '#665191', '#a05195',
-  '#d45087', '#f95d6a', '#ff7c43', '#2f4b7c', '#003f5c',
-  '#7a5195', '#bc5090', '#ef5675', '#ff764a', '#ffa600',
-  '#488f31', '#de425b', '#69b3a2', '#404080', '#f4a261'
-];
+export { CHART_COLORS } from './colors';
 
 export const MONTHS = [
   { value: 1, label: 'January' },

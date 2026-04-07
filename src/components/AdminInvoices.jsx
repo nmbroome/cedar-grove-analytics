@@ -9,6 +9,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
+import { getStatusBadge, getMatchTypeBadge } from '@/utils/statusStyles';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -600,17 +601,6 @@ const AdminInvoices = () => {
     return parsed.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', year: 'numeric' });
   };
 
-  const getStatusBadge = (status) => {
-    if (status === 'Paid') return 'bg-green-100 text-green-700';
-    if (status === 'Payment Initiated') return 'bg-yellow-100 text-yellow-700';
-    return 'bg-red-100 text-red-700';
-  };
-
-  const getMatchTypeBadge = (type) => {
-    if (type === 'alias') return 'bg-purple-100 text-purple-700';
-    if (type === 'name') return 'bg-blue-100 text-blue-700';
-    return 'bg-orange-100 text-orange-700';
-  };
 
   // Render the match cell for a given invoice row
   const renderMatchCell = (inv) => {

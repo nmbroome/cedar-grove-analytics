@@ -1,7 +1,7 @@
 "use client";
 
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CHART_COLORS } from '../../utils/constants';
+import { CHART_COLORS, LABEL_LINE_COLOR, TOOLTIP_BORDER } from '@/utils/colors';
 
 const OpsDistributionPieChart = ({ data, title = "Ops Time Distribution" }) => {
   // Custom label for pie chart - only show for slices >= 5%
@@ -41,7 +41,7 @@ const OpsDistributionPieChart = ({ data, title = "Ops Time Distribution" }) => {
             cy="38%"
             outerRadius={100}
             label={renderCustomLabel}
-            labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
+            labelLine={{ stroke: LABEL_LINE_COLOR, strokeWidth: 1 }}
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -49,7 +49,7 @@ const OpsDistributionPieChart = ({ data, title = "Ops Time Distribution" }) => {
           </Pie>
           <Tooltip 
             formatter={(value, name) => [`${value}h`, name]}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+            contentStyle={{ borderRadius: '8px', border: `1px solid ${TOOLTIP_BORDER}` }}
           />
           <Legend 
             layout="horizontal" 

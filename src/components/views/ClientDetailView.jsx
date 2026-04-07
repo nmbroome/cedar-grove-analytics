@@ -35,7 +35,9 @@ import { useAllBillableEntries, useClients, useUsers } from '@/hooks/useFirestor
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
-import { CHART_COLORS, DATE_RANGE_OPTIONS } from '@/utils/constants';
+import { DATE_RANGE_OPTIONS } from '@/utils/constants';
+import { CHART_COLORS, CHART, GRAY, LABEL_LINE_COLOR, TOOLTIP_BORDER } from '@/utils/colors';
+import { getStatusBadge } from '@/utils/statusStyles';
 import { DateRangeDropdown } from '@/components/shared';
 
 // Custom tooltip for charts - defined outside component to prevent re-creation on render
@@ -69,7 +71,7 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, hours }) => {
     <text 
       x={x} 
       y={y} 
-      fill="#374151"
+      fill={GRAY[700]}
       textAnchor={x > cx ? 'start' : 'end'} 
       dominantBaseline="central"
       fontSize={12}
@@ -430,11 +432,7 @@ const ClientDetailView = ({ clientName }) => {
                   <div className="flex items-center gap-3 mt-1">
                     {clientMetadata?.status && (
                       <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                        clientMetadata.status === 'Active' 
-                          ? 'bg-green-100 text-green-800'
-                          : clientMetadata.status === 'Quiet'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
+                        getStatusBadge(clientMetadata.status)
                       }`}>
                         {clientMetadata.status}
                       </span>
@@ -585,7 +583,7 @@ const ClientDetailView = ({ clientName }) => {
                     <Line 
                       type="monotone" 
                       dataKey="billableHours" 
-                      stroke="#0088FE" 
+                      stroke={CHART.ops}
                       strokeWidth={2} 
                       name="Billable Hours"
                       dot={{ r: 4 }}
@@ -606,7 +604,7 @@ const ClientDetailView = ({ clientName }) => {
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip content={<CustomChartTooltip />} />
                     <Legend />
-                    <Bar dataKey="billableHours" fill="#0088FE" name="Billable Hours" />
+                    <Bar dataKey="billableHours" fill={CHART.ops} name="Billable Hours" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -630,7 +628,7 @@ const ClientDetailView = ({ clientName }) => {
                     cy="50%"
                     outerRadius={100}
                     label={renderPieLabel}
-                    labelLine={{ stroke: '#9CA3AF', strokeWidth: 1 }}
+                    labelLine={{ stroke: LABEL_LINE_COLOR, strokeWidth: 1 }}
                   >
                     {transactionBreakdown.slice(0, 8).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -638,7 +636,7 @@ const ClientDetailView = ({ clientName }) => {
                   </Pie>
                   <Tooltip 
                     formatter={(value) => [`${formatHours(value)}h`]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                    contentStyle={{ borderRadius: '8px', border: `1px solid ${TOOLTIP_BORDER}` }}
                   />
                   <Legend />
                 </PieChart>

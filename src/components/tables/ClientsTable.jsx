@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatHours } from '../../utils/formatters';
+import { getStatusBadge } from '@/utils/statusStyles';
 import { ClientRowTooltip } from '../tooltips';
 
 const ClientsTable = ({ 
@@ -85,9 +86,7 @@ const ClientsTable = ({
               <td className="px-6 py-4 whitespace-nowrap text-sm">
                 <span
                   className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    (client.billableHours || client.totalHours) > 0
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                    getStatusBadge((client.billableHours || client.totalHours) > 0 ? 'active' : 'inactive')
                   }`}
                 >
                   {(client.billableHours || client.totalHours) > 0 ? 'Active' : 'Inactive'}

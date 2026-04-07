@@ -627,7 +627,8 @@ Stores all client records in a single document as an array. Synced from a Google
       billingContact: "John Doe",           // string — billing contact name
       billingContactEmail: "billing@acme.com", // string — billing contact email
       phoneNumber: "555-0123",              // string — phone number
-      location: "San Francisco, CA"         // string — client location
+      location: "San Francisco, CA",         // string — client location
+      paymentTerms: 30                        // number — payment terms in days (15 or 30)
     }
     // ... one object per client
   ],

@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CustomTooltip } from '../tooltips';
+import { CHART } from '@/utils/colors';
 
 const AvgTimePerTransactionChart = ({ data, title = "Average Time per Transaction Type" }) => {
   return (
@@ -13,7 +14,7 @@ const AvgTimePerTransactionChart = ({ data, title = "Average Time per Transactio
           <XAxis type="number" />
           <YAxis dataKey="type" type="category" width={150} />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="avgHours" fill="#FFBB28" name="Avg Hours" />
+          <Bar dataKey="avgHours" fill={CHART.ops} name="Avg Hours" />
         </BarChart>
       </ResponsiveContainer>
     </div>

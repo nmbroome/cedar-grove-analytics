@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import { formatHours } from '../../utils/formatters';
+import { CHART_COLORS, GRAY } from '@/utils/colors';
 
 const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercentage = 5 }) => {
   const svgRef = useRef(null);
@@ -106,11 +107,7 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
     // Color scale for categories
     const categoryColors = d3.scaleOrdinal()
       .domain(hierarchicalData.children.map(d => d.name))
-      .range([
-        '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
-        '#82ca9d', '#ffc658', '#ff7c43', '#665191', '#a05195',
-        '#d45087', '#f95d6a', '#ff7c43', '#2f4b7c', '#003f5c'
-      ]);
+      .range(CHART_COLORS);
 
     // Create hierarchy
     const hierarchy = d3.hierarchy(hierarchicalData)
@@ -201,7 +198,7 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
       })
       .style("font-size", d => d.depth === 1 ? "11px" : "9px")
       .style("font-weight", d => d.depth === 1 ? "600" : "400")
-      .style("fill", "#333");
+      .style("fill", GRAY[700]);
 
     // Secondary label (hours) - only for leaf nodes, hidden initially
     label.append("text")
@@ -210,7 +207,7 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
       .text(d => !d.children ? `${formatHours(d.value)}h` : "")
       .style("font-size", "8px")
       .style("font-weight", "500")
-      .style("fill", "#666")
+      .style("fill", GRAY[500])
       .style("opacity", 0);
 
     // Center circle for clicking back
@@ -227,21 +224,21 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
       .attr("dy", "-0.5em")
       .style("font-size", "14px")
       .style("font-weight", "600")
-      .style("fill", "#374151")
+      .style("fill", GRAY[700])
       .text("All Ops");
 
     const centerSubtext = svg.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "1em")
       .style("font-size", "12px")
-      .style("fill", "#6B7280")
+      .style("fill", GRAY[500])
       .text(`${formatHours(root.value)}h total`);
 
     const centerHint = svg.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "2.5em")
       .style("font-size", "10px")
-      .style("fill", "#9CA3AF")
+      .style("fill", GRAY[400])
       .text("Click to zoom");
 
     function clicked(event, p) {
@@ -335,10 +332,7 @@ const OpsZoomableSunburst = ({ data, title = "Ops Time Distribution", minPercent
       {/* Legend */}
       <div className="mt-4 flex flex-wrap justify-center gap-3">
         {hierarchicalData.children.slice(0, 8).map((category, idx) => {
-          const colors = [
-            '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
-            '#82ca9d', '#ffc658', '#ff7c43'
-          ];
+          const colors = CHART_COLORS;
           return (
             <div key={category.name} className="flex items-center gap-2 text-sm">
               <div 

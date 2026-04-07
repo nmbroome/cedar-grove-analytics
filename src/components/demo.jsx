@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Users, Clock, DollarSign, Activity, Calendar, Search } from 'lucide-react';
+import { getStatusBadge, getUtilizationBgColor } from '@/utils/statusStyles';
 
 // Sample data - replace with Firebase data later
 const sampleAttorneyData = [
@@ -520,9 +521,7 @@ const CedarGroveAnalytics = () => {
                 <span className="text-gray-600 text-sm">Status</span>
                 <div className="mt-2">
                   <span className={`inline-flex px-3 py-1 text-lg font-semibold rounded-full ${
-                    sampleClientDetails[selectedClient]?.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                    getStatusBadge(sampleClientDetails[selectedClient]?.status || 'active')
                   }`}>
                     {sampleClientDetails[selectedClient]?.status || 'Active'}
                   </span>
@@ -763,11 +762,7 @@ const CedarGroveAnalytics = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            month.utilization >= 100
-                              ? 'bg-green-100 text-green-800'
-                              : month.utilization >= 80
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
+                            getUtilizationBgColor(month.utilization)
                           }`}
                         >
                           {month.utilization}%
@@ -901,7 +896,7 @@ const CedarGroveAnalytics = () => {
                 </div>
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex items-baseline gap-1.5">
-                    <div className="text-3xl font-bold text-blue-600">
+                    <div className="text-3xl font-bold text-gray-600">
                       {Math.round((filteredData.totalBillable / (filteredData.totalBillable + filteredData.totalOps)) * 100)}%
                     </div>
                     <div className="text-xl text-gray-400">/</div>
@@ -1096,11 +1091,7 @@ const CedarGroveAnalytics = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              utilization >= 100
-                                ? 'bg-green-100 text-green-800'
-                                : utilization >= 80
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
+                              getUtilizationBgColor(utilization)
                             }`}
                           >
                             {utilization}%
@@ -1443,9 +1434,7 @@ const CedarGroveAnalytics = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            client.status === 'active'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
+                            getStatusBadge(client.status)
                           }`}
                         >
                           {client.status}

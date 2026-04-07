@@ -52,7 +52,7 @@ const OverviewView = ({
           </div>
           <div className="flex-1 flex items-center justify-center">
             <div className="flex items-baseline gap-1.5">
-              <div className="text-3xl font-bold text-blue-600">{billablePercentage}%</div>
+              <div className="text-3xl font-bold text-gray-600">{billablePercentage}%</div>
               <div className="text-xl text-gray-400">/</div>
               <div className="text-3xl font-bold text-green-600">{opsPercentage}%</div>
             </div>

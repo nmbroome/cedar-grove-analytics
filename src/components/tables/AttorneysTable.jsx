@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatHours } from '../../utils/formatters';
+import { getUtilizationBgColor } from '@/utils/statusStyles';
 
 const AttorneysTable = ({
   attorneys,
@@ -22,11 +23,6 @@ const AttorneysTable = ({
     router.push(`/users/${encodeURIComponent(attorneyName)}`);
   };
 
-  const getUtilizationBadgeColor = (util) => {
-    if (util > 90 && util < 110) return 'bg-green-100 text-green-800';
-    if ((util >= 85 && util <= 90) || (util >= 110 && util <= 115)) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -121,7 +117,7 @@ const AttorneysTable = ({
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUtilizationBadgeColor(utilization)}`}
+                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUtilizationBgColor(utilization)}`}
                   >
                     {utilization}%
                   </span>

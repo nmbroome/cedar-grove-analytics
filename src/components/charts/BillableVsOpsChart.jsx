@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PerBarTooltip } from '../tooltips';
+import { CHART } from '@/utils/colors';
 
 const BillableVsOpsChart = ({ data, title = "Billable vs Ops Time by Attorney" }) => {
   const [hoveredBarKey, setHoveredBarKey] = useState(null);
@@ -29,14 +30,14 @@ const BillableVsOpsChart = ({ data, title = "Billable vs Ops Time by Attorney" }
           <Legend />
           <Bar 
             dataKey="billable" 
-            fill="#0088FE" 
+            fill={CHART.billable}
             name="Billable Hours"
             onMouseEnter={() => setHoveredBarKey('billable')}
             onMouseLeave={() => setHoveredBarKey(null)}
           />
           <Bar 
             dataKey="ops" 
-            fill="#00C49F" 
+            fill={CHART.ops}
             name="Ops Hours"
             onMouseEnter={() => setHoveredBarKey('ops')}
             onMouseLeave={() => setHoveredBarKey(null)}
