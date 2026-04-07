@@ -1,13 +1,33 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/firebase/config';
 import { DateRangeIndicator } from '../shared';
 import { ClientsTable } from '../tables';
 import { ClientHoursChart, ServiceBreadthChart } from '../charts';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { useUsers } from '@/hooks/useFirestoreData';
 import { getEntryDate } from '@/utils/dateHelpers';
+
+function parseDateSent(dateSent, year) {
+  if (!dateSent) return null;
+  if (typeof dateSent === 'object' && dateSent.seconds) {
+    return new Date(dateSent.seconds * 1000);
+  }
+  const str = String(dateSent).trim();
+  const parts = str.split('/');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+  }
+  if (parts.length === 2 && year) {
+    return new Date(year, parseInt(parts[0]) - 1, parseInt(parts[1]));
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
 
 const ClientsView = ({
   dateRangeLabel,
@@ -19,9 +39,40 @@ const ClientsView = ({
 }) => {
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
-  const [showInactive, setShowInactive] = useState(false);
+  const [clientFilter, setClientFilter] = useState('billable'); // 'all' | 'billable' | 'non-billable'
   const { getRate, loading: ratesLoading } = useAttorneyRates();
   const { users: firebaseUsers } = useUsers();
+
+  // Fetch invoices to determine billable/non-billable status
+  const [invoicedClients, setInvoicedClients] = useState(new Set());
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'invoices', 'all'));
+        if (snap.exists()) {
+          const entries = snap.data().entries || [];
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+          const recentlyInvoiced = new Set();
+          entries.forEach(inv => {
+            const d = parseDateSent(inv.dateSent, inv.year);
+            if (d && d >= threeMonthsAgo && inv.client) {
+              recentlyInvoiced.add(inv.client.toLowerCase());
+            }
+          });
+          setInvoicedClients(recentlyInvoiced);
+        }
+      } catch (err) {
+        console.error('Error fetching invoices for billable status:', err);
+      } finally {
+        setInvoicesLoaded(true);
+      }
+    };
+    fetchInvoices();
+  }, []);
 
   // Build userId -> display name map
   const userMap = useMemo(() => {
@@ -137,9 +188,11 @@ const ClientsView = ({
       client.name.toLowerCase().includes(clientSearch.toLowerCase())
     );
 
-    // Filter out inactive clients unless showInactive is true
-    if (!showInactive) {
-      filtered = filtered.filter(client => (client.billableHours || client.totalHours) > 0);
+    // Filter by billable status
+    if (clientFilter === 'billable') {
+      filtered = filtered.filter(client => isBillableClient(client));
+    } else if (clientFilter === 'non-billable') {
+      filtered = filtered.filter(client => !isBillableClient(client));
     }
 
     filtered.sort((a, b) => {
@@ -179,8 +232,9 @@ const ClientsView = ({
     return filtered;
   };
 
-  const activeCount = clientsWithBillables.filter(c => (c.billableHours || c.totalHours) > 0).length;
-  const inactiveCount = clientsWithBillables.filter(c => (c.billableHours || c.totalHours) === 0).length;
+  const isBillableClient = (client) => invoicedClients.has((client.name || '').toLowerCase());
+  const activeCount = clientsWithBillables.filter(isBillableClient).length;
+  const inactiveCount = clientsWithBillables.filter(c => !isBillableClient(c)).length;
 
   if (ratesLoading) {
     return (
@@ -213,15 +267,13 @@ const ClientsView = ({
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-gray-600 text-sm">Active Clients</span>
+              <span className="text-gray-600 text-sm">Billable Clients</span>
               <div className="text-3xl font-bold text-green-600 mt-2">{activeCount}</div>
-              <span className="text-gray-400 text-xs">with activity in selected period</span>
             </div>
             <div className="text-gray-300 text-4xl font-light mx-4">/</div>
             <div>
-              <span className="text-gray-600 text-sm">Inactive Clients</span>
+              <span className="text-gray-600 text-sm">Non-billable Clients</span>
               <div className="text-3xl font-bold text-red-600 mt-2">{inactiveCount}</div>
-              <span className="text-gray-400 text-xs">no activity in selected period</span>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -229,15 +281,25 @@ const ClientsView = ({
               <div className="text-gray-400 text-xs">
                 Total: {clientCounts.total} clients (Active + Quiet status)
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(e) => setShowInactive(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-600">Show inactive</span>
-              </label>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                {[
+                  { key: 'all', label: 'All' },
+                  { key: 'billable', label: 'Billable' },
+                  { key: 'non-billable', label: 'Non-billable' },
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setClientFilter(opt.key)}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      clientFilter === opt.key
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -257,10 +319,11 @@ const ClientsView = ({
       </div>
 
       {/* Clients Table */}
-      <ClientsTable 
+      <ClientsTable
         clients={getSortedClients()}
         sortConfig={sortConfig}
         onSort={handleSort}
+        invoicedClients={invoicedClients}
       />
 
       {/* Client Charts */}

@@ -16,7 +16,7 @@ const ClientHoursChart = ({ data, title = "Hours by Client" }) => {
           <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
           <YAxis />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="totalHours" fill={CHART.ops} name="Total Hours" />
+          <Bar dataKey="totalHours" fill={CHART.billable} name="Total Hours" />
         </BarChart>
       </ResponsiveContainer>
     </div>
