@@ -424,9 +424,6 @@ const ClientDetailView = ({ clientName }) => {
               </button>
               <div className="h-6 w-px bg-gray-300"></div>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Building2 className="w-6 h-6 text-purple-600" />
-                </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">{clientName}</h1>
                   <div className="flex items-center gap-3 mt-1">
@@ -598,10 +595,10 @@ const ClientDetailView = ({ clientName }) => {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Hours by Attorney</h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={attorneyBreakdown.slice(0, 8)} layout="vertical">
+                  <BarChart data={attorneyBreakdown.slice(0, 8)}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} domain={[0, (dataMax) => Math.ceil(dataMax / 10) * 10]} ticks={Array.from({ length: Math.ceil(Math.max(...attorneyBreakdown.slice(0, 8).map(a => a.billableHours || 0)) / 10) + 1 }, (_, i) => i * 10)} />
                     <Tooltip content={<CustomChartTooltip />} />
                     <Legend />
                     <Bar dataKey="billableHours" fill={CHART.ops} name="Billable Hours" />
