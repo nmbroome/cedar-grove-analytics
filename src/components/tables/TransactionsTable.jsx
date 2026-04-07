@@ -81,7 +81,7 @@ const TransactionsTable = ({
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <Link
                     href={`/categories/${encodeURIComponent(txn.type)}`}
-                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                    className="text-gray-900 hover:underline"
                   >
                     {txn.type}
                   </Link>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Settings, LogIn, LogOut, Shield, User } from 'lucide-react';
 import { getDateRangeLabel } from '@/utils/dateHelpers';
 import { useAnalyticsData } from '@/hooks/useAnalyticsData';
@@ -17,6 +17,7 @@ const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false
   const { user, isAdmin, signOut, userEmail } = useAuth();
   const { users } = useFirestoreCache();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const restrictedMode = downloadsOnly || transactionsOpsOnly;
 
@@ -40,10 +41,18 @@ const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false
   // Transaction filter state
   const [transactionAttorneyFilter, setTransactionAttorneyFilter] = useState('all');
 
-  // View state
-  const [selectedView, setSelectedView] = useState(
-    downloadsOnly ? 'downloads' : transactionsOpsOnly ? 'transactions' : 'overview'
-  );
+  // View state — read initial tab from URL query param (?tab=clients)
+  const VALID_TABS = ['overview', 'attorneys', 'transactions', 'ops', 'clients', 'downloads'];
+  const defaultTab = downloadsOnly ? 'downloads' : transactionsOpsOnly ? 'transactions' : 'overview';
+  const tabFromUrl = searchParams.get('tab');
+  const initialTab = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : defaultTab;
+  const [selectedView, setSelectedView] = useState(initialTab);
+
+  const switchTab = useCallback((tab) => {
+    setSelectedView(tab);
+    const url = tab === defaultTab ? window.location.pathname : `${window.location.pathname}?tab=${tab}`;
+    window.history.replaceState(null, '', url);
+  }, [defaultTab]);
 
   // Fetch and process data
   const {
@@ -198,7 +207,7 @@ const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false
           }).map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setSelectedView(tab.key)}
+              onClick={() => switchTab(tab.key)}
               className={`px-4 py-2 font-medium transition-colors ${
                 selectedView === tab.key
                   ? 'text-cg-green border-b-2 border-cg-green'
