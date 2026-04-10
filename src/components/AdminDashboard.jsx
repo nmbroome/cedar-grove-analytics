@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt } from 'lucide-react';
+import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt, Briefcase } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -42,6 +42,13 @@ const AdminDashboard = () => {
       href: '/admin/transactions',
       icon: DollarSign,
       color: 'bg-emerald-500',
+    },
+    {
+      title: 'Matters',
+      description: 'View, edit, and manage matters for billing and time tracking',
+      href: '/admin/matters',
+      icon: Briefcase,
+      color: 'bg-purple-500',
     },
   ];
 
