@@ -78,6 +78,7 @@ const AdminInvoices = () => {
   const [matchSelections, setMatchSelections] = useState({});
   const [savingAlias, setSavingAlias] = useState(null);
   const [confirmedMatches, setConfirmedMatches] = useState({});
+  const [markingPaid, setMarkingPaid] = useState(null);
 
   // Gmail API integration
   const [gmailToken, setGmailToken] = useState(null);
@@ -594,6 +595,47 @@ const AdminInvoices = () => {
     });
   };
 
+  // Manually mark an invoice as paid without a matched transaction
+  const handleMarkPaid = async (invoice) => {
+    try {
+      setMarkingPaid(invoice.sheetRowNumber);
+      const today = new Date().toLocaleDateString('en-US');
+      const updatedInvoices = invoices.map((inv) => {
+        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+          return { ...inv, status: 'Paid', dateReceived: today };
+        }
+        return inv;
+      });
+
+      await setDoc(doc(db, 'invoices', 'all'), { entries: updatedInvoices }, { merge: true });
+      setInvoices(updatedInvoices);
+    } catch (err) {
+      console.error('Error marking invoice as paid:', err);
+    } finally {
+      setMarkingPaid(null);
+    }
+  };
+
+  // Revert a manually-marked paid invoice back to outstanding
+  const handleUnmarkPaid = async (invoice) => {
+    try {
+      setMarkingPaid(invoice.sheetRowNumber);
+      const updatedInvoices = invoices.map((inv) => {
+        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+          return { ...inv, status: '', dateReceived: '' };
+        }
+        return inv;
+      });
+
+      await setDoc(doc(db, 'invoices', 'all'), { entries: updatedInvoices }, { merge: true });
+      setInvoices(updatedInvoices);
+    } catch (err) {
+      console.error('Error unmarking invoice:', err);
+    } finally {
+      setMarkingPaid(null);
+    }
+  };
+
   const formatDateDisplay = (dateStr, year) => {
     if (!dateStr) return '—';
     const parsed = parseDateSent(dateStr, year);
@@ -881,11 +923,41 @@ const AdminInvoices = () => {
                           {formatDateDisplay(inv.dateSent, inv.year)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(inv.status)}`}
-                          >
-                            {inv.status || '—'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(inv.status)}`}
+                            >
+                              {inv.status || '—'}
+                            </span>
+                            {inv.status !== 'Paid' ? (
+                              <button
+                                onClick={() => handleMarkPaid(inv)}
+                                disabled={markingPaid === inv.sheetRowNumber}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+                                title="Mark as paid without matching a payment"
+                              >
+                                {markingPaid === inv.sheetRowNumber ? (
+                                  <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Check className="w-3 h-3" />
+                                )}
+                                <span>Mark Paid</span>
+                              </button>
+                            ) : !confirmedMatches[inv.sheetRowNumber] && !inv.matchedTransactionId ? (
+                              <button
+                                onClick={() => handleUnmarkPaid(inv)}
+                                disabled={markingPaid === inv.sheetRowNumber}
+                                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                                title="Revert to outstanding"
+                              >
+                                {markingPaid === inv.sheetRowNumber ? (
+                                  <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <X className="w-3 h-3" />
+                                )}
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {renderMatchCell(inv)}
