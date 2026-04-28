@@ -2,19 +2,23 @@
  * Configuration for attorneys who should be hidden from the UI
  * but whose data should still be included in calculations when their
  * active period overlaps with the selected date range.
- * 
+ *
  * Each entry specifies:
  * - name: The attorney's full name (must match exactly)
- * - hideAfter: Date after which they should be hidden from attorney lists
+ * - hideAfter: Optional. Date after which they should be hidden from attorney lists
  *              (their data is still included if the date range overlaps their active period)
+ * - hideBefore: Optional. Date before which they should be hidden from attorney lists
+ *               (their data is still included if the date range overlaps their active period)
  */
 export const HIDDEN_ATTORNEYS = [
   {
     name: 'Andrew Duble',
     hideAfter: new Date('2025-12-31T23:59:59'), // Hide in 2026 and beyond
   },
-  // Add more attorneys here as needed:
-  // { name: 'John Doe', hideAfter: new Date('2024-06-30') },
+  {
+    name: 'Martyna Skrodzka',
+    hideBefore: new Date('2026-01-01T00:00:00'), // Hide before 2026
+  },
 ];
 
 /**
@@ -26,13 +30,15 @@ export const HIDDEN_ATTORNEYS = [
 export const isAttorneyHidden = (attorneyName, asOfDate = new Date()) => {
   const config = HIDDEN_ATTORNEYS.find(a => a.name === attorneyName);
   if (!config) return false;
-  return asOfDate > config.hideAfter;
+  if (config.hideAfter && asOfDate > config.hideAfter) return true;
+  if (config.hideBefore && asOfDate < config.hideBefore) return true;
+  return false;
 };
 
 /**
  * Check if an attorney's data should be included based on the date range
  * Even if hidden from the UI, their data should be included if the date range
- * overlaps with their active period (before hideAfter)
+ * overlaps with their active period
  * @param {string} attorneyName - The attorney's full name
  * @param {Date} startDate - Start of the date range
  * @param {Date} endDate - End of the date range
@@ -41,9 +47,11 @@ export const isAttorneyHidden = (attorneyName, asOfDate = new Date()) => {
 export const shouldIncludeAttorneyData = (attorneyName, startDate, endDate) => {
   const config = HIDDEN_ATTORNEYS.find(a => a.name === attorneyName);
   if (!config) return true; // Not in hidden list, always include
-  
-  // Include data if any part of the date range is before or at hideAfter
-  return startDate <= config.hideAfter;
+
+  // Active period: (hideBefore, hideAfter). Include if range overlaps.
+  if (config.hideAfter && startDate > config.hideAfter) return false;
+  if (config.hideBefore && endDate < config.hideBefore) return false;
+  return true;
 };
 
 /**

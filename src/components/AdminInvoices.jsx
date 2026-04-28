@@ -64,6 +64,24 @@ function formatTxnDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Stable natural key for an invoice, independent of sheetRowNumber.
+ *
+ * sheetRowNumber is positional — if rows are inserted/deleted/reordered in the
+ * "Payment Status" sheet between the time a match is confirmed and the next
+ * Apps Script sync, the matchedTransactionId will "follow the row slot"
+ * instead of the invoice, and cause the wrong invoice to be marked Paid.
+ * Use this key when locating the invoice to write back to Firestore.
+ */
+function invoiceKey(inv) {
+  if (!inv) return '';
+  const client = (inv.client ?? '').toString().trim().toLowerCase();
+  const amount = inv.amount ?? '';
+  const dateSent = (inv.dateSent ?? '').toString().trim();
+  const year = inv.year ?? '';
+  return `${client}|${amount}|${dateSent}|${year}`;
+}
+
 const AdminInvoices = () => {
   const { user, signOut } = useAuth();
   const router = useRouter();
@@ -330,7 +348,7 @@ const AdminInvoices = () => {
       if (inv.matchedTransactionId) {
         const txn = txnMap.get(inv.matchedTransactionId);
         if (txn) {
-          restored[inv.sheetRowNumber] = { txn, matchType: 'alias' };
+          restored[inv.sheetRowNumber] = { txn, matchType: 'confirmed' };
         }
       }
     }
@@ -533,9 +551,11 @@ const AdminInvoices = () => {
         updatedAliases[cpLower] = [...existing, invoice.client];
       }
 
-      // Update the invoice entry with matched transaction ID and set status to Paid
+      // Update the invoice entry with matched transaction ID and set status to Paid.
+      // Match by stable natural key — sheetRowNumber may shift between syncs.
+      const targetKey = invoiceKey(invoice);
       const updatedInvoices = invoices.map((inv) => {
-        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+        if (invoiceKey(inv) === targetKey) {
           return {
             ...inv,
             matchedTransactionId: transactionId,
@@ -574,8 +594,13 @@ const AdminInvoices = () => {
   // Dismiss a confirmed match: clear persisted match and revert status
   const handleDismissMatch = async (sheetRowNumber) => {
     try {
+      // Resolve the target invoice by sheetRowNumber for the current in-memory
+      // list, then match by stable natural key when writing back to Firestore
+      // so row shifts between fetch and write don't touch the wrong entry.
+      const target = invoices.find((inv) => inv.sheetRowNumber === sheetRowNumber);
+      const targetKey = target ? invoiceKey(target) : null;
       const updatedInvoices = invoices.map((inv) => {
-        if (inv.sheetRowNumber === sheetRowNumber) {
+        if (targetKey && invoiceKey(inv) === targetKey) {
           const { matchedTransactionId, ...rest } = inv;
           return { ...rest, status: '', dateReceived: '' };
         }
@@ -600,8 +625,9 @@ const AdminInvoices = () => {
     try {
       setMarkingPaid(invoice.sheetRowNumber);
       const today = new Date().toLocaleDateString('en-US');
+      const targetKey = invoiceKey(invoice);
       const updatedInvoices = invoices.map((inv) => {
-        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+        if (invoiceKey(inv) === targetKey) {
           return { ...inv, status: 'Paid', dateReceived: today };
         }
         return inv;
@@ -620,8 +646,9 @@ const AdminInvoices = () => {
   const handleUnmarkPaid = async (invoice) => {
     try {
       setMarkingPaid(invoice.sheetRowNumber);
+      const targetKey = invoiceKey(invoice);
       const updatedInvoices = invoices.map((inv) => {
-        if (inv.sheetRowNumber === invoice.sheetRowNumber) {
+        if (invoiceKey(inv) === targetKey) {
           return { ...inv, status: '', dateReceived: '' };
         }
         return inv;
