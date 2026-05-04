@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt, Briefcase } from 'lucide-react';
+import { Users, LogOut, ArrowLeft, Shield, FileText, DollarSign, Receipt, Briefcase, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const AdminDashboard = () => {
@@ -35,6 +35,13 @@ const AdminDashboard = () => {
       href: '/admin/invoices',
       icon: Receipt,
       color: 'bg-amber-500',
+    },
+    {
+      title: 'Billing KPIs',
+      description: 'Average payment time, realization rate, and AR aging by client and firm-wide',
+      href: '/admin/billing-kpis',
+      icon: TrendingUp,
+      color: 'bg-indigo-500',
     },
     {
       title: 'Transactions',
