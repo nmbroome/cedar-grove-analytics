@@ -3,18 +3,16 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LogOut, Target, Users, UserPlus, Shield } from 'lucide-react';
+import { ArrowLeft, LogOut, Users, UserPlus, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useUsers } from '@/hooks/useFirestoreData';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import { filterHiddenAttorneys } from '@/utils/hiddenAttorneys';
-import UtilizationTargetsTab from '@/components/admin/UtilizationTargetsTab';
 import RoleManagementTab from '@/components/admin/RoleManagementTab';
 import AddUserTab from '@/components/admin/AddUserTab';
 import ManageAdminsTab from '@/components/admin/ManageAdminsTab';
 
 const TABS = [
-  { key: 'targets', label: 'Utilization Targets', icon: Target },
   { key: 'roles', label: 'Role Management', icon: Users },
   { key: 'add-user', label: 'Add User', icon: UserPlus },
   { key: 'admins', label: 'Manage Admins', icon: Shield },
@@ -26,7 +24,7 @@ const AdminUserManagement = () => {
   const { users: allUsers, loading: usersLoading, error: usersError } = useUsers();
   const { refetch } = useFirestoreCache();
 
-  const [activeTab, setActiveTab] = useState('targets');
+  const [activeTab, setActiveTab] = useState('roles');
 
   const handleLogout = async () => {
     await signOut();
@@ -82,7 +80,7 @@ const AdminUserManagement = () => {
               <div className="h-6 w-px bg-gray-300"></div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                <p className="text-sm text-gray-600">Manage team members, roles, employment types, and utilization targets</p>
+                <p className="text-sm text-gray-600">Manage team members, roles, and employment types</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -131,9 +129,6 @@ const AdminUserManagement = () => {
 
       {/* Tab Content */}
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        {activeTab === 'targets' && (
-          <UtilizationTargetsTab users={users} usersLoading={usersLoading} />
-        )}
         {activeTab === 'roles' && (
           <RoleManagementTab users={users} allUsers={allUsers} refetch={refetch} />
         )}
