@@ -94,7 +94,7 @@ const AttorneysTable = ({
                     {warnings && warnings.length > 0 && (
                       <span className="relative group">
                         <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                        <span className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-max max-w-sm p-2 bg-gray-900 text-white text-xs rounded shadow-lg">
+                        <span className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-max max-w-xs sm:max-w-sm md:max-w-md p-2 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-normal wrap-break-word">
                           {warnings.map((w, i) => (
                             <span key={i} className="block">{w.message}</span>
                           ))}
