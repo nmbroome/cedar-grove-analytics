@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Cedar Grove Analytics
+
+Legal analytics dashboard for Cedar Grove LLP — attorney utilization, client activity, and billing summaries.
+
+## Tech Stack
+
+- Next.js 16 (App Router) + React 19
+- Tailwind CSS 4
+- Firebase 12 (Firestore + Auth)
+- Recharts 3, D3 7
+- Lucide React icons
 
 ## Getting Started
 
-First, run the development server:
+Prereqs: Node 20+ and npm.
 
 ```bash
+npm install
+cp .env.local.example .env.local   # if a template exists, otherwise create .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and sign in with a `@cedargrovellp.com` Google account.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Required environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+All vars are client-side (`NEXT_PUBLIC_` prefix). Pull values from Vercel or another dev:
 
-## Learn More
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build |
+| `npm run start` | Run the production build |
+| `npm run lint` | Run ESLint |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Layout
 
-## Deploy on Vercel
+```
+src/
+├── app/         # Next.js App Router pages
+├── components/  # UI: charts, tables, views, shared, tooltips
+├── context/     # AuthContext (Google Sign-in, admin check)
+├── firebase/    # Firebase app init
+├── hooks/       # Firestore fetching + analytics aggregation
+└── utils/       # Constants, date math, formatters, role overrides
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployed on Vercel. Pushing to `main` triggers a deploy; environment variables are managed in the Vercel dashboard.
+
+## Further Reading
+
+See [CLAUDE.md](CLAUDE.md) for architecture details, the Firestore data model, auth/admin flow, and project conventions.
