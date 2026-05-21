@@ -273,7 +273,7 @@ const ClientsView = ({
             <div className="text-gray-300 text-4xl font-light mx-4">/</div>
             <div>
               <span className="text-gray-600 text-sm">Quiet Clients</span>
-              <div className="text-3xl font-bold text-red-600 mt-2">{inactiveCount}</div>
+              <div className="text-3xl font-bold text-amber-600 mt-2">{inactiveCount}</div>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">

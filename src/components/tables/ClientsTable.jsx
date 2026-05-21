@@ -87,7 +87,7 @@ const ClientsTable = ({
               <td className="px-6 py-4 whitespace-nowrap text-sm">
                 <span
                   className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    getStatusBadge(invoicedClients.has((client.name || '').toLowerCase()) ? 'active' : 'inactive')
+                    getStatusBadge(invoicedClients.has((client.name || '').toLowerCase()) ? 'active' : 'quiet')
                   }`}
                 >
                   {invoicedClients.has((client.name || '').toLowerCase()) ? 'Active' : 'Quiet'}
