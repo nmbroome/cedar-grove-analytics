@@ -90,7 +90,7 @@ const ClientsTable = ({
                     getStatusBadge(invoicedClients.has((client.name || '').toLowerCase()) ? 'active' : 'inactive')
                   }`}
                 >
-                  {invoicedClients.has((client.name || '').toLowerCase()) ? 'Billable' : 'Non-billable'}
+                  {invoicedClients.has((client.name || '').toLowerCase()) ? 'Active' : 'Quiet'}
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
