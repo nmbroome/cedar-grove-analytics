@@ -267,13 +267,13 @@ const ClientsView = ({
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-gray-600 text-sm">Billable Clients</span>
+              <span className="text-gray-600 text-sm">Active Clients</span>
               <div className="text-3xl font-bold text-green-600 mt-2">{activeCount}</div>
             </div>
             <div className="text-gray-300 text-4xl font-light mx-4">/</div>
             <div>
-              <span className="text-gray-600 text-sm">Non-billable Clients</span>
-              <div className="text-3xl font-bold text-red-600 mt-2">{inactiveCount}</div>
+              <span className="text-gray-600 text-sm">Quiet Clients</span>
+              <div className="text-3xl font-bold text-amber-600 mt-2">{inactiveCount}</div>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -284,8 +284,8 @@ const ClientsView = ({
               <div className="flex rounded-lg border border-gray-200 overflow-hidden">
                 {[
                   { key: 'all', label: 'All' },
-                  { key: 'billable', label: 'Billable' },
-                  { key: 'non-billable', label: 'Non-billable' },
+                  { key: 'billable', label: 'Active' },
+                  { key: 'non-billable', label: 'Quiet' },
                 ].map(opt => (
                   <button
                     key={opt.key}
