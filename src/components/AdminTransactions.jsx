@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, LogOut, DollarSign, ArrowDownCircle, ArrowUpCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db, auth } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
 import { getStatusBadge } from '@/utils/statusStyles';
@@ -46,7 +46,14 @@ const AdminTransactions = () => {
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const res = await fetch('/api/sync-transactions', { method: 'POST' });
+      if (!auth.currentUser) {
+        throw new Error('You are not signed in.');
+      }
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/sync-transactions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
       const data = await res.json();
       if (data.success) {
         setSyncStatus({ type: 'success', message: `Synced ${data.synced} transactions` });

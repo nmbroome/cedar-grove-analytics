@@ -357,7 +357,14 @@ const AdminInvoices = () => {
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const res = await fetch('/api/sync-transactions', { method: 'POST' });
+      if (!auth.currentUser) {
+        throw new Error('You are not signed in.');
+      }
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/sync-transactions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
       const data = await res.json();
       if (data.success) {
         setSyncStatus({ type: 'success', message: `Synced ${data.synced} transactions` });
