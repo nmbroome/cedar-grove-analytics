@@ -1,19 +1,16 @@
 // Client "ideal-fit" rating — Ideal / Non-Ideal / TBD.
 //
-// Cedar Grove tags each client's fit in their source spreadsheet (column E),
-// which is synced into the `clients/all` Firestore doc. The exact synced field
-// name and value shape aren't guaranteed (CLAUDE.md documents a boolean
-// `isIdeal`, but the spreadsheet column is three-state text), so we read
-// DEFENSIVELY across the likely field names and normalize whatever is present
-// to one of: 'ideal' | 'non-ideal' | 'tbd' | null (untagged / no data).
-//
-// If the real synced field turns out to differ, add its name to RATING_FIELDS
-// (or adjust normalizeRatingString) — no other code needs to change.
+// Cedar Grove tags each client's fit in their source spreadsheet, synced into
+// the `clients/all` Firestore doc. Per the data owner, the value lives in the
+// `isIdeal` field as a string: "Yes" | "No" | "TBD". We still read DEFENSIVELY
+// across a few likely field names and normalize whatever is present to one of:
+// 'ideal' | 'non-ideal' | 'tbd' | null (untagged / no data), so the UI stays
+// resilient if the field is later renamed or its values reworded.
 
-// Candidate field names, checked in order. String-valued fields are listed
-// before the documented boolean `isIdeal` so a real three-state value always
-// wins over a lossy boolean.
+// `isIdeal` is the confirmed source; the rest are defensive fallbacks in case
+// the synced field name ever changes. Checked in order.
 const RATING_FIELDS = [
+  'isIdeal',
   'idealRating',
   'idealStatus',
   'idealClient',
@@ -21,7 +18,6 @@ const RATING_FIELDS = [
   'idealFit',
   'idealTag',
   'ideal',
-  'isIdeal',
 ];
 
 export const RATING_LABEL = {
@@ -49,7 +45,11 @@ function normalizeRatingString(value) {
   ) {
     return 'tbd';
   }
-  // Must test "non-ideal" BEFORE "ideal" since the former contains the latter.
+  // The isIdeal field answers "is this an ideal client?" as "Yes" / "No" / "TBD".
+  if (v === 'yes' || v === 'y') return 'ideal';
+  if (v === 'no' || v === 'n') return 'non-ideal';
+  // Also accept literal "Ideal" / "Non-Ideal" labels. Test "non-ideal" BEFORE
+  // "ideal" since the former contains the latter.
   if ((v.includes('non') && v.includes('ideal')) || v === 'not ideal' || v === 'not-ideal') {
     return 'non-ideal';
   }
