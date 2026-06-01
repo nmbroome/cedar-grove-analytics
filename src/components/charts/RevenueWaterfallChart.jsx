@@ -2,9 +2,10 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '@/utils/formatters';
+import { GRAY } from '@/utils/colors';
 
-// Brand green (globals.css --color-cg-green) for totals; red-600 for
-// subtractions, matching the negative styling used in the table.
+// Brand green (globals.css --color-cg-green) for totals and add-backs;
+// red-600 for true reductions, matching the table's negative styling.
 const CG_GREEN = '#1CA33B';
 const RED = '#dc2626';
 
@@ -43,15 +44,15 @@ const RevenueWaterfallChart = ({ data, title = 'Revenue Waterfall' }) => (
         <Tooltip content={<WaterfallTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
         {/* Invisible base props each visible delta to the correct height */}
         <Bar dataKey="base" stackId="wf" fill="transparent" isAnimationActive={false} />
-        {/* Visible delta, colored per datum: green for totals, red for cuts */}
+        {/* Visible delta, colored per datum: green for totals/add-backs, red for cuts */}
         <Bar dataKey="delta" stackId="wf" maxBarSize={64} isAnimationActive={false}>
-          {data.map((d, i) => (
-            <Cell key={i} fill={d.isTotal ? CG_GREEN : RED} />
+          {data.map((d) => (
+            <Cell key={d.name} fill={d.isTotal || !d.isNegative ? CG_GREEN : RED} />
           ))}
           <LabelList
             dataKey="value"
             position="top"
-            style={{ fontSize: 11, fill: '#5A5A48' }}
+            style={{ fontSize: 11, fill: GRAY[600] }}
             formatter={(v) => formatCurrency(v || 0)}
           />
         </Bar>

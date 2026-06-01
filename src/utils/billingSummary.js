@@ -76,8 +76,19 @@ export const buildWaterfallData = (entry) => {
   let running = gross;
   const subtract = (name, amount) => {
     const after = running - amount;
-    // Avoid -0 for zero-value steps (e.g. Outside Counsel Reimb = $0).
-    data.push({ name, base: after, delta: amount, value: amount === 0 ? 0 : -amount, isTotal: false, isNegative: true });
+    // Use an absolute height anchored at the lower of the two running
+    // totals so the step renders correctly even if a field is negative
+    // (e.g. a write-off reversal or deferred-revenue release that adds
+    // back). `value` keeps the signed effect; `isNegative` marks only
+    // true reductions (drives red vs green). Avoid -0 for zero steps.
+    data.push({
+      name,
+      base: Math.min(running, after),
+      delta: Math.abs(amount),
+      value: amount === 0 ? 0 : -amount,
+      isTotal: false,
+      isNegative: amount > 0,
+    });
     running = after;
   };
 

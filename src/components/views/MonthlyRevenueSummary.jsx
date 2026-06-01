@@ -140,8 +140,10 @@ const MonthlyRevenueSummary = () => {
                   <tr key={row.key} className={rowClass(row.kind)}>
                     <td className={`px-6 py-3 ${labelClass(row.kind)}`}>{row.label}</td>
                     <td className={`px-6 py-3 text-right tabular-nums ${amountClass(row.kind)}`}>
+                      {/* Negate so the deduction reads "-$X"; also correct if a
+                          field is stored negative (reversal) -> shows "+$X". */}
                       {row.kind === 'subtract'
-                        ? `−${formatCurrency(row.value)}`
+                        ? formatCurrency(-row.value)
                         : formatCurrency(row.value)}
                     </td>
                   </tr>
