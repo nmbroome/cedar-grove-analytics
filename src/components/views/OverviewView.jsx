@@ -48,9 +48,9 @@ const OverviewView = ({
 }) => {
   const [cohort, setCohort] = useState('lawyers');
   const showRevenueAccrued = cohort === 'full-team' && periodRevenueAccrued != null;
-  // Attorney Billables (firm-wide, from the source sheet) is the preferred
-  // billables figure; rate × hours is only a fallback until it's synced.
-  const billablesFromSheet = !showRevenueAccrued && periodAttorneyBillables != null;
+  // Attorney Billables from the sheet is firm-wide (no per-person/per-cohort
+  // breakdown), so only Full Team uses it; sub-cohorts keep rate × hours.
+  const billablesFromSheet = cohort === 'full-team' && !showRevenueAccrued && periodAttorneyBillables != null;
 
   const cohortMetrics = useMemo(() => {
     const subset = filterByCohort(attorneyData || [], cohort);
@@ -60,12 +60,12 @@ const OverviewView = ({
     const billableTarget = subset.reduce((acc, a) => acc + (a.billableTarget || 0), 0);
     const opsTarget = subset.reduce((acc, a) => acc + (a.opsTarget || 0), 0);
     const grossBillablesSum = subset.reduce((acc, a) => acc + (a.grossBillables || 0), 0);
-    // Prefer firm-wide Revenue Accrued (full team), then firm-wide Attorney
-    // Billables from the sheet, falling back to rate × hours only if neither
-    // is synced for the period.
+    // Full Team: prefer firm-wide Revenue Accrued, then firm-wide Attorney
+    // Billables (both pulled from the sheet). Sub-cohorts keep rate × hours,
+    // since the sheet figures aren't broken out per person/cohort.
     const grossBillables = cohort === 'full-team' && periodRevenueAccrued != null
       ? periodRevenueAccrued
-      : (periodAttorneyBillables != null ? periodAttorneyBillables : grossBillablesSum);
+      : (cohort === 'full-team' && periodAttorneyBillables != null ? periodAttorneyBillables : grossBillablesSum);
 
     const utilizationValues = subset.map((a) => {
       const total = (a.billable || 0) + (a.ops || 0);
