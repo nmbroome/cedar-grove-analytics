@@ -114,16 +114,15 @@ driveDownloads/{monthKey}  — month, totalDownloads, uniqueUsers, uniqueFiles, 
                               Legal Memos, New Client Onboarding.
 
 monthlyMetrics/all       — firm-wide per-month metrics. Single doc with entries[] array:
-                              { entries: [{ month, year, revenueAccrued, syncedAt,
-                                  // optional billing-summary breakdown (back-compatible):
-                                  gross, writeOffs, attorneyBillables, flatFee83b,
-                                  filingFees, outsideCounselReimbursements,
-                                  netAccrued, deferred }],
+                              { entries: [{ month, year, revenueAccrued,
+                                  attorneyBillables,  // optional; pulled from the sheet
+                                  syncedAt }],
                                 entryCount, lastSyncedAt }
                               Synced manually from the monthly sheet tab via Apps Script
-                              (cell B10 "Revenue Accrued" + the summary-table line items).
-                              Breakdown surfaced on the Billing Summaries page as a
-                              reconciliation table + waterfall (see utils/billingSummary.js).
+                              (cell B10 "Revenue Accrued" + the "Attorney Billables" line).
+                              attorneyBillables is shown on the Billing Summaries page and
+                              drives the Overview "Total Billables" KPI (see
+                              utils/billingSummary.js).
 
 rateCard/all             — shared rate ladder used ONLY for predictive earnings
                               modeling. Single doc:

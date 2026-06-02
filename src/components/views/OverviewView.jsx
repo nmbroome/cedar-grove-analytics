@@ -42,11 +42,15 @@ const OverviewView = ({
   globalAttorneyFilter,
   allAttorneyNames,
   periodRevenueAccrued = null,
+  periodAttorneyBillables = null,
   attorneyData,
   transactionData,
 }) => {
   const [cohort, setCohort] = useState('lawyers');
   const showRevenueAccrued = cohort === 'full-team' && periodRevenueAccrued != null;
+  // Attorney Billables (firm-wide, from the source sheet) is the preferred
+  // billables figure; rate × hours is only a fallback until it's synced.
+  const billablesFromSheet = !showRevenueAccrued && periodAttorneyBillables != null;
 
   const cohortMetrics = useMemo(() => {
     const subset = filterByCohort(attorneyData || [], cohort);
@@ -56,9 +60,12 @@ const OverviewView = ({
     const billableTarget = subset.reduce((acc, a) => acc + (a.billableTarget || 0), 0);
     const opsTarget = subset.reduce((acc, a) => acc + (a.opsTarget || 0), 0);
     const grossBillablesSum = subset.reduce((acc, a) => acc + (a.grossBillables || 0), 0);
+    // Prefer firm-wide Revenue Accrued (full team), then firm-wide Attorney
+    // Billables from the sheet, falling back to rate × hours only if neither
+    // is synced for the period.
     const grossBillables = cohort === 'full-team' && periodRevenueAccrued != null
       ? periodRevenueAccrued
-      : grossBillablesSum;
+      : (periodAttorneyBillables != null ? periodAttorneyBillables : grossBillablesSum);
 
     const utilizationValues = subset.map((a) => {
       const total = (a.billable || 0) + (a.ops || 0);
@@ -78,7 +85,7 @@ const OverviewView = ({
       utilization,
       attorneyCount: subset.length,
     };
-  }, [cohort, attorneyData, periodRevenueAccrued]);
+  }, [cohort, attorneyData, periodRevenueAccrued, periodAttorneyBillables]);
 
   const totalHours = cohortMetrics.billable + cohortMetrics.ops;
   const billablePercentage = totalHours > 0 ? Math.round((cohortMetrics.billable / totalHours) * 100) : 0;
@@ -185,7 +192,7 @@ const OverviewView = ({
           <div className="flex-1 flex items-center justify-center">
             <div className="text-3xl font-bold text-gray-900">{formatCurrency(cohortMetrics.grossBillables)}</div>
           </div>
-          <div className="text-sm text-gray-600 text-center">{showRevenueAccrued ? 'Firm-wide' : 'Rate × Hours'}</div>
+          <div className="text-sm text-gray-600 text-center">{showRevenueAccrued || billablesFromSheet ? 'Firm-wide' : 'Rate × Hours'}</div>
         </div>
       </div>
 

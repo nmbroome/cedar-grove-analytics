@@ -14,7 +14,7 @@ import { useAllBillableEntries, useUsers } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
-import MonthlyRevenueSummary from './MonthlyRevenueSummary';
+import MonthlyAttorneyBillables from './MonthlyAttorneyBillables';
 
 const BillingSummariesView = () => {
   const { data: allEntries, loading: entriesLoading, error: entriesError } = useAllBillableEntries();
@@ -246,8 +246,8 @@ const BillingSummariesView = () => {
         </div>
       </div>
 
-      {/* Firm-wide monthly revenue reconciliation */}
-      <MonthlyRevenueSummary />
+      {/* Firm-wide monthly attorney billables */}
+      <MonthlyAttorneyBillables />
 
       {/* Results */}
       {selectedMonth && selectedClient && (

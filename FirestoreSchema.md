@@ -510,19 +510,10 @@ Stores firm-wide per-month metrics in a single document as an entries array. Syn
       month: "January",                     // string — month name
       year: 2026,                           // number
 
-      // Firm-wide billing reconciliation line items. All OPTIONAL —
-      // present once the billing-summary sync runs; parsed from the
-      // month sheet's summary table via parseCurrency. Older entries
-      // may have only revenueAccrued.
-      gross: 263877,                        // number — Gross (Billables, Fees, Reimbursements)
-      writeOffs: 3,                         // number — Write Offs (subtracted)
-      attorneyBillables: 260193,            // number — Attorney Billables
-      flatFee83b: 1750,                     // number — 83(b) Flat Fee
-      filingFees: 1934,                     // number — Filing Fees
-      outsideCounselReimbursements: 0,      // number — Outside Counsel Reimbursements
-      netAccrued: 261940,                   // number — Net Accrued
-      deferred: 5105,                       // number — Deferred (subtracted)
       revenueAccrued: 256835,               // number — Revenue (Accrued), parsed from cell B10
+      attorneyBillables: 260193,            // number — "Attorney Billables" line from the sheet's
+                                            //   billing-summary table. Optional (present once the
+                                            //   sync writes it). Pulled directly, not derived.
 
       syncedAt: "2026-05-04T..."            // string — ISO 8601 timestamp this entry was last synced
     }
@@ -534,11 +525,7 @@ Stores firm-wide per-month metrics in a single document as an entries array. Syn
 ### Field Notes
 
 - `revenueAccrued`: Parsed from cell B10 of the month sheet. Currency strings are normalized to plain numbers via `parseCurrency`.
-- **Billing summary fields** (`gross`, `writeOffs`, `attorneyBillables`, `flatFee83b`, `filingFees`, `outsideCounselReimbursements`, `netAccrued`, `deferred`): firm-wide reconciliation line items from the same month sheet tab as B10. All are **optional** and stored as plain numbers. The Billing Summaries page renders the reconciliation table + waterfall only when `gross`, `netAccrued`, and `revenueAccrued` are all present; entries with only `revenueAccrued` are skipped by that section. Values must be numbers, not currency strings (the dashboard checks `typeof === 'number'`); `parseCurrency` already returns numbers.
-- **Reconciliation identities** (for sync sanity-checking):
-  - `gross = attorneyBillables + flatFee83b + filingFees + outsideCounselReimbursements`
-  - `netAccrued = gross − writeOffs − filingFees − outsideCounselReimbursements`
-  - `revenueAccrued = netAccrued − deferred`
+- `attorneyBillables`: The "Attorney Billables" line from the month sheet's billing-summary table, pulled **directly** from the sheet (not derived from rate × hours). **Optional** — present once the sync writes it. Stored as a plain number (the dashboard checks `typeof === 'number'`; `parseCurrency` already returns numbers). Surfaced on the Billing Summaries page and used for the Overview "Total Billables" KPI.
 - `month` + `year`: Composite key. Re-syncing the same month replaces its entry rather than appending.
 - Entries are sorted chronologically (year, then month index).
 
@@ -548,8 +535,8 @@ Stores firm-wide per-month metrics in a single document as an entries array. Syn
 Google Sheet ({Month} tab) → Apps Script → Firestore
                                           │
                                           ├── 1. Read existing entries[] from monthlyMetrics/all
-                                          ├── 2. Read B10 (Revenue Accrued) + the summary-table
-                                          │      line items (matched by column-A label text)
+                                          ├── 2. Read B10 (Revenue Accrued) + the "Attorney
+                                          │      Billables" line (matched by column-A label text)
                                           ├── 3. Upsert entry by month+year, sort
                                           └── 4. PATCH entries field (preserves other doc fields)
 ```
@@ -558,49 +545,33 @@ Google Sheet ({Month} tab) → Apps Script → Firestore
 - **Strategy**: Field-level PATCH on `entries`. Read-modify-write to upsert one month at a time without overwriting other months.
 - **Cost per sync**: 1 read, 1 write.
 
-#### Reading the billing summary line items (label-based)
+#### Reading Attorney Billables (label-based)
 
-The summary line items live in a small table on each month tab. Match the
-**column-A label text** (case-insensitive, trimmed) rather than hardcoding cell
-addresses, so minor label edits don't break the sync. Read the adjacent value with
-the existing `parseCurrency` helper (which returns a plain number):
+`attorneyBillables` is pulled directly from the "Attorney Billables" line of the
+month sheet's billing-summary table. Match the **column-A label text** (case-
+insensitive, trimmed) rather than a hardcoded cell address, so minor label edits
+don't break the sync. Read the adjacent value with the existing `parseCurrency`
+helper (which returns a plain number):
 
 ```javascript
-// Map column-A label text → Firestore field name.
-var LABEL_TO_FIELD = {
-  'gross (billables, fees, reimbursements)': 'gross',
-  'gross': 'gross',                                 // tolerate a shortened label
-  'write offs': 'writeOffs',
-  'attorney billables': 'attorneyBillables',
-  '83(b) flat fee': 'flatFee83b',
-  'filing fees': 'filingFees',
-  'outside counsel reimbursements': 'outsideCounselReimbursements',
-  'net accrued': 'netAccrued',
-  'deferred': 'deferred',
-  'revenue (accrued)': 'revenueAccrued',
-  'revenue accrued': 'revenueAccrued',
-};
-
-function readBillingSummary(sheet) {
+function readAttorneyBillables(sheet) {
   var rows = sheet.getRange('A1:B40').getValues(); // generous label/value window
-  var out = {};
-  rows.forEach(function (row) {
-    var label = String(row[0] || '').trim().toLowerCase();
-    var field = LABEL_TO_FIELD[label];
-    if (field) out[field] = parseCurrency(row[1]); // returns a number
-  });
-  return out; // { gross, writeOffs, ..., revenueAccrued }
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim().toLowerCase() === 'attorney billables') {
+      return parseCurrency(rows[i][1]); // returns a number
+    }
+  }
+  return null;
 }
 
-// In forceSyncRevenueAccrued*, spread these into the upserted entry:
-//   var entry = Object.assign(
-//     { month: month, year: year, syncedAt: now },
-//     readBillingSummary(sheet)
-//   );
+// In forceSyncRevenueAccrued*, add it to the upserted entry alongside revenueAccrued:
+//   var entry = { month: month, year: year, syncedAt: now,
+//                 revenueAccrued: parseCurrency(sheet.getRange('B10').getValue()) };
+//   var ab = readAttorneyBillables(sheet);
+//   if (ab != null) entry.attorneyBillables = ab;
 ```
 
-Keep `parseCurrency` returning numbers — the dashboard checks `typeof === 'number'`
-to decide whether a month has a full breakdown.
+Keep `parseCurrency` returning numbers — the dashboard checks `typeof === 'number'`.
 
 ---
 

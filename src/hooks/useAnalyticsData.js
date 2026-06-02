@@ -995,13 +995,15 @@ export const useAnalyticsData = ({
     return (monthlyMetrics || []).reduce((acc, m) => acc + (m.revenueAccrued || 0), 0);
   }, [monthlyMetrics]);
 
-  // Revenue accrued for the active date range. Null when range does not align
-  // to one or more whole calendar months (or when no monthlyMetrics entries match).
-  const periodRevenueAccrued = useMemo(() => {
+  // Sum a firm-wide monthly metric field (e.g. revenueAccrued, attorneyBillables)
+  // over the active date range. Null when the range does not align to one or more
+  // whole calendar months (or when no monthlyMetrics entries match).
+  const computePeriodMetric = useCallback((field) => {
     if (!monthlyMetrics || monthlyMetrics.length === 0) return null;
 
     if (dateRange === 'all-time') {
-      return totalRevenueAccrued > 0 ? totalRevenueAccrued : null;
+      const total = monthlyMetrics.reduce((acc, m) => acc + (m[field] || 0), 0);
+      return total > 0 ? total : null;
     }
 
     const { startDate, endDate } = dateRangeInfo || {};
@@ -1042,14 +1044,19 @@ export const useAnalyticsData = ({
       const entry = monthlyMetrics.find(
         e => e.year === year && e.month === monthNames[monthIndex]
       );
-      if (entry && typeof entry.revenueAccrued === 'number') {
-        sum += entry.revenueAccrued;
+      if (entry && typeof entry[field] === 'number') {
+        sum += entry[field];
         foundAny = true;
       }
     });
 
     return foundAny ? sum : null;
-  }, [dateRange, dateRangeInfo, monthlyMetrics, totalRevenueAccrued]);
+  }, [dateRange, dateRangeInfo, monthlyMetrics]);
+
+  // Revenue Accrued and Attorney Billables for the active date range (firm-wide,
+  // pulled from the source sheet). Null when the range doesn't align to whole months.
+  const periodRevenueAccrued = useMemo(() => computePeriodMetric('revenueAccrued'), [computePeriodMetric]);
+  const periodAttorneyBillables = useMemo(() => computePeriodMetric('attorneyBillables'), [computePeriodMetric]);
 
   // Calculate total gross billables (rate * hours) - includes all entries (hidden users too)
   const totalGrossBillables = useMemo(() => {
@@ -1122,6 +1129,7 @@ export const useAnalyticsData = ({
     totalGrossBillables,
     totalRevenueAccrued,
     periodRevenueAccrued,
+    periodAttorneyBillables,
     ...totals,
   };
 };
