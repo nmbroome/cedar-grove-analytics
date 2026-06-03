@@ -1036,21 +1036,24 @@ export const useAnalyticsData = ({
       return fullyCovered || isCurrentMonthToDate;
     });
 
-    if (matched.length === 0) return null;
+    // Use the firm-wide monthly figure only when the range aligns cleanly to
+    // whole calendar months (or the current month-to-date). If any touched
+    // month is only partially covered — Trailing 60, a week, or an arbitrary
+    // custom range — return null so the caller falls back to rate × hours.
+    if (matched.length === 0 || matched.length !== candidates.length) return null;
 
     let sum = 0;
-    let foundAny = false;
-    matched.forEach(({ year, monthIndex }) => {
+    for (const { year, monthIndex } of matched) {
       const entry = monthlyMetrics.find(
         e => e.year === year && e.month === monthNames[monthIndex]
       );
-      if (entry && typeof entry[field] === 'number') {
-        sum += entry[field];
-        foundAny = true;
-      }
-    });
+      // Every in-range month must have a synced value, otherwise the sum would
+      // understate the period — fall back instead of reporting a partial figure.
+      if (!entry || typeof entry[field] !== 'number') return null;
+      sum += entry[field];
+    }
 
-    return foundAny ? sum : null;
+    return sum;
   }, [dateRange, dateRangeInfo, monthlyMetrics]);
 
   // Revenue Accrued and Attorney Billables for the active date range (firm-wide,

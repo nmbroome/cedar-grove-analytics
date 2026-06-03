@@ -525,7 +525,7 @@ Stores firm-wide per-month metrics in a single document as an entries array. Syn
 ### Field Notes
 
 - `revenueAccrued`: Parsed from cell B10 of the month sheet. Currency strings are normalized to plain numbers via `parseCurrency`.
-- `attorneyBillables`: The "Attorney Billables" line from the month sheet's billing-summary table, pulled **directly** from the sheet (not derived from rate × hours). **Optional** — present once the sync writes it. Stored as a plain number (the dashboard checks `typeof === 'number'`; `parseCurrency` already returns numbers). Surfaced on the Billing Summaries page and used for the Overview "Total Billables" KPI.
+- `attorneyBillables`: The "Attorney Billables" line from the month sheet's billing-summary table, pulled **directly** from the sheet (not derived from rate × hours). **Optional** — present once the sync writes it. Stored as a plain number (the dashboard checks `typeof === 'number'`; `parseCurrency` already returns numbers). Surfaced on the Billing Summaries page and used for the Overview "Total Billables" KPI on month-aligned date ranges (a month in progress or completed months); custom or partial ranges fall back to rate × hours.
 - `month` + `year`: Composite key. Re-syncing the same month replaces its entry rather than appending.
 - Entries are sorted chronologically (year, then month index).
 
