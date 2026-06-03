@@ -56,6 +56,10 @@ const OverviewView = ({
     const billableTarget = subset.reduce((acc, a) => acc + (a.billableTarget || 0), 0);
     const opsTarget = subset.reduce((acc, a) => acc + (a.opsTarget || 0), 0);
     const grossBillablesSum = subset.reduce((acc, a) => acc + (a.grossBillables || 0), 0);
+    // Cohort-wide out-of-office / holiday context — the pace targets above are
+    // already reduced for each member's OOO (capacity model); this drives a tooltip.
+    const oooDays = subset.reduce((acc, a) => acc + (a.oooDays || 0), 0);
+    const holidayDays = subset.reduce((acc, a) => acc + (a.holidayDays || 0), 0);
     // "Total Billables" source. Full Team prefers the firm-wide sheet figures —
     // Attorney Billables first (the authoritative billed amount), then Revenue
     // Accrued — and otherwise falls back to rate × hours. Sub-cohorts always use
@@ -81,11 +85,11 @@ const OverviewView = ({
       billablesSubtitle = 'Rate × Hours';
     }
 
-    const utilizationValues = subset.map((a) => {
-      const total = (a.billable || 0) + (a.ops || 0);
-      const target = a.target || 0;
-      return target > 0 ? (total / target) * 100 : 0;
-    });
+    // Exclude members with no target this period (fully out of office) so their
+    // N/A doesn't drag the cohort average — matches calculateUtilization/avgOf.
+    const utilizationValues = subset
+      .filter((a) => (a.target || 0) > 0)
+      .map((a) => (((a.billable || 0) + (a.ops || 0)) / a.target) * 100);
     const utilization = utilizationValues.length > 0
       ? Math.round(utilizationValues.reduce((acc, v) => acc + v, 0) / utilizationValues.length)
       : 0;
@@ -99,9 +103,19 @@ const OverviewView = ({
       billablesLabel,
       billablesSubtitle,
       utilization,
+      oooDays,
+      holidayDays,
       attorneyCount: subset.length,
     };
   }, [cohort, attorneyData, periodRevenueAccrued, periodAttorneyBillables]);
+
+  // Tooltip explaining the OOO/holiday adjustment behind the pace figures.
+  const paceAdjustmentTitle = (cohortMetrics.oooDays > 0 || cohortMetrics.holidayDays > 0)
+    ? `Pace targets reflect ${[
+        cohortMetrics.oooDays > 0 ? `${cohortMetrics.oooDays} out-of-office day${cohortMetrics.oooDays === 1 ? '' : 's'}` : null,
+        cohortMetrics.holidayDays > 0 ? `${cohortMetrics.holidayDays} firm holiday${cohortMetrics.holidayDays === 1 ? '' : 's'}` : null,
+      ].filter(Boolean).join(' and ')} across the cohort this period`
+    : undefined;
 
   const totalHours = cohortMetrics.billable + cohortMetrics.ops;
   const billablePercentage = totalHours > 0 ? Math.round((cohortMetrics.billable / totalHours) * 100) : 0;
@@ -186,7 +200,10 @@ const OverviewView = ({
           <div className="flex-1 flex items-center justify-center">
             <div className="text-3xl font-bold text-gray-900">{formatHours(cohortMetrics.billable)}h</div>
           </div>
-          <div className="text-sm text-gray-600 text-center">{billableProgress}% current pace</div>
+          <div
+            className={`text-sm text-gray-600 text-center${paceAdjustmentTitle ? ' underline decoration-dotted decoration-gray-300 cursor-help' : ''}`}
+            title={paceAdjustmentTitle}
+          >{billableProgress}% current pace</div>
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
@@ -197,7 +214,10 @@ const OverviewView = ({
           <div className="flex-1 flex items-center justify-center">
             <div className="text-3xl font-bold text-gray-900">{formatHours(cohortMetrics.ops)}h</div>
           </div>
-          <div className="text-sm text-gray-600 text-center">{opsProgress}% current pace</div>
+          <div
+            className={`text-sm text-gray-600 text-center${paceAdjustmentTitle ? ' underline decoration-dotted decoration-gray-300 cursor-help' : ''}`}
+            title={paceAdjustmentTitle}
+          >{opsProgress}% current pace</div>
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">

@@ -575,6 +575,108 @@ Keep `parseCurrency` returning numbers — the dashboard checks `typeof === 'num
 
 ---
 
+## Document: `timeOff/all`
+
+Stores firm-wide **out-of-office (OOO)** and **holiday** data in a single document, synced from the firm's shared Google Calendar. Consumed read-only by the dashboard to OOO/holiday-adjust utilization targets — it is never written by the app.
+
+### Document Schema
+
+```javascript
+{
+  holidays: [                               // firm holidays, one entry PER DAY
+    { date: "2026-07-03",                   // string — 'YYYY-MM-DD' (PST calendar day)
+      name: "Independence Day (observed)" } // string — label (informational)
+  ],
+
+  outOfOffice: [                            // per-person OOO, one entry per calendar event
+    { name:  "Nicholas Vail",               // string — canonical attorney display name
+      email: "nick@cedargrovellp.com",      // string — attorney email (preferred join key)
+      start: "2026-06-01",                  // string — 'YYYY-MM-DD', INCLUSIVE
+      end:   "2026-06-05",                  // string — 'YYYY-MM-DD', INCLUSIVE
+      title: "Nick - PTO" }                 // string — original event title (informational)
+  ],
+
+  lastSyncedAt: "2026-06-03T08:00:00Z",     // string — ISO 8601 timestamp of last sync
+  source: "Firm Calendar (shared)"          // string — provenance label
+}
+```
+
+### Field Notes
+
+- **Dates** are PST calendar-day strings `YYYY-MM-DD` (no time component).
+- `holidays` is **pre-expanded to one entry per day** — the Apps Script expands any multi-day holiday event into individual days. A holiday on a weekend has no effect (the dashboard only counts weekdays).
+- `outOfOffice[].start`/`end` are an **inclusive** range. Store **both** `name` and `email` so the dashboard can join on either.
+- **Optional** — the whole document may be absent until the sync ships. The dashboard then falls back to the hardcoded US federal holidays (via `getUSFederalHolidays`) and applies no OOO, i.e. behavior is unchanged.
+
+### How It's Used
+
+- `utils/timeOff.js` `parseTimeOff` turns the doc into a holiday date-set plus OOO date-sets keyed by email and by normalized name.
+- Target pro-rating (`getMonthProRateFraction` in `utils/dateHelpers.js`) uses a **capacity model**: the monthly target's denominator is the month's working days excluding holidays; the numerator additionally excludes the attorney's OOO. So firm holidays are treated as already baked into the monthly target (they cancel for a full month, only shifting intra-month pace), while an attorney's OOO proportionally **reduces** their expected target for **any** period — in-progress or completed. A fully-OOO period yields a 0 target (shown as N/A, not 0%).
+- **Holiday source of truth**: when `holidays` is present it replaces the federal list. Note `isBusinessDay` independently excludes weekends + federal holidays, so a federal holiday the firm actually works cannot be "un-excluded" while it remains in `isBusinessDay` (accepted limitation). Ensure the synced calendar covers the analyzed date range.
+- **Attribution / matching**: the dashboard does **exact, normalized** matching (email first, then name) — there is **no nickname resolution** in the app. Canonicalize the attorney's display name + email in the Apps Script so they match the `users` collection.
+
+### Sync Architecture
+
+```
+Shared Google Calendar → Apps Script (syncTimeOff) → Firestore: timeOff/all
+                                       │
+                                       ├── 1. List all-day events in a window (e.g. −1 .. +12 months)
+                                       ├── 2. Classify each event: holiday vs per-person OOO
+                                       ├── 3. Expand holidays per-day; attribute OOO to an attorney
+                                       │      (canonical name + email)
+                                       └── 4. Overwrite the doc (or PATCH holidays / outOfOffice)
+```
+
+- **Sync trigger**: time-driven (e.g. twice daily), matching the driveDownloads cadence.
+- **Classification**: an event is a **holiday** when its title matches a known holiday-label list (or it has no per-person attendee); otherwise it is **OOO**, attributed by the primary attendee's email (fallback: resolve the attorney name from the title).
+- **Gotcha — exclusive end date**: Google Calendar all-day events report an **exclusive** end (`CalendarEventSeries#getAllDayEndDate()` / `event.end.date` is the day *after* the event). **Subtract one day** to get the inclusive `end` stored here, or a one-day PTO will look like zero days.
+
+```javascript
+// Sketch (out-of-repo Apps Script). Writes via the Firestore REST API, same
+// pattern as the other syncs. Canonicalize name/email to match `users`.
+function syncTimeOff() {
+  var cal = CalendarApp.getCalendarById('FIRM_CALENDAR_ID');
+  var from = new Date(); from.setMonth(from.getMonth() - 1);
+  var to   = new Date(); to.setMonth(to.getMonth() + 12);
+
+  var holidays = [];      // [{ date, name }]  — one per day
+  var outOfOffice = [];   // [{ name, email, start, end, title }]
+
+  cal.getEvents(from, to).forEach(function (ev) {
+    if (!ev.isAllDayEvent()) return;
+    var startD = ev.getAllDayStartDate();
+    var endD   = ev.getAllDayEndDate();             // EXCLUSIVE
+    endD = new Date(endD.getTime() - 24 * 60 * 60 * 1000); // -> inclusive
+    var title = ev.getTitle();
+
+    if (isHolidayTitle(title)) {                    // your label list
+      for (var d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+        holidays.push({ date: ymd(d), name: title });
+      }
+    } else {
+      var person = resolveAttorney(ev, title);      // -> { name, email } canonical
+      if (person) {
+        outOfOffice.push({ name: person.name, email: person.email,
+                           start: ymd(startD), end: ymd(endD), title: title });
+      }
+    }
+  });
+
+  writeDoc('timeOff/all', {                          // overwrite (or PATCH the two arrays)
+    holidays: holidays, outOfOffice: outOfOffice,
+    lastSyncedAt: new Date().toISOString(), source: 'Firm Calendar (shared)'
+  });
+}
+
+function ymd(d) {                                    // PST calendar day
+  return Utilities.formatDate(d, 'America/Los_Angeles', 'yyyy-MM-dd');
+}
+```
+
+- **Cost per sync**: 1 write (plus reads if PATCHing).
+
+---
+
 ## Document: `clientAliases/all`
 
 Stores human-confirmed mappings between Mercury transaction counterparty names and invoice client names. Used by the invoice matching feature on `/admin/invoices` to automatically suggest transaction matches for unpaid invoices.

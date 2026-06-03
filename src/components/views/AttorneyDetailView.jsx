@@ -39,9 +39,14 @@ import {
   getEntryDate,
   getPSTDate,
   getDateRangeLabel,
-  getMonthBusinessDays,
-  countBusinessDays
+  getMonthProRateFraction,
 } from '@/utils/dateHelpers';
+import {
+  parseTimeOff,
+  getHolidaySet,
+  getOooSetFor,
+  countTimeOffInRange,
+} from '@/utils/timeOff';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 import { CHART_COLORS, CHART, GRAY, LABEL_LINE_COLOR } from '@/utils/colors';
 import { getUtilizationColor, getUtilizationBgColor, getProgressBarColor } from '@/utils/statusStyles';
@@ -93,8 +98,11 @@ const AttorneyDetailView = ({ attorneyName }) => {
   const { data: billableEntries, loading: billableLoading, error: billableError } = useUserBillableEntries(attorneyName);
   const { data: opsEntries, loading: opsLoading, error: opsError } = useUserOpsEntries(attorneyName);
   const { users } = useUsers();
-  const { allTargets } = useFirestoreCache();
+  const { allTargets, timeOff } = useFirestoreCache();
   const dataWarnings = useDataWarnings();
+
+  // Parse OOO + firm holidays once (memoized on the raw doc).
+  const parsedTimeOff = useMemo(() => parseTimeOff(timeOff), [timeOff]);
 
   // Date range state
   const [dateRange, setDateRange] = useState('all-time');
@@ -109,6 +117,12 @@ const AttorneyDetailView = ({ attorneyName }) => {
   const personRole = useMemo(() => {
     const user = users.find(u => (u.name || u.id) === attorneyName || u.id === attorneyName);
     return user?.role || 'Attorney';
+  }, [users, attorneyName]);
+
+  // Email for joining out-of-office data (exact normalized match in the calendar)
+  const attorneyEmail = useMemo(() => {
+    const user = users.find(u => (u.name || u.id) === attorneyName || u.id === attorneyName);
+    return user?.email || '';
   }, [users, attorneyName]);
 
   const loading = billableLoading || opsLoading;
@@ -211,16 +225,24 @@ const AttorneyDetailView = ({ attorneyName }) => {
     const defaultTarget = {
       billableTarget: attorneyTargets[currentMonthKey]?.billableHours ?? 100,
       opsTarget: attorneyTargets[currentMonthKey]?.opsHours ?? 50,
-      totalTarget: attorneyTargets[currentMonthKey]?.totalHours ?? 150
+      totalTarget: attorneyTargets[currentMonthKey]?.totalHours ?? 150,
+      oooDays: 0,
+      holidayDays: 0,
     };
 
     if (activeMonths.size === 0) {
       return defaultTarget;
     }
 
+    // Firm holidays for the range + this attorney's out-of-office days.
+    const rangeHolidaySet = getHolidaySet(parsedTimeOff, startDate, endDate);
+    const oooSet = getOooSetFor(parsedTimeOff, { name: attorneyName, email: attorneyEmail });
+
     let totalBillableTarget = 0;
     let totalOpsTarget = 0;
     let totalTarget = 0;
+    let oooDays = 0;
+    let holidayDays = 0;
 
     Array.from(activeMonths).forEach(monthKey => {
       const [year, month] = monthKey.split('-').map(Number);
@@ -232,47 +254,44 @@ const AttorneyDetailView = ({ attorneyName }) => {
       const opsTarget = monthTarget?.opsHours ?? defaultTarget.opsTarget;
       const monthTotalTarget = monthTarget?.totalHours ?? defaultTarget.totalTarget;
 
-      // Check if month needs pro-rating
-      const rangeStartsAfterMonthStart = startDate && startDate > monthStart;
-      const rangeEndsBeforeMonthEnd = endDate && endDate < monthEnd;
-      const isCurrentMonthInProgress = monthKey === currentMonthKey;
-
-      const needsProRating = rangeStartsAfterMonthStart || rangeEndsBeforeMonthEnd || isCurrentMonthInProgress;
-
-      if (needsProRating) {
-        const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
-        let effectiveEnd;
-
-        if (endDate && endDate < monthEnd) {
-          // Explicit end date before month end (e.g., last-week, custom range)
-          effectiveEnd = endDate;
-        } else if (isCurrentMonthInProgress) {
-          // Current month with no explicit early end — pro-rate to today
-          effectiveEnd = now;
-        } else {
-          effectiveEnd = monthEnd;
-        }
-
-        const businessDaysElapsed = countBusinessDays(effectiveStart, effectiveEnd);
-        const totalBusinessDaysInMonth = getMonthBusinessDays(year, month).total;
-        const fraction = totalBusinessDaysInMonth > 0 ? businessDaysElapsed / totalBusinessDaysInMonth : 1;
-
-        totalBillableTarget += billableTarget * fraction;
-        totalOpsTarget += opsTarget * fraction;
-        totalTarget += monthTotalTarget * fraction;
+      // Effective window = month ∩ range, with the current month pro-rated to today.
+      const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
+      let effectiveEnd;
+      if (endDate && endDate < monthEnd) {
+        // Explicit end date before month end (e.g., last-week, custom range)
+        effectiveEnd = endDate;
+      } else if (monthKey === currentMonthKey) {
+        // Current month with no explicit early end — pro-rate to today
+        effectiveEnd = now;
       } else {
-        totalBillableTarget += billableTarget;
-        totalOpsTarget += opsTarget;
-        totalTarget += monthTotalTarget;
+        effectiveEnd = monthEnd;
       }
+
+      // Capacity-model fraction — the attorney's OOO reduces the target for any
+      // period (in-progress or completed); firm holidays only affect intra-month
+      // pace (they cancel for a full month, leaving a full clean month at 1).
+      const { fraction } = getMonthProRateFraction(
+        year, month, effectiveStart, effectiveEnd, rangeHolidaySet, oooSet
+      );
+
+      totalBillableTarget += billableTarget * fraction;
+      totalOpsTarget += opsTarget * fraction;
+      totalTarget += monthTotalTarget * fraction;
+
+      // OOO / holiday context for the period (UI messaging only).
+      const tc = countTimeOffInRange(parsedTimeOff, null, effectiveStart, effectiveEnd, rangeHolidaySet, oooSet);
+      oooDays += tc.oooBusinessDays;
+      holidayDays += tc.holidayBusinessDays;
     });
 
     return {
       billableTarget: Math.round(totalBillableTarget * 10) / 10,
       opsTarget: Math.round(totalOpsTarget * 10) / 10,
-      totalTarget: Math.round(totalTarget * 10) / 10
+      totalTarget: Math.round(totalTarget * 10) / 10,
+      oooDays,
+      holidayDays,
     };
-  }, [attorneyEntries, attorneyTargets, dateRangeInfo]);
+  }, [attorneyEntries, attorneyTargets, dateRangeInfo, parsedTimeOff, attorneyName, attorneyEmail]);
 
   // Process attorney statistics
   const attorneyStats = useMemo(() => {
@@ -642,6 +661,20 @@ const AttorneyDetailView = ({ attorneyName }) => {
             <Target className="w-5 h-5 text-blue-600" />
             Utilization Summary
           </h3>
+          {(calculatedTargets.oooDays > 0 || calculatedTargets.holidayDays > 0) && (
+            <p className="text-xs text-gray-500 -mt-2 mb-4">
+              Targets reflect{' '}
+              {[
+                calculatedTargets.oooDays > 0
+                  ? `${calculatedTargets.oooDays} day${calculatedTargets.oooDays === 1 ? '' : 's'} out of office`
+                  : null,
+                calculatedTargets.holidayDays > 0
+                  ? `${calculatedTargets.holidayDays} firm holiday${calculatedTargets.holidayDays === 1 ? '' : 's'}`
+                  : null,
+              ].filter(Boolean).join(' and ')}{' '}
+              this period.
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Overall Utilization */}
             <div className="text-center">

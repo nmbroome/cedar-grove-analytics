@@ -62,8 +62,9 @@ const AttorneysView = ({
           bVal = b.earnings;
           break;
         case 'utilization':
-          aVal = calculateUtilization(a);
-          bVal = calculateUtilization(b);
+          // Null utilization (no target this period — fully out of office) sorts last.
+          aVal = calculateUtilization(a) ?? -1;
+          bVal = calculateUtilization(b) ?? -1;
           break;
         default:
           aVal = a.name.toLowerCase();

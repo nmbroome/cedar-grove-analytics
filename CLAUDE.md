@@ -134,6 +134,18 @@ rateCard/all             — shared rate ladder used ONLY for predictive earning
                               scripts/seed-rate-card.js. Historical billing
                               continues to use attorneys/{name}/rates — rate
                               card is forward-looking only.
+
+timeOff/all              — firm out-of-office + holidays, single doc:
+                              { holidays:    [{ date: "YYYY-MM-DD", name }],
+                                outOfOffice: [{ name, email, start, end, title }],
+                                lastSyncedAt, source }
+                              Synced from the shared firm Google Calendar via Apps
+                              Script (out-of-repo). `holidays` is one entry per day;
+                              `outOfOffice` ranges are inclusive. Consumed read-only
+                              to OOO/holiday-adjust utilization targets (see
+                              utils/timeOff.js + dateHelpers `getMonthProRateFraction`).
+                              Optional — absent until the sync ships (federal-holiday
+                              fallback, no OOO).
 ```
 
 Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`/`opsHours` in hooks.
@@ -150,7 +162,7 @@ Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`
 
 - **Date filtering:** All-time, current month, trailing 60 days, or custom range. Filters applied in `useAnalyticsData`.
 - **Attorney filtering:** Global filter dropdown affects all views; some views have additional local filters.
-- **Target pro-rating:** Utilization targets are pro-rated by business days elapsed in the current period, accounting for US federal holidays.
+- **Target pro-rating:** Utilization targets are pro-rated per month via a capacity model (`getMonthProRateFraction` in `dateHelpers.js`): denominator = the month's working days (excluding holidays); numerator = working days in the effective window, additionally excluding the attorney's out-of-office (OOO) days. Firm holidays and OOO are sourced from `timeOff/all` (`utils/timeOff.js`), falling back to US federal holidays when unsynced. Holidays are baked into the monthly target (they cancel for a full month, only affecting intra-month pace); OOO reduces the expected target for **any** period — in-progress or completed. A fully-OOO period yields a 0 target → utilization shows N/A.
 - **Hidden attorneys:** Configured in `hiddenAttorneys.js` with date thresholds. Hidden from UI but included in aggregate totals.
 - **Role overrides:** `roles.js` maps non-attorney staff to custom display roles.
 - **Earnings predictions:** Use `rateCard/all` only for forward projections. Derive an attorney's current rank by exact-matching their latest stored `billableRate` against `rateCard.levels[].clientRate`. For each projected month, bump rank by 1 at every Q2 (Apr 1) and Q4 (Oct 1) boundary, capped at rank 19. If the current rate has no exact match, warn and project a flat `currentRate` for the full horizon (no rank bumps).

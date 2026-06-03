@@ -1,13 +1,18 @@
 import { useMemo, useCallback } from 'react';
-import { useAllBillableEntries, useAllOpsEntries, useAllDownloadEvents, useUsers, useClients, useMonthlyMetrics } from './useFirestoreData';
+import { useAllBillableEntries, useAllOpsEntries, useAllDownloadEvents, useUsers, useClients, useMonthlyMetrics, useTimeOff } from './useFirestoreData';
 import { useAttorneyRates } from './useAttorneyRates';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
 import {
   getEntryDate,
   getPSTDate,
-  getMonthBusinessDays,
-  countBusinessDays
+  getMonthProRateFraction,
 } from '../utils/dateHelpers';
+import {
+  parseTimeOff,
+  getHolidaySet,
+  getOooSetFor,
+  countTimeOffInRange,
+} from '../utils/timeOff';
 import {
   isAttorneyHidden,
   shouldIncludeAttorneyData,
@@ -29,8 +34,12 @@ export const useAnalyticsData = ({
   const { clients: firebaseClients, loading: clientsLoading, error: clientsError } = useClients();
   const { data: allDownloadEvents, loading: downloadsLoading } = useAllDownloadEvents();
   const { data: monthlyMetrics } = useMonthlyMetrics();
+  const { data: timeOff } = useTimeOff();
   const { getRate, loading: ratesLoading } = useAttorneyRates();
   const { allTargets: userTargets } = useFirestoreCache();
+
+  // Parse OOO + holidays once per data load (memoized on the raw doc).
+  const parsedTimeOff = useMemo(() => parseTimeOff(timeOff), [timeOff]);
 
   const loading = billableLoading || opsLoading || usersLoading || clientsLoading || downloadsLoading || ratesLoading;
   const error = billableError || opsError || usersError || clientsError;
@@ -60,6 +69,16 @@ export const useAnalyticsData = ({
     firebaseUsers.forEach(user => {
       const name = user.name || user.id;
       map[name] = user.employmentType || 'FTE';
+    });
+    return map;
+  }, [firebaseUsers]);
+
+  // Create user email map (display name -> email) for joining out-of-office data
+  const userEmailMap = useMemo(() => {
+    const map = {};
+    firebaseUsers.forEach(user => {
+      const name = user.name || user.id;
+      map[name] = user.email || '';
     });
     return map;
   }, [firebaseUsers]);
@@ -335,14 +354,23 @@ export const useAnalyticsData = ({
       userMonthlyActivity[userName].ops += opsHours;
     });
 
+    // Firm holidays for the active range (calendar-sourced, or federal fallback).
+    // Range-dependent only, so resolve once for all attorneys.
+    const rangeHolidaySet = getHolidaySet(parsedTimeOff, startDate, endDate);
+
     // Third pass: calculate targets for each user based on date range months
     Object.entries(userMonthlyActivity).forEach(([userName, data]) => {
       let totalBillableTarget = 0;
       let totalOpsTarget = 0;
       let totalTarget = 0;
+      let oooDays = 0;
+      let holidayDays = 0;
 
       const userTargetData = userTargets[userName] || {};
       const defaultTarget = getDefaultTarget(userName);
+
+      // This attorney's out-of-office days (joined by email, then name).
+      const oooSet = getOooSetFor(parsedTimeOff, { name: userName, email: userEmailMap[userName] || '' });
 
       // Use date range months for target calculation so users with zero hours
       // still get proper pro-rated targets for the selected period
@@ -365,40 +393,35 @@ export const useAnalyticsData = ({
           const opsTarget = monthTarget?.opsHours ?? defaultTarget.opsHours;
           const monthTotalTarget = monthTarget?.totalHours ?? defaultTarget.totalHours;
 
-          // Determine if this month needs pro-rating
-          const rangeStartsAfterMonthStart = startDate && startDate > monthStart;
-          const rangeEndsBeforeMonthEnd = endDate && endDate < monthEnd;
-          const isCurrentMonthInProgress = monthKey === currentMonthKey;
-
-          const needsProRating = rangeStartsAfterMonthStart || rangeEndsBeforeMonthEnd || isCurrentMonthInProgress;
-
-          if (needsProRating) {
-            const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
-            let effectiveEnd;
-
-            if (endDate && endDate < monthEnd) {
-              // Explicit end date before month end (e.g., last-week, custom range)
-              effectiveEnd = endDate;
-            } else if (isCurrentMonthInProgress) {
-              // Current month with no explicit early end — pro-rate to today
-              effectiveEnd = now;
-            } else {
-              effectiveEnd = monthEnd;
-            }
-
-            const businessDaysElapsed = countBusinessDays(effectiveStart, effectiveEnd);
-            const totalBusinessDaysInMonth = getMonthBusinessDays(year, month).total;
-
-            const fraction = totalBusinessDaysInMonth > 0 ? businessDaysElapsed / totalBusinessDaysInMonth : 1;
-
-            totalBillableTarget += billableTarget * fraction;
-            totalOpsTarget += opsTarget * fraction;
-            totalTarget += monthTotalTarget * fraction;
+          // Effective window = month ∩ range, with the current month pro-rated to today.
+          const effectiveStart = (startDate && startDate > monthStart) ? startDate : monthStart;
+          let effectiveEnd;
+          if (endDate && endDate < monthEnd) {
+            // Explicit end date before month end (e.g., last-week, custom range)
+            effectiveEnd = endDate;
+          } else if (monthKey === currentMonthKey) {
+            // Current month with no explicit early end — pro-rate to today
+            effectiveEnd = now;
           } else {
-            totalBillableTarget += billableTarget;
-            totalOpsTarget += opsTarget;
-            totalTarget += monthTotalTarget;
+            effectiveEnd = monthEnd;
           }
+
+          // Capacity-model fraction: firm holidays cancel for a full month (they
+          // only affect intra-month pace), while the attorney's OOO reduces the
+          // target for any period — in-progress or completed. A fully-OOO month
+          // yields 0. A full clean month yields exactly 1 (unchanged behavior).
+          const { fraction } = getMonthProRateFraction(
+            year, month, effectiveStart, effectiveEnd, rangeHolidaySet, oooSet
+          );
+
+          totalBillableTarget += billableTarget * fraction;
+          totalOpsTarget += opsTarget * fraction;
+          totalTarget += monthTotalTarget * fraction;
+
+          // OOO / holiday context for the period (UI messaging only).
+          const tc = countTimeOffInRange(parsedTimeOff, null, effectiveStart, effectiveEnd, rangeHolidaySet, oooSet);
+          oooDays += tc.oooBusinessDays;
+          holidayDays += tc.holidayBusinessDays;
         });
       }
 
@@ -411,6 +434,8 @@ export const useAnalyticsData = ({
         target: Math.round(totalTarget * 10) / 10,
         billableTarget: Math.round(totalBillableTarget * 10) / 10,
         opsTarget: Math.round(totalOpsTarget * 10) / 10,
+        oooDays,
+        holidayDays,
         role: getUserRole(userName),
         employmentType: userEmploymentTypeMap[userName] || 'FTE',
         transactions: data.transactions,
@@ -431,7 +456,7 @@ export const useAnalyticsData = ({
     });
 
     return visibleUserData;
-  }, [filteredBillableEntries, filteredOpsEntries, userMap, getRate, dateRangeInfo, userTargets, getUserRole, userEmploymentTypeMap, getDefaultTarget, firebaseUsers, globalAttorneyFilter, dateRangeMonths]);
+  }, [filteredBillableEntries, filteredOpsEntries, userMap, getRate, dateRangeInfo, userTargets, getUserRole, userEmploymentTypeMap, userEmailMap, parsedTimeOff, getDefaultTarget, firebaseUsers, globalAttorneyFilter, dateRangeMonths]);
 
   // Create a separate dataset that includes hidden users for totals calculation
   const allAttorneyDataIncludingHidden = useMemo(() => {
@@ -983,10 +1008,12 @@ export const useAnalyticsData = ({
     return { active, quiet, terminated, total };
   }, [firebaseClients]);
 
-  // Calculate utilization
+  // Calculate utilization. Returns null (→ "N/A") when the pro-rated target is 0,
+  // which now happens when an attorney is out of office for the entire period —
+  // reporting 0% there would misread leave as underperformance.
   const calculateUtilization = (user) => {
     const total = user.billable + user.ops;
-    if (user.target === 0) return 0;
+    if (!user.target || user.target <= 0) return null;
     return Math.round((total / user.target) * 100);
   };
 
@@ -1090,9 +1117,14 @@ export const useAnalyticsData = ({
     const fteAttorneys = attorneysOnly.filter(att => att.employmentType === 'FTE');
     const pteAttorneys = attorneysOnly.filter(att => att.employmentType === 'PTE');
 
-    const avgOf = (list) => list.length > 0
-      ? Math.round(list.reduce((acc, att) => acc + calculateUtilization(att), 0) / list.length)
-      : 0;
+    // Average utilization, skipping attorneys with no target for the period
+    // (fully out of office) so their N/A doesn't drag the cohort average.
+    const avgOf = (list) => {
+      const vals = list.map(att => calculateUtilization(att)).filter(v => v !== null);
+      return vals.length > 0
+        ? Math.round(vals.reduce((acc, v) => acc + v, 0) / vals.length)
+        : 0;
+    };
 
     const avgUtilization = avgOf(attorneysOnly);
     const avgUtilizationFTE = avgOf(fteAttorneys);
