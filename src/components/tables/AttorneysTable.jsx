@@ -116,11 +116,20 @@ const AttorneysTable = ({
                   {formatCurrency(attorney.earnings)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUtilizationBgColor(utilization)}`}
-                  >
-                    {utilization}%
-                  </span>
+                  {utilization === null ? (
+                    <span
+                      className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-500"
+                      title={attorney.oooDays > 0 ? 'Out of office this period — no billable target' : 'No target for this period'}
+                    >
+                      N/A
+                    </span>
+                  ) : (
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUtilizationBgColor(utilization)}`}
+                    >
+                      {utilization}%
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   <div className="flex flex-wrap gap-1">

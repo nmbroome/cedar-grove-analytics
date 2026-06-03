@@ -62,8 +62,10 @@ const AttorneysView = ({
           bVal = b.earnings;
           break;
         case 'utilization':
-          aVal = calculateUtilization(a);
-          bVal = calculateUtilization(b);
+          // Null utilization (no target this period) maps to -1 so it sorts as the
+          // lowest value (last when descending, first when ascending).
+          aVal = calculateUtilization(a) ?? -1;
+          bVal = calculateUtilization(b) ?? -1;
           break;
         default:
           aVal = a.name.toLowerCase();

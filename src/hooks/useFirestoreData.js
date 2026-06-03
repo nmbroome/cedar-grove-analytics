@@ -127,6 +127,16 @@ export const useMonthlyMetrics = () => {
 };
 
 /**
+ * Get the firm's out-of-office + holiday document from `timeOff/all`.
+ * Returns the raw doc ({ holidays, outOfOffice, ... }) or null until synced.
+ * Parse it with utils/timeOff.js `parseTimeOff` before use.
+ */
+export const useTimeOff = () => {
+  const { timeOff, loading, error } = useFirestoreCache();
+  return { data: timeOff || null, loading, error };
+};
+
+/**
  * Get billable entries for a specific user from the shared cache.
  * Supports lookup by display name or Firestore document ID.
  */

@@ -44,6 +44,19 @@ export const getEntryDate = (entry) => {
 };
 
 /**
+ * Format a Date as a local-calendar-day key 'YYYY-MM-DD'.
+ * Uses local getFullYear/getMonth/getDate so it lines up with the local-midnight
+ * dates produced by getEntryDate and the month math elsewhere in this module.
+ * Used to test membership in holiday / out-of-office date sets.
+ */
+export const toDateKey = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+/**
  * Check if a date is a business day (Monday-Friday, excluding US federal holidays)
  */
 export const isBusinessDay = (date) => {
@@ -157,23 +170,29 @@ const observedHoliday = (date) => {
 };
 
 /**
- * Count business days between two dates (inclusive of start, exclusive of end)
+ * Count business days between two dates (inclusive of both ends).
+ * @param startDate
+ * @param endDate
+ * @param excludeDates - optional Set<'YYYY-MM-DD'> of additional days to skip
+ *                       (e.g. firm holidays and/or out-of-office days). Days
+ *                       already excluded by isBusinessDay (weekends, federal
+ *                       holidays) are skipped regardless.
  */
-export const countBusinessDays = (startDate, endDate) => {
+export const countBusinessDays = (startDate, endDate, excludeDates = null) => {
   let count = 0;
   const current = new Date(startDate);
   current.setHours(0, 0, 0, 0);
-  
+
   const end = new Date(endDate);
   end.setHours(0, 0, 0, 0);
-  
+
   while (current <= end) {
-    if (isBusinessDay(current)) {
+    if (isBusinessDay(current) && (!excludeDates || !excludeDates.has(toDateKey(current)))) {
       count++;
     }
     current.setDate(current.getDate() + 1);
   }
-  
+
   return count;
 };
 
@@ -184,43 +203,90 @@ export const countBusinessDays = (startDate, endDate) => {
 export const getMonthBusinessDays = (year, month, asOfDate = null) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 0); // Last day of month
-  
+
   const total = countBusinessDays(monthStart, monthEnd);
-  
+
   if (!asOfDate) {
     return { total, elapsed: total, remaining: 0 };
   }
-  
+
   const asOf = new Date(asOfDate);
   asOf.setHours(23, 59, 59, 999);
-  
+
   // If asOfDate is before the month starts, no days elapsed
   if (asOf < monthStart) {
     return { total, elapsed: 0, remaining: total };
   }
-  
+
   // If asOfDate is after the month ends, all days elapsed
   if (asOf > monthEnd) {
     return { total, elapsed: total, remaining: 0 };
   }
-  
+
   // Count business days from month start to asOfDate
   const elapsed = countBusinessDays(monthStart, asOf);
   const remaining = total - elapsed;
-  
+
   return { total, elapsed, remaining };
 };
 
 /**
- * Calculate the pro-rated target based on business days elapsed
- * @param fullTarget - The full month target
- * @param businessDaysElapsed - Number of business days elapsed
- * @param totalBusinessDays - Total business days in the period
- * @returns Pro-rated target
+ * Capacity-model pro-rate fraction for a single month.
+ *
+ * Returns the fraction of a month's target an attorney is expected to hit over
+ * the window [effectiveStart, effectiveEnd], reducing the target for the
+ * attorney's own out-of-office (OOO) days while treating firm holidays as
+ * already baked into the monthly target:
+ *
+ *   denominator = business days in the WHOLE month, excluding holidays only
+ *                 (the capacity the monthly target assumes — OOO is NOT
+ *                  subtracted here)
+ *   numerator   = business days within [effectiveStart, effectiveEnd], excluding
+ *                 holidays AND the attorney's OOO
+ *   fraction    = numerator / denominator   (0 when the month has no capacity)
+ *
+ * Because holidays appear in both numerator and denominator, a full clean month
+ * yields exactly 1 (full target); holidays only depress intra-month pace. OOO is
+ * subtracted from the numerator only, so it reduces the target for ANY period —
+ * in-progress or completed. A month entirely covered by OOO yields 0.
+ *
+ * Note: isBusinessDay already excludes weekends and US federal holidays, so the
+ * holidaySet only needs to carry additional (non-federal) firm holidays.
+ *
+ * @param {number} year
+ * @param {number} month - 1-indexed month
+ * @param {Date} effectiveStart - window start, clamped to the month/range
+ * @param {Date} effectiveEnd   - window end, clamped to the month/range
+ *                                (e.g. "today" for the in-progress current month)
+ * @param {Set<string>} [holidaySet] - 'YYYY-MM-DD' firm holidays
+ * @param {Set<string>} [oooSet]     - 'YYYY-MM-DD' attorney out-of-office days
+ * @returns {{ fraction: number, baselineMonthDays: number, availableDays: number }}
  */
-export const proRateTarget = (fullTarget, businessDaysElapsed, totalBusinessDays) => {
-  if (totalBusinessDays === 0) return fullTarget;
-  return (fullTarget * businessDaysElapsed) / totalBusinessDays;
+export const getMonthProRateFraction = (
+  year,
+  month,
+  effectiveStart,
+  effectiveEnd,
+  holidaySet = null,
+  oooSet = null,
+) => {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0); // last day of month
+
+  // Denominator: full-month capacity (holidays excluded, OOO NOT excluded).
+  const baselineMonthDays = countBusinessDays(monthStart, monthEnd, holidaySet);
+
+  // Numerator: available days in the effective window (holidays AND OOO excluded).
+  let excludeForPeriod = holidaySet;
+  if (oooSet && oooSet.size > 0) {
+    excludeForPeriod = new Set(holidaySet || []);
+    oooSet.forEach((d) => excludeForPeriod.add(d));
+  }
+  const availableDays = countBusinessDays(effectiveStart, effectiveEnd, excludeForPeriod);
+
+  const fraction = baselineMonthDays > 0 ? availableDays / baselineMonthDays : 0;
+
+  return { fraction, baselineMonthDays, availableDays };
 };
 
 // Get date range label for display
