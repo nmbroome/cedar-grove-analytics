@@ -4,10 +4,8 @@ import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Save, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
-import { useFirestoreCache } from '@/context/FirestoreDataContext';
-import { getEntryDate, getPSTDate } from '@/utils/dateHelpers';
-import { parseTimeOff, getHolidaySet, getOooSetFor, proRateMonth } from '@/utils/timeOff';
 import { formatHours } from '@/utils/formatters';
+import { useMonthlyActualsVsTarget } from '@/hooks/useMonthlyActualsVsTarget';
 
 const MONTHS = [
   { idx: 0, short: 'Jan', long: 'January' },
@@ -391,8 +389,6 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
 
-  const { allBillableEntries, allOpsEntries, timeOff } = useFirestoreCache();
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -524,59 +520,9 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
     return { pte, fte, other };
   }, [users]);
 
-  const parsedTimeOff = useMemo(() => parseTimeOff(timeOff), [timeOff]);
-
-  // Per-user, per-month ACTUAL hours for the selected year, bucketed by entry
-  // date (the same date logic that drives utilization elsewhere in the app).
-  // Keyed by userId → monthIdx → { client, ops }; client = billable, ops = ops.
-  const actuals = useMemo(() => {
-    const out = {};
-    const bump = (userId, monthIdx, field, hrs) => {
-      if (!userId) return;
-      if (!out[userId]) out[userId] = {};
-      if (!out[userId][monthIdx]) out[userId][monthIdx] = { client: 0, ops: 0 };
-      out[userId][monthIdx][field] += hrs;
-    };
-    (allBillableEntries || []).forEach(e => {
-      const d = getEntryDate(e);
-      if (!d || isNaN(d.getTime()) || d.getFullYear() !== selectedYear) return;
-      bump(e.userId, d.getMonth(), 'client', e.billableHours || 0);
-    });
-    (allOpsEntries || []).forEach(e => {
-      const d = getEntryDate(e);
-      if (!d || isNaN(d.getTime()) || d.getFullYear() !== selectedYear) return;
-      bump(e.userId, d.getMonth(), 'ops', e.opsHours || 0);
-    });
-    return out;
-  }, [allBillableEntries, allOpsEntries, selectedYear]);
-
-  // Per-user capacity-model pro-rate fraction for each month of the selected
-  // year (firm holidays + that attorney's OOO), plus which months are still in
-  // the future. Mirrors the utilization pro-rating in utils/timeOff.js so the
-  // variance compares like-for-like — including the in-progress current month,
-  // which is pro-rated to today.
-  const capacity = useMemo(() => {
-    const now = getPSTDate();
-    const yearStart = new Date(selectedYear, 0, 1, 0, 0, 0, 0);
-    const yearEnd = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const range = { startDate: yearStart, endDate: yearEnd, currentMonthKey, now };
-    const holidaySet = getHolidaySet(parsedTimeOff, yearStart, yearEnd);
-
-    const out = {};
-    users.forEach(u => {
-      const oooSet = getOooSetFor(parsedTimeOff, { name: u.name || u.id, email: u.email || '' });
-      const fractions = [];
-      const future = [];
-      for (let mi = 0; mi < 12; mi++) {
-        const isFuture = new Date(selectedYear, mi, 1).getTime() > now.getTime();
-        future[mi] = isFuture;
-        fractions[mi] = isFuture ? 0 : proRateMonth(selectedYear, mi + 1, range, holidaySet, oooSet).fraction;
-      }
-      out[u.id] = { fractions, future };
-    });
-    return out;
-  }, [users, parsedTimeOff, selectedYear]);
+  // Per-attorney, per-month actuals + capacity-pro-rated fractions for the
+  // selected year. Shared hook so this isn't hand-rolled inline (see #1/#6).
+  const { actuals, capacity } = useMonthlyActualsVsTarget(selectedYear);
 
   if (loading || usersLoading) {
     return (
