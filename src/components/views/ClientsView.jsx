@@ -29,7 +29,6 @@ const ClientsView = ({
   allAttorneyNames,
   clientData,
   filteredBillableEntries,
-  dateRangeInfo,
   priorPeriodBillableEntries,
   hasPriorPeriod,
 }) => {
@@ -244,16 +243,6 @@ const ClientsView = ({
 
   const pct = (n) => (bookTotal > 0 ? Math.round((n / bookTotal) * 100) : 0);
 
-  // Explicit date span for the header, e.g. "May 1 – May 31, 2026".
-  const rangeDatesStr = useMemo(() => {
-    const start = dateRangeInfo?.startDate;
-    const end = dateRangeInfo?.endDate;
-    if (!start || !end) return '';
-    const startStr = start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-    const endStr = end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    return `${startStr} – ${endStr}`;
-  }, [dateRangeInfo]);
-
   const isAttorneyFiltered = globalAttorneyFilter?.length > 0 &&
     globalAttorneyFilter?.length < allAttorneyNames?.length;
 
@@ -280,9 +269,7 @@ const ClientsView = ({
       <div>
         <p className="text-base text-cg-dark">
           Showing data for{' '}
-          <span className="font-semibold text-cg-green">
-            {dateRangeLabel}{rangeDatesStr ? ` (${rangeDatesStr})` : ''}
-          </span>
+          <span className="font-semibold text-cg-green">{dateRangeLabel}</span>
         </p>
         <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
           <span className="w-2 h-2 rounded-full bg-cg-green inline-block" />
