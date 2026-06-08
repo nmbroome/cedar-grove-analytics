@@ -155,37 +155,44 @@ export const useAnalyticsData = ({
   }, [dateRange, customDateStart, customDateEnd, allBillableEntries, allOpsEntries]);
 
   // Equivalent prior window for period-over-period deltas (e.g. last-month May
-  // → prior April). all-time has no meaningful prior period. Month ranges use
-  // whole previous calendar months; week/trailing/custom shift back by the
-  // current window's own length.
+  // → prior April). all-time has no meaningful prior period.
   const priorDateRangeInfo = useMemo(() => {
     const now = getPSTDate();
+    const { startDate: curStart, endDate: curEnd } = dateRangeInfo;
 
-    if (dateRange === 'all-time') {
+    if (dateRange === 'all-time' || !curStart || !curEnd) {
       return { startDate: null, endDate: null, hasPrior: false };
     }
 
-    if (dateRange === 'current-month') {
-      const startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-      const endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-      return { startDate, endDate, hasPrior: true };
-    }
-
+    // Completed calendar month → the whole previous calendar month.
     if (dateRange === 'last-month') {
       const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0);
       const endDate = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999);
       return { startDate, endDate, hasPrior: true };
     }
 
-    // Generic equal-length shift immediately before the current window
-    // (current-week, last-week, trailing-60, custom).
-    const { startDate: curStart, endDate: curEnd } = dateRangeInfo;
-    if (!curStart || !curEnd) {
-      return { startDate: null, endDate: null, hasPrior: false };
+    // In-progress periods are partial (period start → now), so the prior window
+    // must cover the SAME elapsed span aligned to the start of the previous
+    // period — otherwise an 8-day month-to-date would compare against a full
+    // ~30-day month and the delta would be systematically negative.
+    const elapsedMs = curEnd.getTime() - curStart.getTime();
+    if (dateRange === 'current-month') {
+      const startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const endDate = new Date(startDate.getTime() + elapsedMs);
+      return { startDate, endDate, hasPrior: true };
     }
-    const durationMs = curEnd.getTime() - curStart.getTime();
+    if (dateRange === 'current-week') {
+      const startDate = new Date(
+        curStart.getFullYear(), curStart.getMonth(), curStart.getDate() - 7, 0, 0, 0, 0
+      );
+      const endDate = new Date(startDate.getTime() + elapsedMs);
+      return { startDate, endDate, hasPrior: true };
+    }
+
+    // Fixed-length / already-complete windows (last-week, trailing-60, custom)
+    // → the equal-length window immediately before the current one.
     const endDate = new Date(curStart.getTime() - 1);
-    const startDate = new Date(endDate.getTime() - durationMs);
+    const startDate = new Date(endDate.getTime() - elapsedMs);
     return { startDate, endDate, hasPrior: true };
   }, [dateRange, dateRangeInfo]);
 

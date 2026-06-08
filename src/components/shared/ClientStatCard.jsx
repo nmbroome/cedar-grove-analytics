@@ -55,6 +55,7 @@ const ClientStatCard = ({
 }) => {
   const a = ACCENT[accent] || ACCENT.green;
   const width = Math.min(Math.max(percent || 0, 0), 100);
+  const displayPct = Math.round(width);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -71,7 +72,7 @@ const ClientStatCard = ({
         <div className={`mt-2 text-4xl font-bold ${a.text}`}>{value}</div>
 
         <div className="mt-1 text-xs text-gray-500">
-          {percent}%{percentLabel ? ` ${percentLabel}` : ''}
+          {displayPct}%{percentLabel ? ` ${percentLabel}` : ''}
         </div>
 
         <div className="mt-3 w-full bg-gray-200 rounded-full h-2 overflow-hidden">

@@ -224,8 +224,11 @@ const ClientsView = ({
   // Clients active in the prior comparison window, measured over the *current*
   // roster (no historical roster exists). bookTotal is constant across both
   // windows, so the Quiet delta is exactly the mirror of the Active delta.
+  // Null (delta hidden) for all-time, and when the prior window holds no
+  // billable data at all (e.g. the earliest period) — comparing against an
+  // empty window would render a spurious "+N vs prior period".
   const priorActiveCount = useMemo(() => {
-    if (!hasPriorPeriod) return null;
+    if (!hasPriorPeriod || !priorPeriodBillableEntries?.length) return null;
     const priorHours = sumHoursByClient(priorPeriodBillableEntries);
     return clientsWithBillables.filter(c => (priorHours.get(c.name) || 0) > 0).length;
   }, [hasPriorPeriod, priorPeriodBillableEntries, clientsWithBillables]);
