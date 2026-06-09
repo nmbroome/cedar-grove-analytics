@@ -156,10 +156,11 @@ const AdminTimeOffDebug = () => {
   }, [timeOffDoc]);
 
   // ── Calendar selection state ────────────────────────────────────────────
-  // All selectable attorney names (anyone with a user doc), sorted.
+  // Selectable attorney names: active attorneys only (inactive hidden), sorted.
   const allAttorneyNames = useMemo(
     () =>
       (allUsers || [])
+        .filter((u) => u.active !== false)
         .map((u) => u.name || u.id)
         .sort((a, b) => a.localeCompare(b)),
     [allUsers],
