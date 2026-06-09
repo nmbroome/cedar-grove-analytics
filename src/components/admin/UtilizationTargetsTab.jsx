@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Save, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db, waitForAuth } from '@/firebase/config';
+import { formatHours } from '@/utils/formatters';
+import { useMonthlyActualsVsTarget } from '@/hooks/useMonthlyActualsVsTarget';
 
 const MONTHS = [
   { idx: 0, short: 'Jan', long: 'January' },
@@ -53,7 +55,48 @@ const sumBillable = (userMatrix, monthList) =>
 const sumOps = (userMatrix, monthList) =>
   monthList.reduce((sum, m) => sum + (parseFloat(userMatrix?.[m.idx]?.ops) || 0), 0);
 
-const TargetTable = ({ title, users, matrix, onChange, visibleMonths, summaryLabel, showMonthTotals }) => {
+// Variance cell: signed text + color, both derived from the canonical hours
+// formatter (formatHours) so the sign, rounding, and color always agree with the
+// number shown. Green over target, red under, muted gray when it rounds to 0
+// (on target, or a sub-0.1h difference).
+const deltaCellValue = (n) => {
+  const s = formatHours(n);            // "0", "-2", "1.5", …
+  if (s === '0') return { text: '0', className: 'text-gray-400' };
+  if (s[0] === '-') return { text: s, className: 'text-red-600' };
+  return { text: `+${s}`, className: 'text-green-600' };
+};
+
+const EMPTY_CELL = { text: '', className: '' };
+
+const EMPTY_FRACTIONS = Array(12).fill(0);
+const EMPTY_FUTURE = Array(12).fill(false);
+
+// One read-only metric row (Actual or Δ): a label cell, then per-month
+// client/ops[/total] cells, then the cumulative summary trio. Each cell is a
+// { text, className } pair so the caller owns the value and color. Shared by the
+// Actual and Δ rows so they aren't two near-identical copy-pasted <tr> blocks.
+const MetricRow = ({ label, visibleMonths, showMonthTotals, cell, summary }) => (
+  <tr className="bg-gray-50">
+    <td className="px-1 py-0.5 text-[10px] text-gray-500 text-right whitespace-nowrap">{label}</td>
+    {visibleMonths.map((m) => {
+      const [c, o, t] = cell(m.idx);
+      return (
+        <Fragment key={m.idx}>
+          <td className={`px-1 py-0.5 text-right text-xs border-l-2 border-cg-dark whitespace-nowrap ${c.className}`}>{c.text}</td>
+          <td className={`px-1 py-0.5 text-right text-xs whitespace-nowrap ${o.className}`}>{o.text}</td>
+          {showMonthTotals && (
+            <td className={`px-1 py-0.5 text-right text-xs whitespace-nowrap bg-gray-100 ${t.className}`}>{t.text}</td>
+          )}
+        </Fragment>
+      );
+    })}
+    <td className={`px-1 py-0.5 text-right text-xs border-l-2 border-cg-dark whitespace-nowrap ${summary[0].className}`}>{summary[0].text}</td>
+    <td className={`px-1 py-0.5 text-right text-xs whitespace-nowrap ${summary[1].className}`}>{summary[1].text}</td>
+    <td className={`px-1 py-0.5 text-right text-xs font-semibold whitespace-nowrap ${summary[2].className}`}>{summary[2].text}</td>
+  </tr>
+);
+
+const TargetTable = ({ title, users, matrix, actuals, capacity, onChange, visibleMonths, summaryLabel, showMonthTotals }) => {
   const maxRow = users.length - 1;
   const maxCol = visibleMonths.length * 2 - 1;
 
@@ -158,6 +201,7 @@ const TargetTable = ({ title, users, matrix, onChange, visibleMonths, summaryLab
       {showMonthTotals && (
         <colgroup>
           <col style={{ width: '176px' }} />
+          <col style={{ width: '52px' }} />
           {visibleMonths.map(m => (
             <Fragment key={`cg-${m.idx}`}>
               <col style={{ width: '76px' }} />
@@ -175,6 +219,7 @@ const TargetTable = ({ title, users, matrix, onChange, visibleMonths, summaryLab
           <th rowSpan={2} className="px-2 py-1 text-left align-middle whitespace-nowrap border-r-2 border-cg-dark text-sm">
             {title}
           </th>
+          <th rowSpan={2} className="px-1 py-1"></th>
           {visibleMonths.map(m => (
             <th key={m.idx} colSpan={showMonthTotals ? 3 : 2} className="px-1 py-1 text-center border-l-2 border-cg-dark font-semibold">
               {m.short}
@@ -199,71 +244,133 @@ const TargetTable = ({ title, users, matrix, onChange, visibleMonths, summaryLab
           <th className="px-0.5 py-0.5 text-[10px] font-normal">Total</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-gray-200">
+      <tbody>
         {users.map((u, rowIdx) => {
           const userMatrix = matrix[u.id] || buildEmptyUserMatrix();
+          const userActuals = actuals[u.id] || {};
+          const cap = capacity[u.id] || { fractions: EMPTY_FRACTIONS, future: EMPTY_FUTURE };
+
+          // Cumulative actual + variance across the elapsed (non-future) months.
+          let sumActClient = 0;
+          let sumActOps = 0;
+          let sumDClient = 0;
+          let sumDOps = 0;
+          let hasElapsed = false;
+          visibleMonths.forEach(m => {
+            if (cap.future[m.idx]) return;
+            hasElapsed = true;
+            const act = userActuals[m.idx] || { client: 0, ops: 0 };
+            const cell = userMatrix[m.idx] || {};
+            const frac = cap.fractions[m.idx];
+            sumActClient += act.client;
+            sumActOps += act.ops;
+            sumDClient += act.client - (parseFloat(cell.client) || 0) * frac;
+            sumDOps += act.ops - (parseFloat(cell.ops) || 0) * frac;
+          });
+
+          const gray = 'text-gray-600';
+          // Actual row cells: logged hours (blank for future months).
+          const actualCell = (idx) => {
+            if (cap.future[idx]) return [EMPTY_CELL, EMPTY_CELL, EMPTY_CELL];
+            const act = userActuals[idx] || { client: 0, ops: 0 };
+            return [
+              { text: formatHours(act.client), className: gray },
+              { text: formatHours(act.ops), className: gray },
+              { text: formatHours(act.client + act.ops), className: gray },
+            ];
+          };
+          // Δ row cells: Actual minus the capacity-pro-rated Target (blank for future).
+          const deltaCell = (idx) => {
+            if (cap.future[idx]) return [EMPTY_CELL, EMPTY_CELL, EMPTY_CELL];
+            const act = userActuals[idx] || { client: 0, ops: 0 };
+            const cell = userMatrix[idx] || {};
+            const frac = cap.fractions[idx];
+            const dClient = act.client - (parseFloat(cell.client) || 0) * frac;
+            const dOps = act.ops - (parseFloat(cell.ops) || 0) * frac;
+            return [deltaCellValue(dClient), deltaCellValue(dOps), deltaCellValue(dClient + dOps)];
+          };
+          // Cumulative summary trios — blank when no month has elapsed (e.g. a
+          // fully-future year) so the summary matches the blank per-month cells.
+          const actualSummary = hasElapsed
+            ? [
+                { text: formatHours(sumActClient), className: gray },
+                { text: formatHours(sumActOps), className: gray },
+                { text: formatHours(sumActClient + sumActOps), className: 'text-gray-700' },
+              ]
+            : [EMPTY_CELL, EMPTY_CELL, EMPTY_CELL];
+          const deltaSummary = hasElapsed
+            ? [deltaCellValue(sumDClient), deltaCellValue(sumDOps), deltaCellValue(sumDClient + sumDOps)]
+            : [EMPTY_CELL, EMPTY_CELL, EMPTY_CELL];
+
           return (
-            <tr key={u.id} className="hover:bg-gray-50">
-              <td className="px-2 py-0.5 font-medium text-gray-900 whitespace-nowrap border-r-2 border-cg-dark text-sm">
-                {u.name || u.id}
-              </td>
-              {visibleMonths.map((m, colIdx) => {
-                const cell = userMatrix[m.idx] || { client: '', ops: '' };
-                const clientCol = colIdx * 2;
-                const opsCol = colIdx * 2 + 1;
-                return (
-                  <Fragment key={m.idx}>
-                    <td className="px-0.5 py-0.5 border-l-2 border-cg-dark">
-                      <input
-                        type="number"
-                        value={cell.client ?? ''}
-                        onChange={(e) => onChange(u.id, m.idx, 'client', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, rowIdx, clientCol)}
-                        onPaste={(e) => handlePaste(e, rowIdx, clientCol)}
-                        data-row={rowIdx}
-                        data-col={clientCol}
-                        className={`no-spinner ${showMonthTotals ? 'w-16' : 'w-full'} px-1 py-0.5 text-xs text-right border border-gray-200 rounded focus:ring-1 focus:ring-cg-green focus:border-cg-green`}
-                        min="0"
-                        step="1"
-                      />
-                    </td>
-                    <td className="px-0.5 py-0.5">
-                      <input
-                        type="number"
-                        value={cell.ops ?? ''}
-                        onChange={(e) => onChange(u.id, m.idx, 'ops', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, rowIdx, opsCol)}
-                        onPaste={(e) => handlePaste(e, rowIdx, opsCol)}
-                        data-row={rowIdx}
-                        data-col={opsCol}
-                        className={`no-spinner ${showMonthTotals ? 'w-16' : 'w-full'} px-1 py-0.5 text-xs text-right border border-gray-200 rounded focus:ring-1 focus:ring-cg-green focus:border-cg-green`}
-                        min="0"
-                        step="1"
-                      />
-                    </td>
-                    {showMonthTotals && (
-                      <td className="px-1 py-0.5 text-right text-xs font-medium text-gray-700 whitespace-nowrap bg-gray-50">
-                        {monthTotal(cell) || ''}
+            <Fragment key={u.id}>
+              {/* Target — editable */}
+              <tr className="bg-white border-t-2 border-gray-300">
+                <td rowSpan={3} className="px-2 py-0.5 font-medium text-gray-900 whitespace-nowrap border-r-2 border-cg-dark text-sm align-middle">
+                  {u.name || u.id}
+                </td>
+                <td className="px-1 py-0.5 text-[10px] text-gray-500 text-right whitespace-nowrap">Target</td>
+                {visibleMonths.map((m, colIdx) => {
+                  const cell = userMatrix[m.idx] || { client: '', ops: '' };
+                  const clientCol = colIdx * 2;
+                  const opsCol = colIdx * 2 + 1;
+                  return (
+                    <Fragment key={m.idx}>
+                      <td className="px-0.5 py-0.5 border-l-2 border-cg-dark">
+                        <input
+                          type="number"
+                          value={cell.client ?? ''}
+                          onChange={(e) => onChange(u.id, m.idx, 'client', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, rowIdx, clientCol)}
+                          onPaste={(e) => handlePaste(e, rowIdx, clientCol)}
+                          data-row={rowIdx}
+                          data-col={clientCol}
+                          className={`no-spinner ${showMonthTotals ? 'w-16' : 'w-full'} px-1 py-0.5 text-xs text-right border border-gray-200 rounded focus:ring-1 focus:ring-cg-green focus:border-cg-green`}
+                          min="0"
+                          step="1"
+                        />
                       </td>
-                    )}
-                  </Fragment>
-                );
-              })}
-              <td className="px-1 py-0.5 text-right text-xs text-gray-700 border-l-2 border-cg-dark whitespace-nowrap">
-                {sumBillable(userMatrix, visibleMonths) || ''}
-              </td>
-              <td className="px-1 py-0.5 text-right text-xs text-gray-700 whitespace-nowrap">
-                {sumOps(userMatrix, visibleMonths) || ''}
-              </td>
-              <td className="px-1 py-0.5 text-right font-semibold text-gray-900 text-xs whitespace-nowrap">
-                {sumTotal(userMatrix, visibleMonths) || ''}
-              </td>
-            </tr>
+                      <td className="px-0.5 py-0.5">
+                        <input
+                          type="number"
+                          value={cell.ops ?? ''}
+                          onChange={(e) => onChange(u.id, m.idx, 'ops', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, rowIdx, opsCol)}
+                          onPaste={(e) => handlePaste(e, rowIdx, opsCol)}
+                          data-row={rowIdx}
+                          data-col={opsCol}
+                          className={`no-spinner ${showMonthTotals ? 'w-16' : 'w-full'} px-1 py-0.5 text-xs text-right border border-gray-200 rounded focus:ring-1 focus:ring-cg-green focus:border-cg-green`}
+                          min="0"
+                          step="1"
+                        />
+                      </td>
+                      {showMonthTotals && (
+                        <td className="px-1 py-0.5 text-right text-xs font-medium text-gray-700 whitespace-nowrap bg-gray-50">
+                          {monthTotal(cell) || ''}
+                        </td>
+                      )}
+                    </Fragment>
+                  );
+                })}
+                <td className="px-1 py-0.5 text-right text-xs text-gray-700 border-l-2 border-cg-dark whitespace-nowrap">
+                  {sumBillable(userMatrix, visibleMonths) || ''}
+                </td>
+                <td className="px-1 py-0.5 text-right text-xs text-gray-700 whitespace-nowrap">
+                  {sumOps(userMatrix, visibleMonths) || ''}
+                </td>
+                <td className="px-1 py-0.5 text-right font-semibold text-gray-900 text-xs whitespace-nowrap">
+                  {sumTotal(userMatrix, visibleMonths) || ''}
+                </td>
+              </tr>
+
+              <MetricRow label="Actual" visibleMonths={visibleMonths} showMonthTotals={showMonthTotals} cell={actualCell} summary={actualSummary} />
+              <MetricRow label="Δ" visibleMonths={visibleMonths} showMonthTotals={showMonthTotals} cell={deltaCell} summary={deltaSummary} />
+            </Fragment>
           );
         })}
         {users.length === 0 && (
           <tr>
-            <td colSpan={visibleMonths.length * (showMonthTotals ? 3 : 2) + 4} className="px-3 py-4 text-center text-gray-500">
+            <td colSpan={visibleMonths.length * (showMonthTotals ? 3 : 2) + 5} className="px-3 py-4 text-center text-gray-500">
               No members in this group.
             </td>
           </tr>
@@ -413,6 +520,10 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
     return { pte, fte, other };
   }, [users]);
 
+  // Per-attorney, per-month actuals + capacity-pro-rated fractions for the
+  // selected year. Shared hook so this isn't hand-rolled inline (see #1/#6).
+  const { actuals, capacity } = useMonthlyActualsVsTarget(selectedYear, users);
+
   if (loading || usersLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -496,9 +607,9 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
         </div>
       </div>
 
-      <TargetTable title="Attorneys Full-time" users={groups.fte} matrix={matrix} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
-      <TargetTable title="Attorneys Part-time" users={groups.pte} matrix={matrix} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
-      <TargetTable title="Other" users={groups.other} matrix={matrix} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
+      <TargetTable title="Attorneys Full-time" users={groups.fte} matrix={matrix} actuals={actuals} capacity={capacity} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
+      <TargetTable title="Attorneys Part-time" users={groups.pte} matrix={matrix} actuals={actuals} capacity={capacity} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
+      <TargetTable title="Other" users={groups.other} matrix={matrix} actuals={actuals} capacity={capacity} onChange={handleChange} visibleMonths={visibleMonths} summaryLabel={summaryLabel} showMonthTotals={selectedQuarter !== 'all'} />
 
       <div className="flex justify-end">
         <button
