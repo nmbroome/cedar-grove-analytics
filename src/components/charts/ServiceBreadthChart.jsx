@@ -15,7 +15,7 @@ const ServiceBreadthChart = ({ data, title = "Service Breadth (Unique Transactio
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
           <YAxis />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip sourceNote="count of distinct billing categories per client — computed by the dashboard" />} />
           <Bar dataKey="uniqueTransactions" fill={CHART.ops} name="Unique Transaction Types" />
         </BarChart>
       </ResponsiveContainer>

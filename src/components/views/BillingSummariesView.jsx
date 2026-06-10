@@ -14,6 +14,7 @@ import { useAllBillableEntries, useUsers } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
+import { CalcTooltip } from '../shared';
 import MonthlyAttorneyBillables from './MonthlyAttorneyBillables';
 
 const BillingSummariesView = () => {
@@ -264,7 +265,10 @@ const BillingSummariesView = () => {
 
             <div className="bg-white p-4 rounded-lg shadow">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-cg-dark text-sm font-medium">Total Hours</span>
+                <span className="text-cg-dark text-sm font-medium inline-flex items-center gap-1">
+                  Total Hours
+                  <CalcTooltip calcKey="billableHours" position="bottom" />
+                </span>
                 <Clock className="w-5 h-5 text-purple-500" />
               </div>
               <div className="text-2xl font-bold text-cg-black">{formatHours(totals.hours)}h</div>
@@ -272,7 +276,10 @@ const BillingSummariesView = () => {
 
             <div className="bg-white p-4 rounded-lg shadow">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-cg-dark text-sm font-medium">Total Billables</span>
+                <span className="text-cg-dark text-sm font-medium inline-flex items-center gap-1">
+                  Total Billables
+                  <CalcTooltip calcKey="grossBillables" position="bottom" />
+                </span>
                 <DollarSign className="w-5 h-5 text-green-500" />
               </div>
               <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.grossBillables)}</div>
@@ -316,13 +323,22 @@ const BillingSummariesView = () => {
                         Attorney
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Rate
+                        <span className="inline-flex items-center gap-1">
+                          Rate
+                          <CalcTooltip calcKey="billingRate" position="bottom" />
+                        </span>
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Hours
+                        <span className="inline-flex items-center gap-1">
+                          Hours
+                          <CalcTooltip calcKey="billableHours" position="bottom" align="right" />
+                        </span>
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
+                        <span className="inline-flex items-center gap-1">
+                          Amount
+                          <CalcTooltip calcKey="grossBillables" position="bottom" align="right" />
+                        </span>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Category
