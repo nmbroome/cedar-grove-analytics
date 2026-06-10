@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Activity, Clock, Users, DollarSign, AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatHours, formatTimeOffContext } from '../../utils/formatters';
 import { filterByCohort, deriveTransactionTotals } from '../../utils/cohortFilter.mjs';
-import { DateRangeIndicator } from '../shared';
+import { DateRangeIndicator, CalcTooltip } from '../shared';
 import { TopTransactionsChart, BillableVsOpsChart } from '../charts';
 
 const COHORT_OPTIONS = [
@@ -72,18 +72,22 @@ const OverviewView = ({
     let grossBillables;
     let billablesLabel;
     let billablesSubtitle;
+    let billablesCalcKey;
     if (isFullTeam && periodAttorneyBillables != null) {
       grossBillables = periodAttorneyBillables;
       billablesLabel = 'Total Billables';
       billablesSubtitle = 'Firm-wide';
+      billablesCalcKey = 'totalBillablesAttorney';
     } else if (isFullTeam && periodRevenueAccrued != null) {
       grossBillables = periodRevenueAccrued;
       billablesLabel = 'Revenue Accrued';
       billablesSubtitle = 'Firm-wide';
+      billablesCalcKey = 'totalBillablesRevenueAccrued';
     } else {
       grossBillables = grossBillablesSum;
       billablesLabel = 'Total Billables';
       billablesSubtitle = 'Rate × Hours';
+      billablesCalcKey = 'totalBillablesRateTimesHours';
     }
 
     // Exclude members with no target this period (fully out of office) so their
@@ -103,6 +107,7 @@ const OverviewView = ({
       grossBillables,
       billablesLabel,
       billablesSubtitle,
+      billablesCalcKey,
       utilization,
       oooDays,
       holidayDays,
@@ -187,7 +192,10 @@ const OverviewView = ({
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">Avg Utilization</span>
+            <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+              Avg Utilization
+              <CalcTooltip calcKey="utilizationPct" position="bottom" />
+            </span>
             <Activity className="w-5 h-5 text-blue-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
@@ -200,7 +208,10 @@ const OverviewView = ({
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">Time Split</span>
+            <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+              Time Split
+              <CalcTooltip calcKey="timeSplitPct" position="bottom" />
+            </span>
             <Clock className="w-5 h-5 text-purple-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
@@ -215,35 +226,46 @@ const OverviewView = ({
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">Total Billable</span>
+            <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+              Total Billable
+              <CalcTooltip calcKey="billableHours" position="bottom" />
+            </span>
             <Clock className="w-5 h-5 text-green-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
             <div className="text-3xl font-bold text-gray-900">{formatHours(cohortMetrics.billable)}h</div>
           </div>
-          <div
-            className={`text-sm text-gray-600 text-center${paceAdjustmentTitle ? ' underline decoration-dotted decoration-gray-300 cursor-help' : ''}`}
-            title={paceAdjustmentTitle}
-          >{billableProgress}% current pace</div>
+          <div className="text-sm text-gray-600 text-center">
+            <CalcTooltip calcKey="pacePct" dynamic={{ context: paceAdjustmentTitle }} variant="underline">
+              {billableProgress}% current pace
+            </CalcTooltip>
+          </div>
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">Total Ops</span>
+            <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+              Total Ops
+              <CalcTooltip calcKey="opsHours" position="bottom" />
+            </span>
             <Users className="w-5 h-5 text-orange-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
             <div className="text-3xl font-bold text-gray-900">{formatHours(cohortMetrics.ops)}h</div>
           </div>
-          <div
-            className={`text-sm text-gray-600 text-center${paceAdjustmentTitle ? ' underline decoration-dotted decoration-gray-300 cursor-help' : ''}`}
-            title={paceAdjustmentTitle}
-          >{opsProgress}% current pace</div>
+          <div className="text-sm text-gray-600 text-center">
+            <CalcTooltip calcKey="pacePct" dynamic={{ context: paceAdjustmentTitle }} variant="underline">
+              {opsProgress}% current pace
+            </CalcTooltip>
+          </div>
         </div>
 
         <div className="bg-white p-4 rounded-lg shadow aspect-square flex flex-col justify-between">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-gray-600 text-sm font-medium">{cohortMetrics.billablesLabel}</span>
+            <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+              {cohortMetrics.billablesLabel}
+              <CalcTooltip calcKey={cohortMetrics.billablesCalcKey} position="bottom" />
+            </span>
             <DollarSign className="w-5 h-5 text-emerald-500" />
           </div>
           <div className="flex-1 flex items-center justify-center">
