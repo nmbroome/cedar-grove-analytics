@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderOpen } from 'lucide-react';
+import { CalcTooltip } from '../shared';
 
 const DownloadsTable = ({
   mode,
@@ -41,16 +42,39 @@ const DownloadsTable = ({
                 onClick={() => onSort('downloads')}
                 className="w-[15%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
-                Downloads {getSortIndicator('downloads')}
+                <span className="inline-flex items-center gap-1">
+                  Downloads {getSortIndicator('downloads')}
+                  <CalcTooltip calcKey="downloads" position="bottom" />
+                </span>
               </th>
               <th
                 onClick={() => onSort('uniqueFiles')}
                 className="w-[15%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
-                Files {getSortIndicator('uniqueFiles')}
+                <span className="inline-flex items-center gap-1">
+                  Files {getSortIndicator('uniqueFiles')}
+                  <CalcTooltip
+                    position="bottom"
+                    lines={[
+                      'Unique Files',
+                      '= count of distinct files downloaded in the selected range',
+                      'Source: synced from Google Drive activity',
+                    ]}
+                  />
+                </span>
               </th>
               <th className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Users
+                <span className="inline-flex items-center gap-1">
+                  Users
+                  <CalcTooltip
+                    position="bottom"
+                    lines={[
+                      'Unique Users',
+                      '= count of distinct users who downloaded in the selected range',
+                      'Source: synced from Google Drive activity',
+                    ]}
+                  />
+                </span>
               </th>
               <th
                 onClick={() => onSort('lastDownload')}
@@ -119,7 +143,10 @@ const DownloadsTable = ({
               onClick={() => onSort('downloads')}
               className="w-[20%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Downloads {getSortIndicator('downloads')}
+              <span className="inline-flex items-center gap-1">
+                Downloads {getSortIndicator('downloads')}
+                <CalcTooltip calcKey="downloads" position="bottom" />
+              </span>
             </th>
             <th
               onClick={() => onSort('lastDownload')}
