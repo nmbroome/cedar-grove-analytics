@@ -14,7 +14,8 @@ import {
   Mail,
   Globe,
   TrendingUp,
-  FileText
+  FileText,
+  Ban
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -31,14 +32,20 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { useAllBillableEntries, useClients, useUsers } from '@/hooks/useFirestoreData';
+import { useAllBillableEntries, useClients, useUsers, useInvoices } from '@/hooks/useFirestoreData';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
 import { getEntryDate, getPSTDate, getDateRangeLabel } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours, formatDate } from '@/utils/formatters';
 import { DATE_RANGE_OPTIONS } from '@/utils/constants';
 import { CHART_COLORS, CHART, GRAY, LABEL_LINE_COLOR, TOOLTIP_BORDER } from '@/utils/colors';
 import { getStatusBadge } from '@/utils/statusStyles';
-import { getClientRating, getClientRatingBadge, RATING_LABEL } from '@/utils/clientRating';
+import {
+  PAYMENT_STATUS_LABEL,
+  HOLD_FLAG_MESSAGE,
+  buildPaymentStatusIndex,
+  getClientPaymentStatus,
+  getPaymentStatusBadge,
+} from '@/utils/paymentStatus.mjs';
 import { DateRangeDropdown, CalcTooltip } from '@/components/shared';
 
 // Custom tooltip for charts - defined outside component to prevent re-creation on render
@@ -115,8 +122,13 @@ const ClientDetailView = ({ clientName }) => {
     );
   }, [firebaseClients, clientName]);
 
-  // Ideal-fit rating (Ideal / Non-Ideal / TBD) from the synced client record
-  const idealRating = useMemo(() => getClientRating(clientMetadata), [clientMetadata]);
+  // Payment status (On Target / Warning / Hold) — auto-calculated from the
+  // synced invoice rows + this client's payment terms (utils/paymentStatus.mjs)
+  const { invoices } = useInvoices();
+  const paymentStatus = useMemo(() => {
+    const index = buildPaymentStatusIndex(invoices, clientMetadata ? [clientMetadata] : []);
+    return getClientPaymentStatus(index, clientName);
+  }, [invoices, clientMetadata, clientName]);
 
   // Calculate date range boundaries
   const dateRangeInfo = useMemo(() => {
@@ -501,11 +513,16 @@ const ClientDetailView = ({ clientName }) => {
                         {displayStatus}
                       </span>
                     )}
-                    {idealRating && (
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                        getClientRatingBadge(idealRating)
-                      }`}>
-                        {RATING_LABEL[idealRating]}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                      getPaymentStatusBadge(paymentStatus.status)
+                    }`}>
+                      {PAYMENT_STATUS_LABEL[paymentStatus.status]}
+                      <CalcTooltip calcKey="paymentStatusTag" position="bottom" />
+                    </span>
+                    {paymentStatus.holdFlag && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-status-danger">
+                        <Ban className="w-3.5 h-3.5" />
+                        {HOLD_FLAG_MESSAGE}
                       </span>
                     )}
                     {clientMetadata?.clientType && (

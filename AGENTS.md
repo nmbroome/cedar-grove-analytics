@@ -77,9 +77,15 @@ attorneys/{attorneyName}/
 
 clients/all             — { clients: [array of client objects], lastSyncedAt, totalClients }
                            Each client: clientName, status, clientType, channel, contactEmail,
-                           website, elDate, notes, isIdeal, diverseFounder, clientContact,
-                           billingContact, billingContactEmail, phoneNumber, location,
-                           paymentTerms (number, 15 or 30)
+                           website, elDate, notes, isIdeal (legacy — UI now shows calculated
+                           Payment Status tags from invoices/all instead), diverseFounder,
+                           clientContact, billingContact, billingContactEmail, phoneNumber,
+                           location, paymentTerms (number, 15 or 30)
+
+invoices/all            — all client invoices in a single doc (entries array), synced from
+                           the Invoices workbook's "Payment Status" sheet tab. Drives the
+                           auto-calculated client Payment Status tags
+                           (On Target / Warning / Hold — utils/paymentStatus.mjs)
 
 matters/{autoId}         — name, clientName, createdAt, lastUsedAt, createdBy
                            (managed by Google Sheets Apps Script for matter dropdowns)

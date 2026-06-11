@@ -22,6 +22,7 @@ export const FirestoreDataProvider = ({ children }) => {
   const [allTargets, setAllTargets] = useState({});
   const [allDownloadEvents, setAllDownloadEvents] = useState([]);
   const [monthlyMetrics, setMonthlyMetrics] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [rateCard, setRateCard] = useState(null);
   const [timeOff, setTimeOff] = useState(null);
   const [dataWarnings, setDataWarnings] = useState({});
@@ -44,12 +45,13 @@ export const FirestoreDataProvider = ({ children }) => {
     try {
       await waitForAuth();
 
-      // Fetch users, clients, downloads, monthly metrics, rate card, and time off in parallel
-      const [usersSnap, clientsDoc, downloadsSnap, monthlyMetricsDoc, rateCardDoc, timeOffDoc] = await Promise.all([
+      // Fetch users, clients, downloads, monthly metrics, invoices, rate card, and time off in parallel
+      const [usersSnap, clientsDoc, downloadsSnap, monthlyMetricsDoc, invoicesDoc, rateCardDoc, timeOffDoc] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDoc(doc(db, 'clients', 'all')),
         getDocs(collection(db, 'driveDownloads')),
         getDoc(doc(db, 'monthlyMetrics', 'all')),
+        getDoc(doc(db, 'invoices', 'all')),
         getDoc(doc(db, 'rateCard', 'all')),
         getDoc(doc(db, 'timeOff', 'all')),
       ]);
@@ -370,6 +372,8 @@ export const FirestoreDataProvider = ({ children }) => {
 
       const monthlyMetricsList = monthlyMetricsDoc.exists() ? (monthlyMetricsDoc.data().entries || []) : [];
 
+      const invoiceList = invoicesDoc.exists() ? (invoicesDoc.data().entries || []) : [];
+
       const rateCardData = rateCardDoc.exists() ? rateCardDoc.data() : null;
 
       // Out-of-office + firm holidays (optional; enrichment only — absent until the sync ships)
@@ -381,6 +385,7 @@ export const FirestoreDataProvider = ({ children }) => {
       setClients(clientList);
       setAllDownloadEvents(downloadEvents);
       setMonthlyMetrics(monthlyMetricsList);
+      setInvoices(invoiceList);
       setRateCard(rateCardData);
       setTimeOff(timeOffData);
       setAllRates(ratesMap);
@@ -429,6 +434,7 @@ export const FirestoreDataProvider = ({ children }) => {
     allOpsEntries,
     allDownloadEvents,
     monthlyMetrics,
+    invoices,
     rateCard,
     timeOff,
     users,

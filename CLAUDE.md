@@ -58,6 +58,7 @@ src/
     ├── dateHelpers.js      # Business day math, US holidays
     ├── formatters.js       # Currency and number formatting
     ├── hiddenAttorneys.mjs # Attorneys hidden from UI after a date (pure, Node-importable)
+    ├── paymentStatus.mjs   # Calculated client Payment Status tags — On Target/Warning/Hold (pure, tested)
     ├── rateLookup.mjs      # Pure billing-rate lookup (backward fallback, tested)
     └── roles.js            # Role overrides for non-attorney staff
 ```
@@ -103,6 +104,18 @@ clients/all             — { clients: [array of client objects], lastSyncedAt, 
                            website, elDate, notes, isIdeal, diverseFounder, clientContact,
                            billingContact, billingContactEmail, phoneNumber, location,
                            paymentTerms (number, 15 or 30)
+                           NOTE: `isIdeal` is legacy — the manual Ideal/Non-Ideal/TBD tags
+                           were replaced by calculated Payment Status tags (see Key
+                           Patterns) and the field is no longer surfaced in the UI.
+
+invoices/all            — all client invoices in a single doc, synced from the Invoices
+                           workbook's "Payment Status" sheet tab (source of truth):
+                           { entryCount, syncedAt, entries: [{ client, amount, year,
+                               dateSent, status ("Paid"|"Not Paid"|"Payment Initiated"),
+                               lastReminder, dateReceived, notes, sheetRowNumber }] }
+                           Drives the calculated client Payment Status tags
+                           (utils/paymentStatus.mjs) and the admin Billing KPIs /
+                           invoice-matching pages.
 
 matters/{autoId}         — name, clientName, createdAt, lastUsedAt, createdBy
                            (managed by Google Sheets Apps Script for matter dropdowns)
@@ -174,6 +187,7 @@ Legacy field names (`hours`, `secondaryHours`) are normalized to `billableHours`
 - **Date filtering:** All-time, current month, trailing 60 days, or custom range. Filters applied in `useAnalyticsData`.
 - **Attorney filtering:** Global filter dropdown affects all views; some views have additional local filters.
 - **Target pro-rating:** Utilization targets are pro-rated per month via a capacity model (`getMonthProRateFraction` in `dateHelpers.js`) using **fractional working days**: each business day contributes `1 − its OOO off-fraction` (normal = 1, half-day OOO = 0.5, full-day OOO = 0), with firm holidays excluded entirely. Denominator = fractional working days in the whole month; numerator = fractional working days in the effective window. OOO and holidays are excluded from **both**, so the policy is **compress, don't reduce**: OOO does not lower an attorney's monthly target total — it spreads the same target across only the days they actually work (`target ÷ working-day capacity`). A full clean month yields exactly 1; a part-time/heavily-OOO attorney paces against their real capacity, not the full calendar month; a fully-OOO period yields 0 → utilization shows N/A. **Partial days:** the calendar enters all OOO as all-day events, so half-day time off is detected by parsing the event title (`parseOooDayFraction` in `utils/timeOff.js`: "Half day", "2PM onwards", "AM only", …) → 0.5 off. OOO/holidays are sourced from `timeOff/all`, falling back to US federal holidays when unsynced. Use the **Time-Off Debug** admin page (`/admin/timeoff-debug`) to inspect per-attorney OOO matching, half-day parsing, and unclassified entries.
+- **Client Payment Status tags:** Clients carry an auto-calculated **On Target / Warning / Hold** tag (replacing the old manual Ideal/Non-Ideal/TBD ideal-fit tags). `src/utils/paymentStatus.mjs` (pure, tested by `tests/payment-status.test.mjs`) derives the tag from the synced `invoices/all` rows + the client's `paymentTerms`, so it refreshes whenever the Payment Status sheet re-syncs — **never set manually**. Criteria: On Target = avg payment ≤ 15d AND ≥90% of invoices paid within 15d AND 0 outstanding; Hold = 2+ invoices overdue at once OR 1 invoice 30+ days past terms OR avg > 30d (displays the "No new matters without partner approval" flag); Warning = avg 22–30d, 1 invoice 21+ days overdue, or 2 unpaid accumulated — implemented as the middle catch-all so the three tags cover the whole book. **Hold exit is sticky:** the invoice history is replayed per calendar-month billing cycle; leaving Hold requires zero balance + 2 consecutive clean cycles and steps down to Warning first, never straight to On Target.
 - **Hidden attorneys:** Configured in `hiddenAttorneys.mjs` with date thresholds. Hidden from UI but included in aggregate totals.
 - **Role overrides:** `roles.js` maps non-attorney staff to custom display roles.
 - **Earnings predictions:** Use `rateCard/all` only for forward projections. Derive an attorney's current rank by exact-matching their latest stored `billableRate` against `rateCard.levels[].clientRate`. For each projected month, bump rank by 1 at every Q2 (Apr 1) and Q4 (Oct 1) boundary, capped at rank 19. If the current rate has no exact match, warn and project a flat `currentRate` for the full horizon (no rank bumps).
@@ -193,7 +207,7 @@ Set in `.env.local` (gitignored).
 
 ## Testing
 
-`npm test` runs Node's built-in test runner (`node --test tests/*.test.mjs`) — no test framework dependency. Tests cover the pure `.mjs` modules only (rate lookup, cohort filter, calc-definitions registry + call-site key coverage, audit script helpers); React components and hooks are not unit-tested (they import the Firebase client SDK at module load). Run the suite whenever touching `src/utils/*.mjs`, `scripts/`, or registry keys.
+`npm test` runs Node's built-in test runner (`node --test tests/*.test.mjs`) — no test framework dependency. Tests cover the pure `.mjs` modules only (rate lookup, cohort filter, payment status tags, calc-definitions registry + call-site key coverage, audit script helpers); React components and hooks are not unit-tested (they import the Firebase client SDK at module load). Run the suite whenever touching `src/utils/*.mjs`, `scripts/`, or registry keys.
 
 ## Deployment
 

@@ -127,6 +127,16 @@ export const useMonthlyMetrics = () => {
 };
 
 /**
+ * Get all client invoice entries from `invoices/all` (synced from the
+ * Invoices workbook's "Payment Status" tab). Drives the calculated client
+ * Payment Status tags — see utils/paymentStatus.mjs.
+ */
+export const useInvoices = () => {
+  const { invoices, loading, error } = useFirestoreCache();
+  return { invoices: invoices || [], loading, error };
+};
+
+/**
  * Get the firm's out-of-office + holiday document from `timeOff/all`.
  * Returns the raw doc ({ holidays, outOfOffice, ... }) or null until synced.
  * Parse it with utils/timeOff.js `parseTimeOff` before use.

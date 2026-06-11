@@ -6,9 +6,15 @@ import { DateRangeIndicator, ClientStatCard } from '../shared';
 import { ClientsTable } from '../tables';
 import { ClientHoursChart, ServiceBreadthChart } from '../charts';
 import { useAttorneyRates } from '@/hooks/useAttorneyRates';
-import { useUsers } from '@/hooks/useFirestoreData';
+import { useUsers, useClients, useInvoices } from '@/hooks/useFirestoreData';
 import { getEntryDate } from '@/utils/dateHelpers';
-import { RATING_RANK } from '@/utils/clientRating';
+import {
+  PAYMENT_STATUS,
+  PAYMENT_STATUS_RANK,
+  HOLD_FLAG_MESSAGE,
+  buildPaymentStatusIndex,
+  getClientPaymentStatus,
+} from '@/utils/paymentStatus.mjs';
 
 // Sum billable hours per client name across a set of entries (used to decide
 // which clients were "active" in a given window).
@@ -35,9 +41,19 @@ const ClientsView = ({
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
   const [clientFilter, setClientFilter] = useState('billable'); // 'all' | 'billable' | 'non-billable'
-  const [ratingFilter, setRatingFilter] = useState('all'); // 'all' | 'ideal' | 'non-ideal' | 'tbd'
+  const [paymentFilter, setPaymentFilter] = useState('all'); // 'all' | 'on-target' | 'warning' | 'hold'
   const { getRate, loading: ratesLoading } = useAttorneyRates();
   const { users: firebaseUsers } = useUsers();
+  const { clients: rawClients } = useClients();
+  const { invoices } = useInvoices();
+
+  // Payment Status tags, auto-calculated from the synced invoice rows
+  // (`invoices/all`, source of truth: the Payment Status sheet tab) plus each
+  // client's payment terms. Recomputed whenever the synced data refreshes.
+  const paymentIndex = useMemo(
+    () => buildPaymentStatusIndex(invoices, rawClients),
+    [invoices, rawClients]
+  );
 
   // Build userId -> display name map
   const userMap = useMemo(() => {
@@ -127,6 +143,7 @@ const ClientsView = ({
     // Merge calculated data into clientData
     return clientData.map(client => {
       const calculated = clientDataMap[client.name] || {};
+      const payment = getClientPaymentStatus(paymentIndex, client.name);
       return {
         ...client,
         billableHours: calculated.billableHours || 0,
@@ -135,13 +152,17 @@ const ClientsView = ({
         entries: calculated.entries || [],
         byAttorney: calculated.byAttorney || client.byAttorney || {},
         byCategory: calculated.byCategory || client.byCategory || {},
+        paymentStatus: payment.status,
+        avgPaymentDays: payment.avgDays,
+        outstandingInvoices: payment.outstandingCount,
+        holdFlag: payment.holdFlag,
       };
     });
-  }, [clientData, filteredBillableEntries, getRate, userMap]);
+  }, [clientData, filteredBillableEntries, getRate, userMap, paymentIndex]);
 
   const handleSort = (key) => {
     let direction = 'desc';
-    if (key === 'name' || key === 'status' || key === 'idealRating') direction = 'asc';
+    if (key === 'name' || key === 'status' || key === 'paymentStatus') direction = 'asc';
     if (sortConfig.key === key) {
       direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
     }
@@ -160,12 +181,9 @@ const ClientsView = ({
       filtered = filtered.filter(client => !isBillableClient(client));
     }
 
-    // Filter by ideal-client fit rating. The TBD bucket also absorbs untagged
-    // clients, matching the "TBD · sample" KPI card (tbd + no-data).
-    if (ratingFilter === 'tbd') {
-      filtered = filtered.filter(client => !client.idealRating || client.idealRating === 'tbd');
-    } else if (ratingFilter !== 'all') {
-      filtered = filtered.filter(client => client.idealRating === ratingFilter);
+    // Filter by calculated payment status tag
+    if (paymentFilter !== 'all') {
+      filtered = filtered.filter(client => client.paymentStatus === paymentFilter);
     }
 
     filtered.sort((a, b) => {
@@ -180,10 +198,19 @@ const ClientsView = ({
           aVal = (a.billableHours || a.totalHours) > 0 ? 'active' : 'inactive';
           bVal = (b.billableHours || b.totalHours) > 0 ? 'active' : 'inactive';
           break;
-        case 'idealRating':
-          // Rank ideal first, untagged last; ties fall back to billable hours.
-          aVal = RATING_RANK[a.idealRating] ?? 99;
-          bVal = RATING_RANK[b.idealRating] ?? 99;
+        case 'paymentStatus':
+          // Rank healthy payers first, holds last.
+          aVal = PAYMENT_STATUS_RANK[a.paymentStatus] ?? 99;
+          bVal = PAYMENT_STATUS_RANK[b.paymentStatus] ?? 99;
+          break;
+        case 'avgPaymentDays':
+          // Clients with no paid invoices sort below 0-day payers.
+          aVal = a.avgPaymentDays ?? -1;
+          bVal = b.avgPaymentDays ?? -1;
+          break;
+        case 'outstandingInvoices':
+          aVal = a.outstandingInvoices || 0;
+          bVal = b.outstandingInvoices || 0;
           break;
         case 'billableHours':
           aVal = a.billableHours || a.totalHours || 0;
@@ -217,7 +244,7 @@ const ClientsView = ({
   const activeCount = clientsWithBillables.filter(isBillableClient).length;
   const inactiveCount = clientsWithBillables.filter(c => !isBillableClient(c)).length;
 
-  // ---- KPI summary (Status + Ideal-fit) ---------------------------------
+  // ---- KPI summary (Status + Payment Status) ----------------------------
   const bookTotal = clientsWithBillables.length;
 
   // Clients active in the prior comparison window, measured over the *current*
@@ -235,11 +262,11 @@ const ClientsView = ({
   const activeDelta = priorActiveCount === null ? null : activeCount - priorActiveCount;
   const quietDelta = activeDelta === null ? null : -activeDelta;
 
-  // Ideal-client fit over the whole book; untagged clients fall into TBD so the
-  // three buckets always sum to bookTotal.
-  const idealCount = clientsWithBillables.filter(c => c.idealRating === 'ideal').length;
-  const nonIdealCount = clientsWithBillables.filter(c => c.idealRating === 'non-ideal').length;
-  const tbdCount = bookTotal - idealCount - nonIdealCount;
+  // Payment status over the whole book. Warning is the middle catch-all
+  // bucket (see utils/paymentStatus.mjs), so the three tags sum to bookTotal.
+  const onTargetCount = clientsWithBillables.filter(c => c.paymentStatus === PAYMENT_STATUS.ON_TARGET).length;
+  const warningCount = clientsWithBillables.filter(c => c.paymentStatus === PAYMENT_STATUS.WARNING).length;
+  const holdCount = clientsWithBillables.filter(c => c.paymentStatus === PAYMENT_STATUS.HOLD).length;
 
   const pct = (n) => (bookTotal > 0 ? Math.round((n / bookTotal) * 100) : 0);
 
@@ -285,13 +312,14 @@ const ClientsView = ({
         </p>
       </div>
 
-      {/* Status: Active vs Quiet */}
+      {/* Status: Active vs Quiet (compact row) */}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
           Status · {bookTotal} total clients
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ClientStatCard
+            compact
             label="Active clients"
             value={activeCount}
             accent="green"
@@ -301,6 +329,7 @@ const ClientsView = ({
             info={{ calcKey: 'activeClients' }}
           />
           <ClientStatCard
+            compact
             label="Quiet clients"
             value={inactiveCount}
             accent="amber"
@@ -312,35 +341,36 @@ const ClientsView = ({
         </div>
       </div>
 
-      {/* Ideal-client fit */}
+      {/* Payment status — auto-calculated from the synced invoice data */}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Ideal-client fit
+          Payment Status
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <ClientStatCard
-            label="Ideal"
-            value={idealCount}
+            label="On Target"
+            value={onTargetCount}
             accent="green"
-            percent={pct(idealCount)}
-            percentLabel="· sample"
-            info={{ calcKey: 'pctOfBookClients' }}
+            percent={pct(onTargetCount)}
+            percentLabel="· avg ≤ 15d · 0 outstanding"
+            info={{ calcKey: 'onTargetClients' }}
           />
           <ClientStatCard
-            label="Non-Ideal"
-            value={nonIdealCount}
+            label="Warning"
+            value={warningCount}
+            accent="amber"
+            percent={pct(warningCount)}
+            percentLabel="· avg 22–30d, 2 pending, or 1 overdue +21d"
+            info={{ calcKey: 'warningClients' }}
+          />
+          <ClientStatCard
+            label="Hold"
+            value={holdCount}
             accent="red"
-            percent={pct(nonIdealCount)}
-            percentLabel="· sample"
-            info={{ calcKey: 'pctOfBookClients' }}
-          />
-          <ClientStatCard
-            label="TBD"
-            value={tbdCount}
-            accent="blue"
-            percent={pct(tbdCount)}
-            percentLabel="· sample"
-            info={{ calcKey: 'pctOfBookClients' }}
+            percent={pct(holdCount)}
+            percentLabel="· 2+ overdue, 1 overdue +30d, or avg >30d"
+            info={{ calcKey: 'holdClients' }}
+            flag={HOLD_FLAG_MESSAGE}
           />
         </div>
       </div>
@@ -380,15 +410,15 @@ const ClientsView = ({
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             {[
               { key: 'all', label: 'All' },
-              { key: 'ideal', label: 'Ideal' },
-              { key: 'non-ideal', label: 'Non-Ideal' },
-              { key: 'tbd', label: 'TBD' },
+              { key: 'on-target', label: 'On Target' },
+              { key: 'warning', label: 'Warning' },
+              { key: 'hold', label: 'Hold' },
             ].map(opt => (
               <button
                 key={opt.key}
-                onClick={() => setRatingFilter(opt.key)}
+                onClick={() => setPaymentFilter(opt.key)}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  ratingFilter === opt.key
+                  paymentFilter === opt.key
                     ? 'bg-cg-green text-white'
                     : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
