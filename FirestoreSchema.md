@@ -821,7 +821,9 @@ Stores all client records in a single document as an array. Synced from a Google
       website: "https://acme.com",          // string — client website
       elDate: "2025-03-15",                 // string — engagement letter date
       notes: "Annual retainer client",      // string — freeform notes
-      isIdeal: true,                         // boolean — ideal client flag
+      isIdeal: true,                         // boolean — LEGACY ideal client flag (no longer
+                                             //   surfaced; the UI shows calculated Payment
+                                             //   Status tags from invoices/all instead)
       diverseFounder: false,                 // boolean — diverse founder flag
       clientContact: "Jane Smith",          // string — primary contact name
       billingContact: "John Doe",           // string — billing contact name
@@ -842,6 +844,7 @@ Stores all client records in a single document as an array. Synced from a Google
 - `clientName` is the primary identifier used throughout the dashboard for lookups and display.
 - All fields are optional except `clientName`.
 - The dashboard fetches this single document on load and filters/searches the clients array client-side.
+- `isIdeal` is legacy: the manual Ideal/Non-Ideal/TBD tags were replaced by Payment Status tags (On Target / Warning / Hold) that are auto-calculated from `invoices/all` + `paymentTerms` (see `src/utils/paymentStatus.mjs`) and refresh on every invoice sync.
 
 ### Sync Architecture
 

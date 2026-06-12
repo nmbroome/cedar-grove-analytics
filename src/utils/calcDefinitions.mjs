@@ -24,6 +24,7 @@ export const SOURCE = Object.freeze({
 const WORKBOOK_LABELS = {
   invoices: "'{year} - Invoices ({lastName})' workbook → month tab",
   rates: 'rates workbook → monthly tab',
+  paymentStatusTab: "Invoices workbook → 'Payment Status' tab",
 };
 
 /**
@@ -170,11 +171,58 @@ export const CALC_DEFINITIONS = Object.freeze({
     inputs: ['per-category billable hours', 'total billable hours in range'],
     source: SOURCE.COMPUTED,
   },
-  pctOfBookClients: {
-    label: '% of Client Book',
-    formula: 'client count ÷ total clients × 100',
-    inputs: ['client counts', 'total client book'],
+  paymentStatusTag: {
+    label: 'Payment Status',
+    formula: 'auto-tagged from avg payment time + outstanding invoices; never set manually',
+    inputs: ['synced invoice rows (sent/received dates, status)', 'client payment terms'],
     source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
+    notes: [
+      'On Target: avg ≤ 15d, ≥90% paid within 15d, 0 outstanding. Hold: 2+ overdue at once, 1 invoice 30+ days overdue, or avg > 30d. Warning: everything in between.',
+      'Hold is sticky: exiting requires zero balance + 2 clean billing cycles, stepping down to Warning first.',
+      'Refreshes whenever the Payment Status sheet re-syncs.',
+    ],
+  },
+  onTargetClients: {
+    label: 'On Target Clients',
+    formula: 'count of clients with avg payment ≤ 15d, ≥90% of invoices paid within 15d, and 0 outstanding invoices',
+    inputs: ['synced invoice rows per client', 'total client book'],
+    source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
+    notes: ['Clients with no invoice history count as On Target (no payment issues on record).'],
+  },
+  warningClients: {
+    label: 'Warning Clients',
+    formula: 'count of clients with avg payment 22–30d, or 1 invoice 21+ days overdue, or 2 unpaid invoices accumulated',
+    inputs: ['synced invoice rows per client', 'client payment terms', 'total client book'],
+    source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
+    notes: ['Warning is the middle bucket: it also absorbs any client who misses the On Target bar without triggering Hold, so the three tags cover the whole book.'],
+  },
+  holdClients: {
+    label: 'Hold Clients',
+    formula: 'count of clients with 2+ invoices overdue at once, or 1 invoice 30+ days overdue, or avg payment > 30d',
+    inputs: ['synced invoice rows per client', 'client payment terms', 'total client book'],
+    source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
+    notes: [
+      'Hold clients take no new matters without partner approval.',
+      'Exiting Hold requires zero balance + 2 clean billing cycles, stepping down to Warning first — never straight to On Target.',
+    ],
+  },
+  avgPaymentDays: {
+    label: 'Avg Days',
+    formula: 'mean of (date received − date sent) across the client’s paid invoices',
+    inputs: ['synced invoice sent/received dates'],
+    source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
+  },
+  outstandingInvoices: {
+    label: 'Outstanding',
+    formula: 'count of invoices sent but not yet paid',
+    inputs: ['synced invoice rows (status, sent/received dates)'],
+    source: SOURCE.COMPUTED,
+    sheetRef: { workbook: 'paymentStatusTab', label: 'invoice rows', scope: 'rows (row 2 down)' },
   },
   avgHoursPerTransaction: {
     label: 'Avg Hours',

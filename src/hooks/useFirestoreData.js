@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFirestoreCache } from '@/context/FirestoreDataContext';
+import { buildPaymentStatusIndex } from '@/utils/paymentStatus.mjs';
 
 /**
  * Normalize a billable entry from the new schema.
@@ -124,6 +125,31 @@ export const useAllDownloadEvents = () => {
 export const useMonthlyMetrics = () => {
   const { monthlyMetrics, loading, error } = useFirestoreCache();
   return { data: monthlyMetrics || [], loading, error };
+};
+
+/**
+ * Get all client invoice entries from `invoices/all` (synced from the
+ * Invoices workbook's "Payment Status" tab). Drives the calculated client
+ * Payment Status tags — see utils/paymentStatus.mjs.
+ */
+export const useInvoices = () => {
+  const { invoices, loading, error } = useFirestoreCache();
+  return { invoices: invoices || [], loading, error };
+};
+
+/**
+ * Calculated client Payment Status tags (On Target / Warning / Hold) for the
+ * whole book, computed once per cache refresh from `invoices/all` + each
+ * client's paymentTerms. The single computation site for every consumer —
+ * look up a client with `getClientPaymentStatus(index, clientName)`.
+ */
+export const usePaymentStatusIndex = () => {
+  const { invoices, clients, loading, error } = useFirestoreCache();
+  const index = useMemo(
+    () => buildPaymentStatusIndex(invoices || [], clients || []),
+    [invoices, clients]
+  );
+  return { index, loading, error };
 };
 
 /**

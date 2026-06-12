@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Ban } from 'lucide-react';
 import { formatCurrency, formatHours } from '../../utils/formatters';
 import { getStatusBadge } from '@/utils/statusStyles';
-import { getClientRatingBadge, RATING_LABEL } from '@/utils/clientRating';
+import { getPaymentStatusBadge, PAYMENT_STATUS_LABEL, HOLD_FLAG_MESSAGE } from '@/utils/paymentStatus.mjs';
 import { ClientRowTooltip } from '../tooltips';
 import { CalcTooltip } from '../shared';
 
@@ -33,13 +34,13 @@ const ClientsTable = ({
           <tr>
             <th
               onClick={() => onSort('name')}
-              className="w-[28%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[20%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Client Name {getSortIndicator('name')}
             </th>
             <th
               onClick={() => onSort('status')}
-              className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               <span className="inline-flex items-center gap-1">
                 Status {getSortIndicator('status')}
@@ -47,14 +48,35 @@ const ClientsTable = ({
               </span>
             </th>
             <th
-              onClick={() => onSort('idealRating')}
-              className="w-[13%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              onClick={() => onSort('paymentStatus')}
+              className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
-              Ideal {getSortIndicator('idealRating')}
+              <span className="inline-flex items-center gap-1">
+                Payment {getSortIndicator('paymentStatus')}
+                <CalcTooltip calcKey="paymentStatusTag" position="bottom" />
+              </span>
+            </th>
+            <th
+              onClick={() => onSort('avgPaymentDays')}
+              className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+            >
+              <span className="inline-flex items-center gap-1">
+                Avg Days {getSortIndicator('avgPaymentDays')}
+                <CalcTooltip calcKey="avgPaymentDays" position="bottom" />
+              </span>
+            </th>
+            <th
+              onClick={() => onSort('outstandingInvoices')}
+              className="w-[10%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+            >
+              <span className="inline-flex items-center gap-1">
+                Outstanding {getSortIndicator('outstandingInvoices')}
+                <CalcTooltip calcKey="outstandingInvoices" position="bottom" />
+              </span>
             </th>
             <th
               onClick={() => onSort('billableHours')}
-              className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[13%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               <span className="inline-flex items-center gap-1">
                 Billable Hours {getSortIndicator('billableHours')}
@@ -63,7 +85,7 @@ const ClientsTable = ({
             </th>
             <th
               onClick={() => onSort('grossBillables')}
-              className="w-[15%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[12%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               <span className="inline-flex items-center gap-1">
                 Billables {getSortIndicator('grossBillables')}
@@ -72,7 +94,7 @@ const ClientsTable = ({
             </th>
             <th
               onClick={() => onSort('lastActivity')}
-              className="w-[16%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="w-[13%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
             >
               Last Activity {getSortIndicator('lastActivity')}
             </th>
@@ -109,16 +131,26 @@ const ClientsTable = ({
                   {(client.billableHours || client.totalHours || 0) > 0 ? 'Active' : 'Quiet'}
                 </span>
               </td>
+              {/* paymentStatus is always set by ClientsView's merge — every
+                  client gets a tag, so no empty state is needed here */}
               <td className="px-6 py-4 whitespace-nowrap text-sm">
-                {client.idealRating ? (
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getClientRatingBadge(client.idealRating)}`}
-                  >
-                    {RATING_LABEL[client.idealRating]}
-                  </span>
-                ) : (
-                  <span className="text-gray-300">—</span>
-                )}
+                <span
+                  title={client.holdFlag ? HOLD_FLAG_MESSAGE : undefined}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatusBadge(client.paymentStatus)}`}
+                >
+                  {PAYMENT_STATUS_LABEL[client.paymentStatus]}
+                  {client.holdFlag && <Ban className="w-3 h-3" />}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {client.avgPaymentDays !== null && client.avgPaymentDays !== undefined
+                  ? `${client.avgPaymentDays.toFixed(1)} days`
+                  : '—'}
+              </td>
+              <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                (client.outstandingInvoices || 0) > 0 ? 'text-status-danger' : 'text-gray-900'
+              }`}>
+                {client.outstandingInvoices || 0}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {formatHours(client.billableHours || client.totalHours || 0)}h
