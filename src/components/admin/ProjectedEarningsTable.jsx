@@ -11,7 +11,10 @@ const MAX_RANK = 19;
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const isColin = (name) => /colin\s+van\s+loon/i.test(name || '');
-const rateField = (name) => (isColin(name) ? 'colinRate' : 'clientRate');
+// Stored rates in users/{id}.rates are CLIENT billing rates, so rank is always
+// derived from clientRate. Projection pays out the take-home column instead:
+// colinRate for Colin (his bespoke ladder), attorneyRate for everyone else.
+const takeHomeField = (name) => (isColin(name) ? 'colinRate' : 'attorneyRate');
 
 const monthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
@@ -72,7 +75,7 @@ const ProjectedEarningsTable = () => {
 
     return visibleAttorneys.map((u) => {
       const name = u.name || u.id;
-      const field = rateField(name);
+      const payField = takeHomeField(name);
 
       // YTD actual earnings + per-month actuals (for current-month partial blend).
       let ytdEarnings = 0;
@@ -91,7 +94,7 @@ const ProjectedEarningsTable = () => {
       });
 
       const latest = findLatestRate(allRates?.[name]);
-      const startRank = latest ? findRankForRate(levels, latest.rate, field) : -1;
+      const startRank = latest ? findRankForRate(levels, latest.rate, 'clientRate') : -1;
       const hasRankMatch = startRank !== -1;
       const currentRate = latest?.rate || 0;
 
@@ -110,9 +113,13 @@ const ProjectedEarningsTable = () => {
         if (hasRankMatch) {
           rank = predictedRankForMonth(startRank, currentMonth, m);
           endRank = Math.max(endRank, rank);
-          monthRate = Number(levels[rank]?.[field]) || Number(levels[rank]?.clientRate) || currentRate;
+          // Take-home payout for the predicted rank; colinRate is null below
+          // rank 13, so fall back to the standard attorneyRate there.
+          monthRate = Number(levels[rank]?.[payField]) || Number(levels[rank]?.attorneyRate) || 0;
         } else {
-          monthRate = currentRate;
+          // No rank match — currentRate is a client rate, so paying it out
+          // would overstate take-home. Project $0 and surface the badge.
+          monthRate = 0;
         }
 
         let hoursToProject = targetHours;
@@ -140,7 +147,6 @@ const ProjectedEarningsTable = () => {
         ytdHours,
         projectedEarnings,
         projectedHours,
-        totalPredicted: ytdEarnings + projectedEarnings,
       };
     });
   }, [users, allBillableEntries, allRates, allTargets, rateCard]);
@@ -152,9 +158,8 @@ const ProjectedEarningsTable = () => {
         ytdHours: acc.ytdHours + r.ytdHours,
         projectedEarnings: acc.projectedEarnings + r.projectedEarnings,
         projectedHours: acc.projectedHours + r.projectedHours,
-        totalPredicted: acc.totalPredicted + r.totalPredicted,
       }),
-      { ytdEarnings: 0, ytdHours: 0, projectedEarnings: 0, projectedHours: 0, totalPredicted: 0 }
+      { ytdEarnings: 0, ytdHours: 0, projectedEarnings: 0, projectedHours: 0 }
     );
   }, [rows]);
 
@@ -183,9 +188,10 @@ const ProjectedEarningsTable = () => {
       <div>
         <h2 className="text-2xl font-bold text-cg-black">Projected Earnings — {currentYear}</h2>
         <p className="text-sm text-cg-dark">
-          YTD actual earnings plus projection through Dec {currentYear}, using monthly billable
-          targets × predicted rate. Rank bumps applied at Apr 1 (Q2) and Oct 1 (Q4). Colin Van
-          Loon uses the Colin rate column.
+          YTD actual take-home earnings plus projection through Dec {currentYear}, using monthly
+          billable targets × predicted take-home rate. Rank is derived from the client rate; the
+          payout uses the rate card&apos;s attorney (take-home) column. Rank bumps applied at
+          Apr 1 (Q2) and Oct 1 (Q4). Colin Van Loon uses the Colin rate column.
         </p>
         <p className="text-xs text-gray-500 mt-1">
           As of {MONTH_LABELS[currentMonth - 1]} {today.getDate()}, {currentYear}.
@@ -228,18 +234,12 @@ const ProjectedEarningsTable = () => {
                   <CalcTooltip calcKey="projectedEarnings" position="bottom" align="right" />
                 </span>
               </th>
-              <th className="px-3 py-2 text-right font-semibold">
-                <span className="inline-flex items-center gap-1">
-                  Predicted Total
-                  <CalcTooltip calcKey="predictedTotal" position="bottom" align="right" />
-                </span>
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
                   No attorney data available.
                 </td>
               </tr>
@@ -256,7 +256,7 @@ const ProjectedEarningsTable = () => {
                   {!r.hasRankMatch && (
                     <span
                       className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold bg-yellow-100 text-yellow-800 rounded"
-                      title="Stored rate did not match any rate card level — projecting flat current rate, no rank bumps."
+                      title="Stored client rate did not match any rate card level — take-home rate unknown, projecting $0."
                     >
                       No rank match
                     </span>
@@ -273,9 +273,6 @@ const ProjectedEarningsTable = () => {
                 <td className="px-3 py-2 text-right text-gray-900">{formatCurrency(r.ytdEarnings)}</td>
                 <td className="px-3 py-2 text-right text-gray-700">{formatHours(r.projectedHours)}</td>
                 <td className="px-3 py-2 text-right text-gray-700">{formatCurrency(r.projectedEarnings)}</td>
-                <td className="px-3 py-2 text-right font-semibold text-cg-black">
-                  {formatCurrency(r.totalPredicted)}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -289,7 +286,6 @@ const ProjectedEarningsTable = () => {
                 <td className="px-3 py-2 text-right text-cg-black">{formatCurrency(totals.ytdEarnings)}</td>
                 <td className="px-3 py-2 text-right text-cg-black">{formatHours(totals.projectedHours)}</td>
                 <td className="px-3 py-2 text-right text-cg-black">{formatCurrency(totals.projectedEarnings)}</td>
-                <td className="px-3 py-2 text-right text-cg-black">{formatCurrency(totals.totalPredicted)}</td>
               </tr>
             </tfoot>
           )}

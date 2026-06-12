@@ -97,10 +97,15 @@ The user profile document. Stores identity, role, billing rate, and performance 
   active: true,                            // boolean — false hides attorney unless timeframe overlaps their data (absent = active)
 
   // Billing rates (one entry per active month)
+  // `rate` is the CLIENT billing rate (drives rate × hours billables).
+  // `takeHomeRate` is the attorney's take-home hourly rate, mirrored from the
+  // invoice sheet's rate table — optional; absent where the sheet has no
+  // explicit value (e.g. Sam's Jan–Sep 2025 founder-model months). Actual
+  // take-home dollars still come from per-entry `earnings`, not this field.
   rates: [
-    { month: "January", year: 2026, rate: 337.50 },
-    { month: "February", year: 2026, rate: 337.50 },
-    { month: "March", year: 2026, rate: 350.00 }
+    { month: "January", year: 2026, rate: 600, takeHomeRate: 337.50 },
+    { month: "February", year: 2026, rate: 615, takeHomeRate: 337.50 },
+    { month: "March", year: 2026, rate: 615, takeHomeRate: 337.50 }
     // ... one entry per month the user is active
   ],
 

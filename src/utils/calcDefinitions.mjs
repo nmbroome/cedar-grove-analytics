@@ -183,22 +183,19 @@ export const CALC_DEFINITIONS = Object.freeze({
     source: SOURCE.COMPUTED,
   },
   projectedEarnings: {
-    label: 'Projected Earnings',
-    formula: 'Σ over remaining months: (target hours − actual this month) × projected rate',
+    label: 'Projected Earnings (take-home)',
+    formula: 'Σ over remaining months: (target hours − actual this month) × projected take-home rate',
     inputs: ['monthly targets (admin-entered)', 'rate card ladder (Q2/Q4 rank bumps, capped at rank 19)', 'YTD actuals'],
     source: SOURCE.COMPUTED,
-    notes: ['If the current rate has no exact rate-card match, the current rate is projected flat with no rank bumps.'],
+    notes: [
+      'Rank is matched on the client rate; the payout uses the attorney (take-home) column — Colin rate for Colin.',
+      'If the current client rate has no exact rate-card match, take-home is unknown and the projection is $0.',
+    ],
   },
   projectedHours: {
     label: 'Projected Hours',
     formula: 'Σ over remaining months: target hours − actual hours this month (never below 0)',
     inputs: ['monthly billable targets (admin-entered)', 'current-month actual hours'],
-    source: SOURCE.COMPUTED,
-  },
-  predictedTotal: {
-    label: 'Predicted Total',
-    formula: 'YTD earnings + projected earnings for the remaining months',
-    inputs: ['YTD actual earnings', 'projected earnings (rate card model)'],
     source: SOURCE.COMPUTED,
   },
   activeClients: {
