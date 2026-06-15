@@ -121,6 +121,11 @@ const ClientDetailView = ({ clientName }) => {
     );
   }, [firebaseClients, clientName]);
 
+  // Trimmed per-client "General Note" for display. The raw Firestore value can
+  // be a non-string (a numeric-only note cell syncs from Sheets as a number),
+  // so coerce before trimming.
+  const clientNote = String(clientMetadata?.notes || '').trim();
+
   // Payment status (On Target / Warning / Hold) — auto-calculated from the
   // synced invoice rows + this client's payment terms (utils/paymentStatus.mjs)
   const { index: paymentIndex } = usePaymentStatusIndex();
@@ -563,7 +568,7 @@ const ClientDetailView = ({ clientName }) => {
         </div>
 
         {/* Client Metadata */}
-        {clientMetadata && (clientMetadata.contactEmail || clientMetadata.website || clientMetadata.channel || clientMetadata.notes?.trim()) && (
+        {clientMetadata && (clientMetadata.contactEmail || clientMetadata.website || clientMetadata.channel || clientNote) && (
           <div className="bg-white rounded-lg shadow p-4 space-y-3">
             {(clientMetadata.contactEmail || clientMetadata.website || clientMetadata.channel) && (
               <div className="flex flex-wrap gap-6 text-sm">
@@ -593,12 +598,12 @@ const ClientDetailView = ({ clientName }) => {
             )}
             {/* Per-client "General Notes" synced from the finance sheet, tied to
                 this client by name. */}
-            {clientMetadata.notes?.trim() && (
+            {clientNote && (
               <div className="flex items-start gap-2 text-sm text-gray-600">
                 <FileText className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
                 <div>
                   <span className="font-medium text-gray-500">Notes: </span>
-                  <span className="whitespace-pre-wrap">{clientMetadata.notes.trim()}</span>
+                  <span className="whitespace-pre-wrap">{clientNote}</span>
                 </div>
               </div>
             )}

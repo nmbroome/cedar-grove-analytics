@@ -1100,8 +1100,9 @@ export const useAnalyticsData = ({
           website: client.website || '',
           // Per-client "General Notes" synced from the finance sheet, kept on
           // the client object so it stays paired with its client by name
-          // (never by row position) through any table sort.
-          notes: (client.notes || '').trim(),
+          // (never by row position) through any table sort. Coerce before
+          // trimming — a numeric-only note cell syncs from Sheets as a number.
+          notes: String(client.notes || '').trim(),
           byAttorney: stats.byAttorney || {},
           byCategory: stats.byCategory || {},
           entries: sortedEntries,
