@@ -1,4 +1,5 @@
 import { getAdminAuth } from "@/firebase/admin";
+import { DEFAULT_GITHUB_REPO } from "@/utils/constants";
 
 // GET /api/commit-history
 // Returns the repo's commit history (newest first) pulled from the GitHub REST
@@ -12,7 +13,6 @@ import { getAdminAuth } from "@/firebase/admin";
 // (revalidate window) so we don't pull on every request; the client adds a
 // localStorage layer on top, and `?refresh=1` busts both.
 
-const DEFAULT_REPO = "nmbroome/cedar-grove-analytics";
 const ALLOWED_EMAIL_DOMAIN = "cedargrovellp.com";
 const PER_PAGE = 100;
 const MAX_PAGES = 20; // safety cap (≤ 2000 commits)
@@ -50,7 +50,7 @@ export async function GET(request) {
   // ---------------------------------------------------------------------------
   // 2. Fetch commits from GitHub. Token optional (public repo).
   // ---------------------------------------------------------------------------
-  const repo = process.env.GITHUB_REPO || DEFAULT_REPO;
+  const repo = process.env.GITHUB_REPO || DEFAULT_GITHUB_REPO;
   const token = process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || "";
   const forceRefresh =
     new URL(request.url).searchParams.get("refresh") === "1";
@@ -65,6 +65,10 @@ export async function GET(request) {
 
   try {
     const commits = [];
+    // True when GitHub failed partway through pagination and we return only the
+    // pages collected so far. Clients use this to avoid caching an incomplete
+    // history as if it were complete.
+    let partial = false;
 
     for (let page = 1; page <= MAX_PAGES; page++) {
       const url = `https://api.github.com/repos/${repo}/commits?per_page=${PER_PAGE}&page=${page}`;
@@ -88,8 +92,12 @@ export async function GET(request) {
         }
         console.error(`commit-history: ${hint} (page ${page})`);
         // If earlier pages already succeeded, return what we have rather than
-        // failing the whole request.
-        if (commits.length > 0) break;
+        // failing the whole request — but flag it as partial so the client
+        // surfaces a warning and does NOT cache it.
+        if (commits.length > 0) {
+          partial = true;
+          break;
+        }
         return json({ success: false, error: hint }, 502);
       }
 
@@ -115,6 +123,7 @@ export async function GET(request) {
 
     return json({
       success: true,
+      partial,
       repo,
       total: commits.length,
       tokenConfigured: Boolean(token),

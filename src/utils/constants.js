@@ -15,6 +15,14 @@ export const MONTHS = [
   { value: 12, label: 'December' },
 ];
 
+// Canonical month-name arrays, derived from MONTHS so there is a single source.
+export const MONTH_NAMES_FULL = MONTHS.map((m) => m.label);
+export const MONTH_NAMES_ABBR = MONTH_NAMES_FULL.map((m) => m.slice(0, 3));
+
+// Default repository for the Tech Team commit-history view. Overridable
+// server-side via the GITHUB_REPO env var (see api/commit-history/route.js).
+export const DEFAULT_GITHUB_REPO = 'nmbroome/cedar-grove-analytics';
+
 export const DATE_RANGE_OPTIONS = [
   { value: 'all-time', label: 'All Time' },
   { value: 'current-week', label: 'Current Week' },

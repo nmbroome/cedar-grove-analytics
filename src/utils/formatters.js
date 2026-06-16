@@ -1,3 +1,5 @@
+import { MONTH_NAMES_ABBR } from './constants';
+
 // Format currency - omit .00 decimals
 export const formatCurrency = (amount) => {
   const rounded = Math.round(amount * 100) / 100;
@@ -53,4 +55,14 @@ export const formatDate = (date) => {
     return date.toLocaleDateString();
   }
   return 'No date';
+};
+
+// Format a date as "Mon D, YYYY" (e.g. "Jun 11, 2026"). Accepts an ISO string,
+// a Date, or epoch-millis. Returns '' for null / invalid input so callers can
+// guard the surrounding text.
+export const formatShortDate = (input) => {
+  if (input == null) return '';
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${MONTH_NAMES_ABBR[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 };

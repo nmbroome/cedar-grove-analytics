@@ -104,7 +104,10 @@ const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false
   const VALID_TABS = ['overview', 'attorneys', 'transactions', 'ops', 'clients', 'downloads', 'targets', 'tech-team'];
   const defaultTab = downloadsOnly ? 'downloads' : transactionsOpsOnly ? 'transactions' : 'overview';
   const tabFromUrl = searchParams.get('tab');
-  const initialTab = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : defaultTab;
+  // Restricted (downloads-only / transactions+ops-only) users must not reach the
+  // Tech Team tab via the ?tab=tech-team URL — it isn't in their allowed tab set.
+  const isTabAllowed = (tab) => VALID_TABS.includes(tab) && !(restrictedMode && tab === 'tech-team');
+  const initialTab = tabFromUrl && isTabAllowed(tabFromUrl) ? tabFromUrl : defaultTab;
   const [selectedView, setSelectedView] = useState(initialTab);
 
   const updateDashboardUrl = useCallback((overrides = {}) => {
@@ -412,7 +415,7 @@ const AnalyticsDashboard = ({ downloadsOnly = false, transactionsOpsOnly = false
 
         {selectedView === 'targets' && isAdmin && <TargetsView />}
 
-        {selectedView === 'tech-team' && <TechTeamView />}
+        {selectedView === 'tech-team' && !restrictedMode && <TechTeamView />}
       </div>
     </div>
   );

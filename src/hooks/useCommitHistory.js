@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { auth } from "@/firebase/config";
+import { auth, waitForAuth } from "@/firebase/config";
 
 // Client-side cache for the repo commit history.
 //
@@ -45,6 +45,7 @@ export function useCommitHistory({ ttlMs = DEFAULT_TTL_MS } = {}) {
   const [fetchedAt, setFetchedAt] = useState(null);
   const [meta, setMeta] = useState({ repo: null, tokenConfigured: null });
   const [fromCache, setFromCache] = useState(false);
+  const [partial, setPartial] = useState(false);
   const didInit = useRef(false);
 
   const load = useCallback(
@@ -62,12 +63,17 @@ export function useCommitHistory({ ttlMs = DEFAULT_TTL_MS } = {}) {
             tokenConfigured: cached.tokenConfigured ?? null,
           });
           setFromCache(true);
+          setPartial(false); // cached payloads are always complete
           setLoading(false);
           return;
         }
       }
 
       try {
+        // Wait for Firebase to restore the session before reading currentUser —
+        // on a hard refresh the SDK hydrates auth state asynchronously, so
+        // auth.currentUser can briefly be null even inside ProtectedRoute.
+        await waitForAuth();
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error("You are not signed in.");
         const idToken = await currentUser.getIdToken();
@@ -77,7 +83,7 @@ export function useCommitHistory({ ttlMs = DEFAULT_TTL_MS } = {}) {
           { headers: { Authorization: `Bearer ${idToken}` } }
         );
         const data = await res.json();
-        if (!res.ok || !data.success) {
+        if (!res.ok || !data.success || !Array.isArray(data.commits)) {
           throw new Error(data && data.error ? data.error : `Request failed (${res.status})`);
         }
 
@@ -85,12 +91,17 @@ export function useCommitHistory({ ttlMs = DEFAULT_TTL_MS } = {}) {
         setFetchedAt(data.fetchedAt);
         setMeta({ repo: data.repo, tokenConfigured: data.tokenConfigured });
         setFromCache(false);
-        writeCache({
-          fetchedAt: data.fetchedAt,
-          commits: data.commits,
-          repo: data.repo,
-          tokenConfigured: data.tokenConfigured,
-        });
+        setPartial(data.partial === true);
+        // Never cache a partial (failed-mid-pagination) history — it would
+        // serve an incomplete list as authoritative for the whole TTL.
+        if (!data.partial) {
+          writeCache({
+            fetchedAt: data.fetchedAt,
+            commits: data.commits,
+            repo: data.repo,
+            tokenConfigured: data.tokenConfigured,
+          });
+        }
       } catch (err) {
         setError(err.message || "Failed to load commit history.");
       } finally {
@@ -109,5 +120,5 @@ export function useCommitHistory({ ttlMs = DEFAULT_TTL_MS } = {}) {
 
   const refresh = useCallback(() => load({ force: true }), [load]);
 
-  return { commits, loading, error, fetchedAt, meta, fromCache, refresh };
+  return { commits, loading, error, fetchedAt, meta, fromCache, partial, refresh };
 }

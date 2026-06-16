@@ -8,17 +8,8 @@ import {
 import { DateRangeDropdown } from "../shared";
 import { useCommitHistory } from "@/hooks/useCommitHistory";
 import { calculateDateRange, getDateRangeLabel } from "@/utils/dateHelpers";
-
-const MONTHS_FULL = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const MONTHS_ABBR = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const DEFAULT_REPO = "nmbroome/cedar-grove-analytics";
+import { MONTH_NAMES_FULL, MONTH_NAMES_ABBR, DEFAULT_GITHUB_REPO } from "@/utils/constants";
+import { formatShortDate } from "@/utils/formatters";
 
 const FEATURE_RE =
   /^(add|added|implement|introduce|create|build|new|redesign|replace|migrate|launch)\b/i;
@@ -61,16 +52,6 @@ function commitType(c) {
   return { label: "Update", cls: "bg-gray-100 text-gray-700" };
 }
 
-function formatDay(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${MONTHS_ABBR[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function slug(s) {
-  return String(s).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
-}
-
 function sortByDateDesc(a, b) {
   return new Date(b.date) - new Date(a.date);
 }
@@ -86,9 +67,10 @@ function buildTree(commits, groupBy) {
     return {
       ...c,
       monthKey,
-      monthLabel: valid ? `${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}` : "Undated",
-      monthShort: valid ? `${MONTHS_ABBR[d.getMonth()]} '${String(d.getFullYear()).slice(2)}` : "—",
+      monthLabel: valid ? `${MONTH_NAMES_FULL[d.getMonth()]} ${d.getFullYear()}` : "Undated",
+      monthShort: valid ? `${MONTH_NAMES_ABBR[d.getMonth()]} '${String(d.getFullYear()).slice(2)}` : "—",
       category: classify(c),
+      type: commitType(c), // classified once here; reused by featureCount + render
     };
   });
 
@@ -117,7 +99,7 @@ function buildTree(commits, groupBy) {
     label: p.label,
     short: p.short,
     count: p.commits.length,
-    featureCount: p.commits.filter((c) => FEATURE_RE.test(c.message) && !c.isMerge).length,
+    featureCount: p.commits.filter((c) => c.type.label === "Feature").length,
     children: [...p.secs.values()].map((s) => ({
       key: s.key,
       label: s.label,
@@ -150,7 +132,7 @@ function StatChip({ icon: Icon, label, value }) {
 }
 
 export default function TechTeamView() {
-  const { commits, loading, error, fetchedAt, meta, refresh } = useCommitHistory();
+  const { commits, loading, error, fetchedAt, meta, partial, refresh } = useCommitHistory();
   const baseId = useId();
 
   const [dateRange, setDateRange] = useState("all-time");
@@ -160,12 +142,17 @@ export default function TechTeamView() {
   const [groupBy, setGroupBy] = useState("month"); // 'month' | 'project'
   const [expanded, setExpanded] = useState(() => new Set());
 
-  const repo = meta.repo || DEFAULT_REPO;
+  const repo = meta.repo || DEFAULT_GITHUB_REPO;
 
   // Filter the CACHED commits by range — useMemo, so changing the range only
   // re-filters in memory and never re-pulls from GitHub.
   const filteredCommits = useMemo(() => {
     if (!commits || commits.length === 0) return [];
+    // 'all-time' is short-circuited here (return everything, incl. undated
+    // commits) BECAUSE calculateDateRange's all-time branch needs an allEntries
+    // list to bound the start — without it, it clamps to the current month.
+    // Keep this guard. Ranged filters can't place undated commits, so they are
+    // excluded from non-all-time views by design.
     if (dateRange === "all-time") return commits;
     const { startDate, endDate } = calculateDateRange(dateRange, customDateStart, customDateEnd, []);
     const startMs = startDate.getTime();
@@ -191,7 +178,8 @@ export default function TechTeamView() {
     for (const c of filteredCommits) {
       if (c.author) authors.add(c.author);
       if (c.isMerge) merges += 1;
-      const t = new Date(c.date).getTime();
+      // new Date(null) is epoch 0 (not NaN), so guard the null case explicitly.
+      const t = c.date ? new Date(c.date).getTime() : NaN;
       if (!Number.isNaN(t)) {
         if (minD === null || t < minD) minD = t;
         if (maxD === null || t > maxD) maxD = t;
@@ -235,10 +223,10 @@ export default function TechTeamView() {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const openAndScrollTo = (pkey) => {
+  const openAndScrollTo = (pkey, index) => {
     setExpanded((prev) => new Set(prev).add(`p:${pkey}`));
     if (typeof document !== "undefined") {
-      const el = document.getElementById(`${baseId}-prim-${slug(pkey)}`);
+      const el = document.getElementById(`${baseId}-p${index}`);
       if (el) el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
     }
   };
@@ -347,6 +335,15 @@ export default function TechTeamView() {
             </div>
           )}
 
+          {partial && (
+            <div className="px-4 py-2 rounded-lg bg-status-warning-light text-status-warning-text text-sm flex items-center justify-between gap-3">
+              <span>This history may be incomplete — GitHub returned a partial result (likely rate-limited), so it was not cached.</span>
+              <button type="button" onClick={refresh} className="font-medium underline hover:no-underline whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-status-warning-text rounded">
+                Refresh
+              </button>
+            </div>
+          )}
+
           {/* Summary chips */}
           <div className="flex flex-wrap items-center gap-3">
             <StatChip icon={GitCommit} label="commits" value={summary.commitCount} />
@@ -356,7 +353,7 @@ export default function TechTeamView() {
             <StatChip
               icon={Calendar}
               label="span"
-              value={summary.minD == null ? "—" : `${formatDay(summary.minD)} → ${formatDay(summary.maxD)}`}
+              value={summary.minD == null ? "—" : `${formatShortDate(summary.minD)} → ${formatShortDate(summary.maxD)}`}
             />
           </div>
 
@@ -370,13 +367,13 @@ export default function TechTeamView() {
               {/* Volume overview — accessible buttons that expand + scroll to a group */}
               <div className="cg-card p-4">
                 <div className="flex items-end gap-2 overflow-x-auto pb-1" role="group" aria-label={`Commits per ${groupBy}`}>
-                  {tree.map((p) => {
+                  {tree.map((p, pi) => {
                     const h = maxCount ? Math.max(6, Math.round((64 * p.count) / maxCount)) : 6;
                     return (
                       <button
                         key={p.key}
                         type="button"
-                        onClick={() => openAndScrollTo(p.key)}
+                        onClick={() => openAndScrollTo(p.key, pi)}
                         title={`${p.label}: ${p.count} commits`}
                         aria-label={`${p.label}: ${p.count} commits. Expand.`}
                         className="group flex flex-col items-center justify-end gap-1 min-w-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-cg-green focus-visible:ring-offset-1 rounded"
@@ -406,11 +403,11 @@ export default function TechTeamView() {
 
               {/* Disclosure tree: primary → secondary → commits */}
               <ul role="list" className="space-y-3">
-                {tree.map((p) => {
+                {tree.map((p, pi) => {
                   const pKey = `p:${p.key}`;
                   const pOpen = isOpen(pKey);
-                  const pPanelId = `${baseId}-pp-${slug(p.key)}`;
-                  const pBtnId = `${baseId}-prim-${slug(p.key)}`;
+                  const pPanelId = `${baseId}-pp${pi}`;
+                  const pBtnId = `${baseId}-p${pi}`;
                   return (
                     <li key={p.key} className="cg-card overflow-hidden">
                       <h3 className="m-0">
@@ -440,11 +437,11 @@ export default function TechTeamView() {
                       <div id={pPanelId} role="region" aria-labelledby={pBtnId} hidden={!pOpen} className="border-t border-gray-200">
                         {pOpen && (
                           <ul role="list" className="divide-y divide-gray-100">
-                            {p.children.map((s) => {
+                            {p.children.map((s, si) => {
                               const sKey = `s:${p.key}:${s.key}`;
                               const sOpen = isOpen(sKey);
-                              const sPanelId = `${baseId}-sp-${slug(p.key)}-${slug(s.key)}`;
-                              const sBtnId = `${baseId}-sec-${slug(p.key)}-${slug(s.key)}`;
+                              const sPanelId = `${baseId}-sp${pi}-${si}`;
+                              const sBtnId = `${baseId}-s${pi}-${si}`;
                               return (
                                 <li key={s.key}>
                                   <h4 className="m-0">
@@ -469,7 +466,7 @@ export default function TechTeamView() {
                                     {sOpen && (
                                       <ul role="list" className="pl-12 pr-4 py-1 space-y-1">
                                         {s.commits.map((c) => {
-                                          const type = commitType(c);
+                                          const type = c.type;
                                           const url = `https://github.com/${repo}/commit/${c.sha}`;
                                           return (
                                             <li key={c.sha} className="flex items-start gap-2.5 py-1.5">
@@ -479,7 +476,7 @@ export default function TechTeamView() {
                                               <div className="min-w-0">
                                                 <p className="text-sm text-cg-dark break-words">{c.message}</p>
                                                 <p className="text-xs text-gray-700 mt-0.5">
-                                                  {c.author} · {formatDay(c.date)} ·{" "}
+                                                  {c.author} · {formatShortDate(c.date)} ·{" "}
                                                   <a
                                                     href={url}
                                                     target="_blank"
