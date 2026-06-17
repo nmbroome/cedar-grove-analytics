@@ -136,16 +136,19 @@ export function monthlyHoursFromTargetMap(targetMap, year, field) {
 }
 
 /**
- * Dense 12-element actuals array from the bucketed actuals for one user
- * ({ [monthIdx]: { client, ops } } — useMonthlyActualsVsTarget's actuals[id]).
- * `field` is 'client' or 'ops'.
+ * Dense 12-element hours array from an object keyed by month index 0-11 whose
+ * values are objects with numeric (or numeric-string) fields. Handles both the
+ * bucketed actuals ({ [monthIdx]: { client, ops } } — useMonthlyActualsVsTarget's
+ * actuals[id], numbers) and the editable targets grid matrix (same shape, but
+ * cells are strings being typed). `field` is 'client' or 'ops'; parseFloat
+ * tolerates both, and blank/garbage cells contribute 0.
  */
-export function monthlyActualsByIndex(actualsForUser, field) {
+export function monthlyHoursByIndex(byMonthIdx, field) {
   const out = new Array(12).fill(0);
-  if (!actualsForUser) return out;
+  if (!byMonthIdx) return out;
   for (let mi = 0; mi < 12; mi++) {
-    const cell = actualsForUser[mi];
-    if (cell && cell[field] != null) out[mi] = Number(cell[field]) || 0;
+    const cell = byMonthIdx[mi];
+    if (cell && cell[field] != null) out[mi] = parseFloat(cell[field]) || 0;
   }
   return out;
 }

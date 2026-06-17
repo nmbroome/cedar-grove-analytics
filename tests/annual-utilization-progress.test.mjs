@@ -8,7 +8,7 @@ import {
   annualGroupForUser,
   groupUsersByEmployment,
   monthlyHoursFromTargetMap,
-  monthlyActualsByIndex,
+  monthlyHoursByIndex,
   computeAnnualProgress,
 } from '../src/utils/annualUtilizationProgress.mjs';
 
@@ -213,12 +213,21 @@ test('monthlyHoursFromTargetMap reads the "YYYY-MM" cache shape for one field', 
   assert.deepEqual(monthlyHoursFromTargetMap(null, 2026, 'billableHours'), fill(0));
 });
 
-test('monthlyActualsByIndex densifies the sparse { monthIdx: { client, ops } } shape', () => {
+test('monthlyHoursByIndex densifies the { monthIdx: { client, ops } } shape (numbers and matrix strings)', () => {
   const actualsForUser = { 0: { client: 50, ops: 5 }, 5: { client: 12.5, ops: 0 } };
-  const client = monthlyActualsByIndex(actualsForUser, 'client');
+  const client = monthlyHoursByIndex(actualsForUser, 'client');
   assert.equal(client[0], 50);
   assert.equal(client[5], 12.5);
   assert.equal(client[1], 0);
-  assert.equal(monthlyActualsByIndex(actualsForUser, 'ops')[0], 5);
-  assert.deepEqual(monthlyActualsByIndex(undefined, 'client'), fill(0));
+  assert.equal(monthlyHoursByIndex(actualsForUser, 'ops')[0], 5);
+  assert.deepEqual(monthlyHoursByIndex(undefined, 'client'), fill(0));
+
+  // The same helper also reads the editable grid matrix, whose cells are
+  // strings being typed ('' = unset → 0).
+  const matrix = { 0: { client: '100', ops: '' }, 2: { client: '80.5', ops: '10' } };
+  const target = monthlyHoursByIndex(matrix, 'client');
+  assert.equal(target[0], 100);
+  assert.equal(target[2], 80.5);
+  assert.equal(target[1], 0);
+  assert.equal(monthlyHoursByIndex(matrix, 'ops')[0], 0); // '' → 0
 });

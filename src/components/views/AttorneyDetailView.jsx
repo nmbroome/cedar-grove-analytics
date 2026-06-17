@@ -51,7 +51,7 @@ import {
   annualGroupForUser,
   computeAnnualProgress,
   monthlyHoursFromTargetMap,
-  monthlyActualsByIndex,
+  monthlyHoursByIndex,
 } from '@/utils/annualUtilizationProgress';
 import { formatCurrency, formatHours, formatDate, formatTimeOffContext } from '@/utils/formatters';
 import { CHART_COLORS, CHART, GRAY, LABEL_LINE_COLOR } from '@/utils/colors';
@@ -135,9 +135,15 @@ const AnnualProgressCompact = ({ year, group, result }) => {
         paceDeltaHours={result.paceDeltaHours}
         barClassName="h-3"
       />
-      <p className="text-xs text-gray-400 mt-3 inline-flex items-center gap-1 flex-wrap">
-        Pace marker shows where you should be by today
-        <CalcTooltip calcKey="annualPaceMarker" position="bottom" />
+      <p className="text-xs text-gray-400 mt-3 flex items-center gap-x-3 gap-y-1 flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          Pace marker shows where you should be by today
+          <CalcTooltip calcKey="annualPaceMarker" position="bottom" />
+        </span>
+        <span className="inline-flex items-center gap-1">
+          Ahead / Behind status
+          <CalcTooltip calcKey="annualPaceDelta" position="bottom" />
+        </span>
       </p>
     </div>
   );
@@ -427,7 +433,7 @@ const AttorneyDetailView = ({ attorneyName }) => {
     const group = annualGroupForUser(currentUser);
     if (!group) return null;
     const monthlyTargets = monthlyHoursFromTargetMap(attorneyTargets, summaryYear, group.targetField);
-    const monthlyActuals = monthlyActualsByIndex(annualActuals?.[currentUser.id], group.actualField);
+    const monthlyActuals = monthlyHoursByIndex(annualActuals?.[currentUser.id], group.actualField);
     const capacityFractions = annualCapacity?.[currentUser.id]?.fractions;
     const isFutureYear = summaryYear > getPSTDate().getFullYear();
     const result = computeAnnualProgress(monthlyTargets, monthlyActuals, capacityFractions, { isFutureYear });

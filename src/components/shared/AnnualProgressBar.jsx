@@ -1,6 +1,7 @@
 "use client";
 
 import { ANNUAL_STATUS, ANNUAL_STATUS_LABEL } from '@/utils/annualUtilizationProgress';
+import { formatHours } from '@/utils/formatters';
 
 const clampPct = (v) => Math.max(0, Math.min(100, v));
 
@@ -24,13 +25,13 @@ const PILL_CLASS = {
   [ANNUAL_STATUS.NOT_STARTED]: 'bg-gray-100 text-gray-600',
 };
 
-// Signed hour delta like "+1" / "−38" (1 dp, trailing .0 trimmed, real minus sign).
+// Signed hour delta like "+1" / "−38". Magnitude formatting (1 dp, trailing .0
+// trimmed) is delegated to the shared formatHours so the rule lives in one place;
+// this only adds the sign and the real minus glyph.
 export const formatSignedHours = (h) => {
   const rounded = Math.round((Number(h) || 0) * 10) / 10;
   if (rounded === 0) return '0';
-  const abs = Math.abs(rounded);
-  const body = abs === Math.floor(abs) ? String(Math.floor(abs)) : abs.toFixed(1);
-  return `${rounded > 0 ? '+' : '−'}${body}`;
+  return `${rounded > 0 ? '+' : '−'}${formatHours(Math.abs(rounded))}`;
 };
 
 /**

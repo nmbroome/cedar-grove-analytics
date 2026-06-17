@@ -5,21 +5,9 @@ import { formatHours } from '@/utils/formatters';
 import {
   ANNUAL_GROUPS,
   computeAnnualProgress,
-  monthlyActualsByIndex,
+  monthlyHoursByIndex,
 } from '@/utils/annualUtilizationProgress';
 import { AnnualProgressBar, AnnualStatusPill, CalcTooltip } from '@/components/shared';
-
-// Build a person's 12-month target array from the editable grid matrix
-// (matrix[userId][monthIdx] = { client, ops }; cells are strings while editing,
-// so the summary tracks unsaved edits the moment they're typed).
-const monthlyTargetsFromMatrix = (userMatrix, field) => {
-  const out = new Array(12).fill(0);
-  if (!userMatrix) return out;
-  for (let mi = 0; mi < 12; mi++) {
-    out[mi] = parseFloat(userMatrix[mi]?.[field]) || 0;
-  }
-  return out;
-};
 
 const pctText = (result) =>
   result.percentComplete == null ? '—' : `${Math.round(result.percentComplete * 100)}%`;
@@ -30,8 +18,8 @@ const GroupTable = ({ group, users, matrix, actuals, capacity, isFutureYear }) =
   const rows = useMemo(
     () =>
       users.map((u) => {
-        const monthlyTargets = monthlyTargetsFromMatrix(matrix?.[u.id], group.matrixField);
-        const monthlyActuals = monthlyActualsByIndex(actuals?.[u.id], group.actualField);
+        const monthlyTargets = monthlyHoursByIndex(matrix?.[u.id], group.matrixField);
+        const monthlyActuals = monthlyHoursByIndex(actuals?.[u.id], group.actualField);
         const capacityFractions = capacity?.[u.id]?.fractions;
         const result = computeAnnualProgress(monthlyTargets, monthlyActuals, capacityFractions, { isFutureYear });
         return { user: u, result };
