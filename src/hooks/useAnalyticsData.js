@@ -366,6 +366,7 @@ export const useAnalyticsData = ({
         billable: 0,
         ops: 0,
         earnings: 0,
+        adjustment: 0,
         transactions: {},
         clients: {}
       };
@@ -382,6 +383,7 @@ export const useAnalyticsData = ({
           billable: 0,
           ops: 0,
           earnings: 0,
+          adjustment: 0,
           transactions: {},
           clients: {}
         };
@@ -397,6 +399,7 @@ export const useAnalyticsData = ({
 
       userMonthlyActivity[userName].billable += billableHours;
       userMonthlyActivity[userName].earnings += earnings;
+      userMonthlyActivity[userName].adjustment += entry.adjustment || 0;
       // Gross billables = rate × hours (distinct from take-home `earnings`)
       if (billableHours > 0) {
         userMonthlyActivity[userName].grossBillables =
@@ -432,6 +435,7 @@ export const useAnalyticsData = ({
           billable: 0,
           ops: 0,
           earnings: 0,
+          adjustment: 0,
           transactions: {},
           clients: {}
         };
@@ -502,6 +506,7 @@ export const useAnalyticsData = ({
         billable: data.billable,
         ops: data.ops,
         earnings: data.earnings,
+        adjustment: data.adjustment || 0,
         grossBillables: data.grossBillables || 0,
         target: Math.round(totalTarget * 10) / 10,
         billableTarget: Math.round(totalBillableTarget * 10) / 10,

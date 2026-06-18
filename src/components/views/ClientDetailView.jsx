@@ -209,6 +209,7 @@ const ClientDetailView = ({ clientName }) => {
         opsHours: 0,
         grossBillables: 0,
         takeHomeEarnings: 0,
+        totalAdjustments: 0,
         transactionCount: 0,
         uniqueTransactionTypes: 0,
         uniqueAttorneys: 0,
@@ -224,6 +225,7 @@ const ClientDetailView = ({ clientName }) => {
       opsHours: 0,
       grossBillables: 0,
       takeHomeEarnings: 0,
+      totalAdjustments: 0,
       transactionCount: clientEntries.length,
       transactionTypes: new Set(),
       attorneys: new Set(),
@@ -239,6 +241,7 @@ const ClientDetailView = ({ clientName }) => {
       stats.opsHours += ops;
       stats.totalHours += billable + ops;
       stats.takeHomeEarnings += entry.earnings || 0;
+      stats.totalAdjustments += entry.adjustment || 0;
       
       // Calculate gross billables using attorney rate * hours
       const entryDate = getEntryDate(entry);
@@ -273,6 +276,10 @@ const ClientDetailView = ({ clientName }) => {
         : 0,
     };
   }, [clientEntries, getRate, userMap]);
+
+  // Sam McClure's manual month-end adjustments are folded into this client's
+  // earnings; only surface the Earnings/Adjustments KPIs + column when present.
+  const hasAdjustments = clientStats.totalAdjustments !== 0 || clientEntries.some((e) => e.adjustment);
 
   // Attorney breakdown data
   const attorneyBreakdown = useMemo(() => {
@@ -638,6 +645,34 @@ const ClientDetailView = ({ clientName }) => {
             <div className="text-xs text-gray-500 mt-1">Rate × Hours</div>
           </div>
 
+          {hasAdjustments && (
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+                  Earnings
+                  <CalcTooltip calcKey="earnings" position="bottom" />
+                </span>
+                <DollarSign className="w-5 h-5 text-green-500" />
+              </div>
+              <div className="text-2xl font-bold text-green-600">{formatCurrency(clientStats.takeHomeEarnings)}</div>
+              <div className="text-xs text-gray-500 mt-1">Take-home (incl. adjustment)</div>
+            </div>
+          )}
+
+          {hasAdjustments && (
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm font-medium inline-flex items-center gap-1">
+                  Adjustments
+                  <CalcTooltip calcKey="adjustment" position="bottom" />
+                </span>
+                <DollarSign className="w-5 h-5 text-amber-500" />
+              </div>
+              <div className={`text-2xl font-bold ${clientStats.totalAdjustments < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatCurrency(clientStats.totalAdjustments)}</div>
+              <div className="text-xs text-gray-500 mt-1">Included in Earnings</div>
+            </div>
+          )}
+
           <div className="bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-600 text-sm font-medium">Transactions</span>
@@ -907,6 +942,14 @@ const ClientDetailView = ({ clientName }) => {
                         <CalcTooltip calcKey="grossBillables" position="bottom" align="right" />
                       </span>
                     </th>
+                    {hasAdjustments && (
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                        <span className="inline-flex items-center gap-1">
+                          Adjustment
+                          <CalcTooltip calcKey="entryAdjustment" position="bottom" align="right" />
+                        </span>
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
                   </tr>
                 </thead>
@@ -936,6 +979,13 @@ const ClientDetailView = ({ clientName }) => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right font-medium">
                           {grossBillables > 0 ? formatCurrency(grossBillables) : '-'}
                         </td>
+                        {hasAdjustments && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                            {entry.adjustment
+                              ? <span className={entry.adjustment < 0 ? 'text-red-600' : 'text-gray-900'}>{formatCurrency(entry.adjustment)}</span>
+                              : <span className="text-gray-400">-</span>}
+                          </td>
+                        )}
                         <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={entry.notes || entry.description}>
                           {entry.notes || entry.description || '-'}
                         </td>
