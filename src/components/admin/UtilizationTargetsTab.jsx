@@ -50,14 +50,16 @@ const monthTotal = (cell) => {
   return Math.round((c + o) * 100) / 100;
 };
 
+const round2 = (n) => Math.round(n * 100) / 100;
+
 const sumTotal = (userMatrix, monthList) =>
-  monthList.reduce((sum, m) => sum + monthTotal(userMatrix?.[m.idx]), 0);
+  round2(monthList.reduce((sum, m) => sum + monthTotal(userMatrix?.[m.idx]), 0));
 
 const sumBillable = (userMatrix, monthList) =>
-  monthList.reduce((sum, m) => sum + (parseFloat(userMatrix?.[m.idx]?.client) || 0), 0);
+  round2(monthList.reduce((sum, m) => sum + (parseFloat(userMatrix?.[m.idx]?.client) || 0), 0));
 
 const sumOps = (userMatrix, monthList) =>
-  monthList.reduce((sum, m) => sum + (parseFloat(userMatrix?.[m.idx]?.ops) || 0), 0);
+  round2(monthList.reduce((sum, m) => sum + (parseFloat(userMatrix?.[m.idx]?.ops) || 0), 0));
 
 // Variance cell: signed text + color, both derived from the canonical hours
 // formatter (formatHours) so the sign, rounding, and color always agree with the
