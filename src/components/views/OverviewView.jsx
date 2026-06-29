@@ -81,24 +81,27 @@ const OverviewView = ({
     // already reduced for each member's OOO (capacity model); this drives a tooltip.
     const oooDays = subset.reduce((acc, a) => acc + (a.oooDays || 0), 0);
     const holidayDays = subset.reduce((acc, a) => acc + (a.holidayDays || 0), 0);
-    // "Total Billables" source. Full Team prefers the firm-wide sheet figures —
-    // Attorney Billables first (the authoritative billed amount), then Revenue
-    // Accrued — and otherwise falls back to rate × hours. Sub-cohorts always use
-    // rate × hours, since the sheet figures aren't broken out per person/cohort.
-    // periodAttorneyBillables / periodRevenueAccrued are non-null only for
-    // month-aligned ranges (a month in progress or completed months); custom or
-    // partial ranges leave them null, so those fall back to rate × hours.
-    const isFullTeam = cohort === 'full-team';
+    // "Total Billables" source. Full Team and All Lawyers prefer the firm-wide
+    // sheet figures — Attorney Billables first (the authoritative billed amount),
+    // then Revenue Accrued — and otherwise fall back to rate × hours. The synced
+    // "Attorney Billables" figure is lawyer billings, so it maps to both cohorts
+    // (Full Team only adds non-billing staff, which don't change the number).
+    // The narrower sub-cohorts (FTE/PTE) always use rate × hours, since the sheet
+    // figures aren't broken out per person/cohort. periodAttorneyBillables /
+    // periodRevenueAccrued are non-null only for month-aligned ranges (a month in
+    // progress or completed months); custom or partial ranges leave them null, so
+    // those fall back to rate × hours.
+    const usesFirmFigure = cohort === 'full-team' || cohort === 'lawyers';
     let grossBillables;
     let billablesLabel;
     let billablesSubtitle;
     let billablesCalcKey;
-    if (isFullTeam && periodAttorneyBillables != null) {
+    if (usesFirmFigure && periodAttorneyBillables != null) {
       grossBillables = periodAttorneyBillables;
       billablesLabel = 'Total Billables';
       billablesSubtitle = 'Firm-wide';
       billablesCalcKey = 'totalBillablesAttorney';
-    } else if (isFullTeam && periodRevenueAccrued != null) {
+    } else if (usesFirmFigure && periodRevenueAccrued != null) {
       grossBillables = periodRevenueAccrued;
       billablesLabel = 'Revenue Accrued';
       billablesSubtitle = 'Firm-wide';
