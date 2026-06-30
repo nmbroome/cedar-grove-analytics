@@ -62,8 +62,10 @@ const AttorneysView = ({
           aVal = calculateUtilization(a) ?? -1;
           bVal = calculateUtilization(b) ?? -1;
           break;
-        default:
-          return compareBySeniority(a.name, b.name);
+        default: {
+          const cmp = compareBySeniority(a.name, b.name);
+          return sortConfig.direction === 'asc' ? cmp : -cmp;
+        }
       }
 
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
