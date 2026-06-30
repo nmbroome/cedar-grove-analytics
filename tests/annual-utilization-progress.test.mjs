@@ -184,8 +184,13 @@ test('annualGroupForUser picks the right metric fields', () => {
   assert.equal(annualGroupByKey('other').targetField, 'opsHours');
   assert.equal(annualGroupByKey('fte').actualField, 'client');
   assert.equal(annualGroupByKey('fte').targetField, 'billableHours');
-  // Render order matches the mockup: Other, Part-time, Full-time.
-  assert.deepEqual(ANNUAL_GROUPS.map((g) => g.key), ['other', 'pte', 'fte']);
+  // Canonical section order: Full-time, Operations (Other), Part-time.
+  assert.deepEqual(ANNUAL_GROUPS.map((g) => g.key), ['fte', 'other', 'pte']);
+  // Each group also carries its editable-grid section header.
+  assert.deepEqual(
+    ANNUAL_GROUPS.map((g) => g.gridTitle),
+    ['Attorneys Full-time', 'Other', 'Attorneys Part-time'],
+  );
 });
 
 // --- 7. Capacity-weighted front/back-loaded monthly targets ---------------

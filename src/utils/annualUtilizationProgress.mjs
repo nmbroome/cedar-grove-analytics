@@ -39,8 +39,13 @@ export const ANNUAL_STATUS_LABEL = Object.freeze({
 });
 
 /**
- * The three annual-progress groups, in render order (matches the mockup):
- * operational (Ops) staff, then part-time attorneys, then full-time attorneys.
+ * The three annual-progress groups, in the canonical section render order:
+ * full-time attorneys, then operational (Ops) staff, then part-time attorneys.
+ * This is the SINGLE SOURCE OF TRUTH for section ordering on the Targets page —
+ * both the editable targets grid and the Annual progress summary iterate this
+ * array, so the two can never drift out of order.
+ *   - gridTitle:   section header in the editable targets grid (Targets page)
+ *   - title:       section header in the Annual progress summary
  *   - metricLabel: the "Metric" column value ("Ops" / "Client")
  *   - matrixField: key in the editable grid cell ({ client, ops }) — Targets page
  *   - targetField: key in a stored target entry ({ billableHours, opsHours }) — member page
@@ -48,8 +53,18 @@ export const ANNUAL_STATUS_LABEL = Object.freeze({
  */
 export const ANNUAL_GROUPS = Object.freeze([
   Object.freeze({
+    key: 'fte',
+    title: 'Attorneys Full-time — Annual progress (Client hours)',
+    gridTitle: 'Attorneys Full-time',
+    metricLabel: 'Client',
+    matrixField: 'client',
+    targetField: 'billableHours',
+    actualField: 'client',
+  }),
+  Object.freeze({
     key: 'other',
     title: 'Other (Ops) — Annual progress',
+    gridTitle: 'Other',
     metricLabel: 'Ops',
     matrixField: 'ops',
     targetField: 'opsHours',
@@ -58,14 +73,7 @@ export const ANNUAL_GROUPS = Object.freeze([
   Object.freeze({
     key: 'pte',
     title: 'Attorneys Part-time — Annual progress (Client hours)',
-    metricLabel: 'Client',
-    matrixField: 'client',
-    targetField: 'billableHours',
-    actualField: 'client',
-  }),
-  Object.freeze({
-    key: 'fte',
-    title: 'Attorneys Full-time — Annual progress (Client hours)',
+    gridTitle: 'Attorneys Part-time',
     metricLabel: 'Client',
     matrixField: 'client',
     targetField: 'billableHours',
