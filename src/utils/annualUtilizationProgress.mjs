@@ -18,6 +18,8 @@
  * tests/annual-utilization-progress.test.mjs.
  */
 
+import { compareBySeniority } from './seniority.mjs';
+
 export const ANNUAL_STATUS = Object.freeze({
   NA: 'na',
   NOT_STARTED: 'not-started',
@@ -79,7 +81,7 @@ export function annualGroupByKey(key) {
 /**
  * Classify users into the targets groups exactly as the monthly grid does:
  * non-attorneys → other; attorneys with employmentType 'PTE' → pte; everyone
- * else (FTE or unset) → fte. Each bucket is sorted by display name. Shared so
+ * else (FTE or unset) → fte. Each bucket is ordered by firm seniority. Shared so
  * the grid and the annual summary never drift apart.
  *
  * @returns {{ fte: object[], pte: object[], other: object[] }}
@@ -96,10 +98,10 @@ export function groupUsersByEmployment(users) {
     else if (emp === 'PTE') pte.push(u);
     else fte.push(u);
   });
-  const byName = (a, b) => (a.name || a.id || '').localeCompare(b.name || b.id || '');
-  fte.sort(byName);
-  pte.sort(byName);
-  other.sort(byName);
+  const bySeniority = (a, b) => compareBySeniority(a.name || a.id || '', b.name || b.id || '');
+  fte.sort(bySeniority);
+  pte.sort(bySeniority);
+  other.sort(bySeniority);
   return { fte, pte, other };
 }
 

@@ -5,6 +5,7 @@ import { DateRangeIndicator } from '../shared';
 import { AttorneysTable } from '../tables';
 import { BillableVsOpsChart } from '../charts';
 import { useDataWarnings } from '@/hooks/useFirestoreData';
+import { compareBySeniority } from '@/utils/seniority.mjs';
 
 const AttorneysView = ({
   dateRangeLabel,
@@ -29,22 +30,16 @@ const AttorneysView = ({
     const attorneys = [...attorneyData];
 
     attorneys.sort((a, b) => {
-      // FTE-before-PTE grouping only when sorting by name; numeric columns rank purely by metric
+      // The Name column lists staff in firm seniority order (asc = most senior
+      // first); numeric columns rank purely by metric.
       if (sortConfig.key === 'name') {
-        const aType = a.employmentType || 'FTE';
-        const bType = b.employmentType || 'FTE';
-        if (aType !== bType) {
-          return aType === 'FTE' ? -1 : 1;
-        }
+        const cmp = compareBySeniority(a.name, b.name);
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
       }
 
       let aVal, bVal;
 
       switch (sortConfig.key) {
-        case 'name':
-          aVal = a.name.toLowerCase();
-          bVal = b.name.toLowerCase();
-          break;
         case 'billable':
           aVal = a.billable;
           bVal = b.billable;
@@ -68,8 +63,7 @@ const AttorneysView = ({
           bVal = calculateUtilization(b) ?? -1;
           break;
         default:
-          aVal = a.name.toLowerCase();
-          bVal = b.name.toLowerCase();
+          return compareBySeniority(a.name, b.name);
       }
 
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
