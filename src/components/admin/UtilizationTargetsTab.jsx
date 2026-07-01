@@ -10,6 +10,7 @@ import { groupUsersByEmployment, ANNUAL_GROUPS } from '@/utils/annualUtilization
 import { useMonthlyActualsVsTarget } from '@/hooks/useMonthlyActualsVsTarget';
 import { CalcTooltip } from '@/components/shared';
 import AnnualUtilizationSummary from '@/components/admin/AnnualUtilizationSummary';
+import { hasJoinedBy } from '@/utils/userActivation.mjs';
 
 const MONTHS = [
   { idx: 0, short: 'Jan', long: 'January' },
@@ -411,6 +412,11 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
 
+  const visibleUsers = useMemo(() => {
+    const yearEnd = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+    return users.filter(u => hasJoinedBy(u, yearEnd));
+  }, [users, selectedYear]);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -419,7 +425,7 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
         await waitForAuth();
 
         const next = {};
-        for (const u of users) {
+        for (const u of visibleUsers) {
           const userMatrix = buildEmptyUserMatrix();
           try {
             const userDoc = await getDoc(doc(db, 'users', u.id));
@@ -449,13 +455,13 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
       }
     };
 
-    if (!usersLoading && users.length > 0) {
+    if (!usersLoading && visibleUsers.length > 0) {
       load();
     } else if (!usersLoading) {
       setLoading(false);
       setMatrix({});
     }
-  }, [selectedYear, users, usersLoading]);
+  }, [selectedYear, visibleUsers, usersLoading]);
 
   const handleChange = (userId, monthIdx, field, value) => {
     setMatrix(prev => ({
@@ -476,7 +482,7 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
       setSaveStatus(null);
       await waitForAuth();
 
-      for (const u of users) {
+      for (const u of visibleUsers) {
         const userMatrix = matrix[u.id];
         if (!userMatrix) continue;
 
@@ -524,11 +530,11 @@ const UtilizationTargetsTab = ({ users, usersLoading, refetch }) => {
 
   const summaryLabel = selectedQuarter === 'all' ? 'Annual' : selectedQuarter;
 
-  const groups = useMemo(() => groupUsersByEmployment(users), [users]);
+  const groups = useMemo(() => groupUsersByEmployment(visibleUsers), [visibleUsers]);
 
   // Per-attorney, per-month actuals + capacity-pro-rated fractions for the
   // selected year. Shared hook so this isn't hand-rolled inline (see #1/#6).
-  const { actuals, capacity } = useMonthlyActualsVsTarget(selectedYear, users);
+  const { actuals, capacity } = useMonthlyActualsVsTarget(selectedYear, visibleUsers);
 
   if (loading || usersLoading) {
     return (

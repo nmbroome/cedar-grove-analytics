@@ -6,6 +6,7 @@ import { getEntryDate } from '@/utils/dateHelpers';
 import { formatCurrency, formatHours } from '@/utils/formatters';
 import { filterHiddenAttorneys } from '@/utils/hiddenAttorneys.mjs';
 import { sortBySeniority } from '@/utils/seniority.mjs';
+import { hasJoinedBy } from '@/utils/userActivation.mjs';
 import { CalcTooltip } from '@/components/shared';
 
 const MAX_RANK = 19;
@@ -230,7 +231,7 @@ const ProjectedEarningsTable = () => {
       ? (completedProfitMonths.reduce((s, e) => s + Number(e.firmProfit), 0) / completedProfitMonths.length) * 12
       : 0;
 
-    const attorneys = users.filter((u) => (u.role || 'Attorney') === 'Attorney' && u.active !== false);
+    const attorneys = users.filter((u) => (u.role || 'Attorney') === 'Attorney' && u.active !== false && hasJoinedBy(u, today));
     const visibleNames = filterHiddenAttorneys(attorneys.map((u) => u.name || u.id));
     // Firm seniority order; the Full-time / Part-time cards below preserve it
     // when they split these rows by employment type.
