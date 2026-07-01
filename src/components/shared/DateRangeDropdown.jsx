@@ -39,8 +39,11 @@ const DateRangeDropdown = ({
     return option ? option.label : 'Select Range';
   };
 
+  const isCustomRangeValid = () =>
+    customDateStart && customDateEnd && (!minDate || (customDateStart >= minDate && customDateEnd >= minDate));
+
   const handleApplyCustomRange = () => {
-    if (customDateStart && customDateEnd && (!minDate || customDateStart >= minDate)) {
+    if (isCustomRangeValid()) {
       setDateRange('custom');
       setShowDropdown(false);
     }
@@ -107,9 +110,9 @@ const DateRangeDropdown = ({
             </div>
             <button
               onClick={handleApplyCustomRange}
-              disabled={!customDateStart || !customDateEnd || (minDate && customDateStart < minDate)}
+              disabled={!isCustomRangeValid()}
               className={`w-full py-1.5 text-sm rounded transition-colors ${
-                customDateStart && customDateEnd && (!minDate || customDateStart >= minDate)
+                isCustomRangeValid()
                   ? 'bg-cg-green text-white hover:opacity-90'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}

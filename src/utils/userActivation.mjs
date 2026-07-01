@@ -22,6 +22,15 @@ export function parseActivationDate(value) {
   // comparisons elsewhere in the app.
   const d = new Date(value + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return null;
+
+  // Guard against calendar-invalid day-of-month strings (e.g. "2026-02-30"),
+  // which `new Date()` silently rolls forward into the next month instead of
+  // rejecting. Not reachable via the <input type="date"> UI, but a direct
+  // Firestore edit or future non-UI writer could store one — reject rather
+  // than silently gating on a shifted date.
+  const [y, m, dd] = value.split('-').map(Number);
+  if (d.getFullYear() !== y || d.getMonth() !== m - 1 || d.getDate() !== dd) return null;
+
   return d;
 }
 
