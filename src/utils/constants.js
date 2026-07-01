@@ -15,9 +15,10 @@ export const MONTHS = [
   { value: 12, label: 'December' },
 ];
 
-// Canonical month-name arrays, derived from MONTHS so there is a single source.
-export const MONTH_NAMES_FULL = MONTHS.map((m) => m.label);
-export const MONTH_NAMES_ABBR = MONTH_NAMES_FULL.map((m) => m.slice(0, 3));
+// Canonical month-name arrays — single source is commitTimeline.mjs (a plain
+// Node-importable pure module; this file isn't, since CHART_COLORS above
+// re-exports from './colors' without an extension), re-exported here.
+export { MONTH_NAMES_FULL, MONTH_NAMES_ABBR } from './commitTimeline.mjs';
 
 // Default repository for the Tech Team commit-history view. Overridable
 // server-side via the GITHUB_REPO env var (see api/commit-history/route.js).
