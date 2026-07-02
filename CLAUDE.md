@@ -54,8 +54,10 @@ src/
 └── utils/
     ├── calcDefinitions.mjs # Metric formula/provenance registry (drives CalcTooltip)
     ├── cohortFilter.mjs    # Overview cohort classification (pure, tested)
+    ├── commitTimeline.mjs  # Tech Team commit classifier + timeline grouping (pure, tested)
     ├── constants.js        # Colors, date range options, periods
     ├── dateHelpers.js      # Business day math, US holidays
+    ├── exportTimelineImage.js # Browser-only SVG/PNG export helpers for the Tech Team chevron timeline (not tested — browser-coupled, see Testing)
     ├── formatters.js       # Currency and number formatting
     ├── hiddenAttorneys.mjs # Attorneys hidden from UI after a date (pure, Node-importable)
     ├── paymentStatus.mjs   # Calculated client Payment Status tags — On Target/Warning/Hold (pure, tested)
@@ -225,7 +227,7 @@ Set in `.env.local` (gitignored).
 
 ## Testing
 
-`npm test` runs Node's built-in test runner (`node --test tests/*.test.mjs`) — no test framework dependency. Tests cover the pure `.mjs` modules only (rate lookup, cohort filter, payment status tags, calc-definitions registry + call-site key coverage, audit script helpers); React components and hooks are not unit-tested (they import the Firebase client SDK at module load). Run the suite whenever touching `src/utils/*.mjs`, `scripts/`, or registry keys.
+`npm test` runs Node's built-in test runner (`node --test tests/*.test.mjs`) — no test framework dependency. Tests cover the pure `.mjs` modules only (rate lookup, cohort filter, payment status tags, calc-definitions registry + call-site key coverage, audit script helpers, Tech Team commit classifier/timeline grouping); React components and hooks are not unit-tested (they import the Firebase client SDK at module load). Run the suite whenever touching `src/utils/*.mjs`, `scripts/`, or registry keys.
 
 ## Deployment
 
@@ -235,6 +237,6 @@ Configured for Vercel. Push to `main` triggers deploy. Environment variables set
 
 - JSX components use `.jsx` extension; plain JS uses `.js`.
 - Tailwind utility classes for all styling. Custom brand colors defined in `tailwind.config.js` (`cg-black`, `cg-green`, `cg-dark`, `cg-background`).
-- Recharts for standard charts; D3 for the ops sunburst visualization.
+- Recharts for standard charts (bar/line/pie/area — anything with data-driven axes/scales); D3 for the ops sunburst visualization. Bespoke annotated infographics that aren't a standard chart type (e.g. `TechTeamChevronTimeline.jsx`'s chevron/callout timeline) use hand-built inline-styled SVG instead — neither library models that layout naturally, and the component still imports its colors from `utils/colors.js` (GRAY) rather than hardcoding hex.
 - Tables include client-side sorting and pagination.
 - Currency formatted via `Intl.NumberFormat` helpers in `formatters.js`.
