@@ -1,4 +1,8 @@
-export { CHART_COLORS } from './colors';
+// Explicit '.js' extension required: Node's ESM resolver (unlike bundlers)
+// does no extension-guessing, so omitting it here breaks any plain
+// `node --test`/`node -e` import of this file (this module IS meant to be
+// Node-importable — see MONTH_NAMES_FULL/ABBR below).
+export { CHART_COLORS } from './colors.js';
 
 export const MONTHS = [
   { value: 1, label: 'January' },
@@ -15,10 +19,13 @@ export const MONTHS = [
   { value: 12, label: 'December' },
 ];
 
-// Canonical month-name arrays — single source is commitTimeline.mjs (a plain
-// Node-importable pure module; this file isn't, since CHART_COLORS above
-// re-exports from './colors' without an extension), re-exported here.
-export { MONTH_NAMES_FULL, MONTH_NAMES_ABBR } from './commitTimeline.mjs';
+// Canonical month-name arrays, derived from MONTHS above. commitTimeline.mjs
+// (the Tech Team feature) imports these FROM here and re-exports them for its
+// own call sites — this file is the single source of truth for app-wide date
+// labels, not the other way around, since MONTHS/DATE_RANGE_OPTIONS/etc.
+// below are used throughout the app, not just by the Tech Team tab.
+export const MONTH_NAMES_FULL = MONTHS.map((m) => m.label);
+export const MONTH_NAMES_ABBR = MONTH_NAMES_FULL.map((m) => m.slice(0, 3));
 
 // Default repository for the Tech Team commit-history view. Overridable
 // server-side via the GITHUB_REPO env var (see api/commit-history/route.js).

@@ -8,6 +8,7 @@ import {
   CATEGORY_RULES,
   classify,
   commitType,
+  annotateCommit,
   sortByDateDesc,
   buildTree,
   pickMonthHeadlines,
@@ -92,6 +93,20 @@ test('classify: spot-checks across the rest of the category table', () => {
   }
 });
 
+test('classify: Clients rule word-bounds "ideal" (no mid-word false match) but still catches the isIdeal field name', () => {
+  // Regression pin for an alternation-precedence fix: a bare, unparenthesized
+  // `\bclient|ideal|\bquiet` middle alternative had no word boundary at all,
+  // so it would match "ideal" as a mid-word substring (e.g. hypothetically
+  // "unidealistic"). Confirm that's now excluded...
+  assert.equal(classify(mk('Refactor unidealistic sorting logic')), 'Setup & Platform');
+  // ...while the real, recurring "isIdeal" identifier (the legacy Firestore
+  // field name for client ideal-fit rating) is still explicitly special-cased
+  // to Clients, since it has no word boundary before "ideal" either but IS
+  // genuinely a client-related term in this codebase.
+  assert.equal(classify(mk('Map isIdeal "Yes"/"No"/"TBD" strings to ratings')), 'Clients');
+  assert.equal(classify(mk('Surface client Ideal/Non-Ideal/TBD rating from synced data')), 'Clients');
+});
+
 test('classify: unmatched messages fall back to Other', () => {
   assert.equal(classify(mk('zzz nonsense qqq')), 'Other');
 });
@@ -140,21 +155,46 @@ test('commitType: FEATURE_RE/FIX_RE only match at the start of the message', () 
   assert.equal(FIX_RE.test('We should fix the widget'), false);
 });
 
+// ----------------------------------------------------------- annotateCommit()
+
+test('annotateCommit: attaches category + type once, matching classify()/commitType()', () => {
+  const c = mk('Add a widget');
+  const annotated = annotateCommit(c);
+  assert.equal(annotated.category, classify(c));
+  assert.deepEqual(annotated.type, commitType(c));
+  // Original fields preserved.
+  assert.equal(annotated.sha, c.sha);
+  assert.equal(annotated.message, c.message);
+});
+
+test('buildTree: reuses pre-annotated .category/.type instead of reclassifying', () => {
+  // A commit whose message would normally classify as "Team & Attorneys" /
+  // "Feature", but is pre-annotated with different values — buildTree must
+  // trust the pre-annotated fields (the efficiency contract annotateCommit()
+  // exists for), not silently reclassify and discard them.
+  const raw = mk('Add attorney rate update', { sha: 'preannot1' });
+  const preAnnotated = { ...raw, category: 'Custom Bucket', type: { label: 'Update', cls: 'x' } };
+  const tree = buildTree([preAnnotated], 'project');
+  assert.equal(tree[0].key, 'Custom Bucket');
+  assert.equal(tree[0].featureCount, 0); // type.label is 'Update', not 'Feature'
+});
+
 // --------------------------------------------------------------- buildTree()
 
 // Shared fixture: 3 months (incl. one undated bucket), mixed categories/types.
 //
-// The undated commit deliberately uses date: undefined, NOT null: buildTree's
-// validity check is `!Number.isNaN(new Date(c.date).getTime())`, and
-// `new Date(null).getTime()` is 0 (epoch, a "valid" date) rather than NaN —
-// only a value that itself parses to Invalid Date (undefined, or a
-// non-ISO string) actually lands in the "0000-00" / Undated bucket.
+// The undated commit uses date: null, matching the real shape the API emits
+// (src/app/api/commit-history/route.js: `date: authorMeta.date ||
+// committerMeta.date || null`) when a commit has no author/committer date.
+// `new Date(null).getTime()` is 0 (epoch, a "valid" date) rather than NaN, so
+// buildTree explicitly checks `c.date` truthiness before parsing — see the
+// dedicated regression test below for both the null and undefined cases.
 const treeCommits = [
   mk('Add attorney rate update', { sha: 'aaa1111', date: '2026-03-10T00:00:00Z' }), // Mar'26, Team & Attorneys, Feature
   mk('Fix client billing issue', { sha: 'bbb2222', date: '2026-03-05T00:00:00Z' }), // Mar'26, Clients, Fix
   mk('Update ops dashboard', { sha: 'ccc3333', date: '2026-02-20T00:00:00Z' }), // Feb'26, Ops, Update
   mk('Merge pull request #4 from x/y', { sha: 'ddd4444', date: '2026-02-25T00:00:00Z', isMerge: true }), // Feb'26, Merges & PRs
-  mk('zzz nonsense qqq', { sha: 'eee5555', date: undefined }), // Undated, Other
+  mk('zzz nonsense qqq', { sha: 'eee5555', date: null }), // Undated, Other
   mk('Update ops chart', { sha: 'fff6666', date: '2026-02-10T00:00:00Z' }), // Feb'26, Ops, Update (older)
 ];
 
@@ -226,6 +266,20 @@ test('buildTree: month labels use the shared MONTH_NAMES_FULL/ABBR arrays', () =
   assert.equal(MONTH_NAMES_ABBR[2], 'Mar');
   assert.equal(MONTH_NAMES_FULL.length, 12);
   assert.equal(MONTH_NAMES_ABBR.length, 12);
+});
+
+test('buildTree: a null date (the real API shape for a dateless commit) lands in Undated, not "January 1970"', () => {
+  // Regression pin: new Date(null) is epoch (1970-01-01), NOT NaN, so a naive
+  // `!Number.isNaN(new Date(c.date).getTime())` validity check misclassifies
+  // it as a real date. Cover both null (the API's actual shape) and undefined.
+  const tree = buildTree([mk('No date at all', { sha: 'null0001', date: null })], 'month');
+  assert.deepEqual(tree.map((p) => p.key), ['0000-00']);
+  assert.equal(tree[0].label, 'Undated');
+  assert.equal(tree[0].short, '—');
+
+  const treeUndef = buildTree([mk('Also no date', { sha: 'undef001', date: undefined })], 'month');
+  assert.deepEqual(treeUndef.map((p) => p.key), ['0000-00']);
+  assert.equal(treeUndef[0].label, 'Undated');
 });
 
 test('sortByDateDesc: newest first, treats null date as epoch (oldest)', () => {

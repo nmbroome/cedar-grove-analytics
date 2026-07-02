@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { MONTH_NAMES_FULL, MONTH_NAMES_ABBR, pickMonthHeadlines } from "@/utils/commitTimeline";
 import { formatShortDate } from "@/utils/formatters";
+import { GRAY } from "@/utils/colors";
 
 // Accessible "features timeline" infographic for the Tech Team tab: a
 // chronological, interlocking chevron/arrow band (one segment per month)
@@ -36,11 +37,15 @@ const TEXT_INSET = 24; // fixed left inset for title/subtitle/footer — indepen
 // of the chevron band's own side margin (below), so the header text always
 // reads flush top-left regardless of how the band itself is centered.
 const MARGIN = 32; // default side margin around the chevron band (>= 2 months)
-// Single-month timelines have nowhere to "fan toward the center" (see the
-// WIDE_MARGIN visually centers a lone chevron column: with a single month the
-// band is far narrower than its header/footer text, so the default margin
-// reads lopsided. (Label overflow itself is handled by LABEL_RIGHT_RESERVE —
-// all callouts flow rightward regardless of month count.)
+// WIDE_MARGIN applies only to a single-month timeline: with just one chevron
+// column, the 230px-wide band is much narrower than the header/footer text
+// above and below it, so the default 32px margin reads lopsided/off-center.
+// 200px is an empirically-chosen value that visually balances a lone column
+// against the surrounding text — unlike HEADLINE_CHAR_BUDGET/
+// LABEL_RIGHT_RESERVE below, there's no title/footer-width formula it's
+// derived from. (Label overflow itself is handled separately by
+// LABEL_RIGHT_RESERVE — all callouts flow rightward regardless of month
+// count.)
 const WIDE_MARGIN = 200;
 const CALLOUT_BASE_GAP = 36; // band edge -> nearest callout row
 const LEVEL_GAP = 52; // vertical spacing between callout rows (spec: ~52px)
@@ -77,23 +82,27 @@ const FOOTER_Y = TOTAL_HEIGHT - CANVAS_PAD - FOOTER_HEIGHT / 2 + 5;
 const FONT_STACK =
   'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
-// Brand colors as literal hex — every one below is verified against the
-// project's documented contrast table (never #7A7B6E/muted for text).
+// Brand colors — GRAY[*] (src/utils/colors.js) is the single source of truth
+// for the gray ramp, so a future palette retune propagates here automatically
+// instead of silently drifting out of sync with every other chart. white/
+// black/milestone aren't part of that ramp, so they stay literal (verified
+// against the project's documented contrast table — never #7A7B6E/muted).
 const COLOR = {
   white: "#FFFFFF",
   black: "#000000",
-  ink: "#484839", // gray-700
-  dark: "#5A5A48", // cg-dark / gray-600
-  bg: "#ECEDE5", // cg-background / gray-100
+  ink: GRAY[700], // #484839
+  dark: GRAY[600], // #5A5A48 — cg-dark
+  bg: GRAY[100], // #ECEDE5 — cg-background
   // Non-milestone elbow-connector line + dot. This is a graphical object
   // "required to understand the content" (WCAG 1.4.11, 3:1 min) — it's the
   // only visual link between a headline callout and its month column — so it
-  // can't use the gray-300 "recessive" border tone (#C9CAC0 measures ~1.65:1
-  // on white, well under 3:1). cg-dark clears both 1.4.11 (3:1) and text-grade
-  // 1.4.3 (4.5:1) at 7.0:1, and is already used elsewhere in this graphic
-  // (band fill, footer), so it doesn't add a new color to the palette.
-  connector: "#5A5A48", // cg-dark / gray-600 — was gray-300 (failed 3:1)
-  milestone: "#15803d", // status-success-text
+  // can't use the gray-300 "recessive" border tone (GRAY[300]/#C9CAC0
+  // measures ~1.65:1 on white, well under 3:1). cg-dark clears both 1.4.11
+  // (3:1) and text-grade 1.4.3 (4.5:1) at 7.0:1, and is already used
+  // elsewhere in this graphic (band fill, footer), so it doesn't add a new
+  // color to the palette.
+  connector: GRAY[600], // cg-dark — was gray-300 (failed 3:1)
+  milestone: "#15803d", // status-success-text (globals.css; not in the GRAY ramp)
 };
 
 // Shared x-position of month column `i`'s left edge — the one function both

@@ -11,7 +11,7 @@ import { useCommitHistory } from "@/hooks/useCommitHistory";
 import { calculateDateRange, getDateRangeLabel } from "@/utils/dateHelpers";
 import { DEFAULT_GITHUB_REPO } from "@/utils/constants";
 import { formatShortDate } from "@/utils/formatters";
-import { buildTree, commitType } from "@/utils/commitTimeline";
+import { buildTree, annotateCommit } from "@/utils/commitTimeline";
 import {
   svgElementToSvgBlob,
   svgElementToPngBlob,
@@ -30,6 +30,36 @@ function StatChip({ icon: Icon, label, value }) {
       <span className="text-lg font-bold text-cg-black leading-none">{value}</span>
       <span className="text-xs text-gray-700">{label}</span>
     </div>
+  );
+}
+
+// Single source of truth for the Export PNG / SVG toolbar buttons — same
+// disabled/aria-busy/spinner treatment for both, so they can't drift out of
+// sync with each other again. `primary` gets the more prominent (white,
+// shadowed) treatment; the secondary format is visually lighter.
+function ExportButton({ format, label, primary, busy, onExport, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onExport(format)}
+      disabled={disabled}
+      aria-busy={busy}
+      className={`flex items-center gap-2 min-h-[44px] rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cg-green focus-visible:ring-offset-1 ${
+        primary
+          ? "px-4 py-2 bg-cg-white border border-gray-300 shadow-sm hover:bg-gray-100"
+          : "px-3 py-2 bg-transparent border border-gray-300 hover:bg-gray-100"
+      }`}
+    >
+      {busy ? (
+        <span
+          className="w-4 h-4 rounded-full border-2 border-cg-dark border-t-transparent animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+      ) : (
+        <Download className="w-4 h-4 text-cg-dark" aria-hidden="true" />
+      )}
+      <span className="text-sm font-medium text-cg-dark">{label}</span>
+    </button>
   );
 }
 
@@ -55,34 +85,53 @@ export default function TechTeamView() {
 
   const repo = meta.repo || DEFAULT_GITHUB_REPO;
 
+  // Classify (category + type) each commit exactly ONCE, keyed only on the
+  // raw `commits` from useCommitHistory — which only changes on an actual
+  // fetch/refresh, never on a filter/search edit. Every stage below re-slices
+  // this same annotated array instead of re-running classify()/commitType()
+  // (each up to 14 regex tests) on every keystroke.
+  const annotatedCommits = useMemo(() => commits.map(annotateCommit), [commits]);
+
   // Stage 1 of the filter chain: date range. useMemo, so changing the range
   // only re-filters in memory and never re-pulls from GitHub. Also backs the
   // contributor <select>'s option list below (options are the authors
   // present in the DATE-filtered set, deliberately unaffected by the
   // search/type/contributor filters that come after it in the chain).
   const dateFilteredCommits = useMemo(() => {
-    if (!commits || commits.length === 0) return [];
+    if (!annotatedCommits || annotatedCommits.length === 0) return [];
     // 'all-time' is short-circuited here (return everything, incl. undated
     // commits) BECAUSE calculateDateRange's all-time branch needs an allEntries
     // list to bound the start — without it, it clamps to the current month.
     // Keep this guard. Ranged filters can't place undated commits, so they are
     // excluded from non-all-time views by design.
-    if (dateRange === "all-time") return commits;
+    if (dateRange === "all-time") return annotatedCommits;
     const { startDate, endDate } = calculateDateRange(dateRange, customDateStart, customDateEnd, []);
     const startMs = startDate.getTime();
     const endMs = endDate.getTime();
-    return commits.filter((c) => {
+    return annotatedCommits.filter((c) => {
       if (!c.date) return false;
       const t = new Date(c.date).getTime();
       return t >= startMs && t <= endMs;
     });
-  }, [commits, dateRange, customDateStart, customDateEnd]);
+  }, [annotatedCommits, dateRange, customDateStart, customDateEnd]);
 
   const contributorOptions = useMemo(() => {
     const names = new Set();
     for (const c of dateFilteredCommits) if (c.author) names.add(c.author);
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [dateFilteredCommits]);
+
+  // If the selected contributor falls out of contributorOptions (e.g. the
+  // date range narrows to a window where they have no commits), reset the
+  // filter to "All" rather than leaving a stale value applied while the
+  // <select> — which only renders options from the current list — visually
+  // desyncs from it (no option would match `value={contributorFilter}`).
+  // Render-time adjustment: converges in exactly one extra render (same
+  // pattern as the disclosure-tree reset below), not an effect, so it can't
+  // trip the codebase's forbidden setState-in-effect lint rule.
+  if (contributorFilter !== "All" && !contributorOptions.includes(contributorFilter)) {
+    setContributorFilter("All");
+  }
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -101,7 +150,7 @@ export default function TechTeamView() {
       });
     }
     if (typeFilter !== "All") {
-      list = list.filter((c) => commitType(c).label === typeFilter);
+      list = list.filter((c) => c.type.label === typeFilter);
     }
     if (contributorFilter !== "All") {
       list = list.filter((c) => c.author === contributorFilter);
@@ -138,6 +187,13 @@ export default function TechTeamView() {
     return { commitCount: filteredCommits.length, authorCount: authors.size, merges, minD, maxD };
   }, [filteredCommits]);
 
+  // The chevron graphic (and therefore its export) renders nothing when
+  // there are no commits at all, OR when every filtered commit lacks a
+  // parseable date (buildMonthBuckets excludes them, same criterion as
+  // summary.minD above) — disable Export PNG/SVG proactively in both cases
+  // instead of only surfacing it as a runtime error after the click.
+  const graphicUnavailable = filteredCommits.length === 0 || summary.minD === null;
+
   // svgRef: forwarded to the chevron-timeline graphic's <svg> so a future
   // export/print feature can reach the live DOM node without changing the
   // chart component's prop contract.
@@ -169,6 +225,21 @@ export default function TechTeamView() {
   const [exportFormat, setExportFormat] = useState(null);
   const [exportError, setExportError] = useState(null);
   const [exportStatus, setExportStatus] = useState("");
+
+  // Clear any stale export success/error banner once the exported record set
+  // actually changes (filteredCommits is the single array every filter/range
+  // stage above feeds into, so this fires regardless of which control caused
+  // the change). Without this, a "couldn't export" banner from an old,
+  // filtered-to-nothing state — or a stale "exported as PNG" success message
+  // — would keep showing after the user adjusts filters and the graphic is
+  // showing something different (or exportable again). Render-time
+  // adjustment, same pattern as the disclosure-tree reset below.
+  const [prevFilteredCommitsForExport, setPrevFilteredCommitsForExport] = useState(filteredCommits);
+  if (filteredCommits !== prevFilteredCommitsForExport) {
+    setPrevFilteredCommitsForExport(filteredCommits);
+    if (exportError) setExportError(null);
+    if (exportStatus) setExportStatus("");
+  }
 
   // When the grouping/filter changes the set of primary groups, reset to the
   // first group expanded (most recent month / largest project) — or, when a
@@ -296,10 +367,12 @@ export default function TechTeamView() {
     if (exportFormat) return; // one export at a time
     const svgEl = timelineSvgRef.current;
     if (!svgEl) {
-      // Reachable even with filteredCommits.length > 0: the graphic renders
-      // nothing when every filtered commit lacks a parseable date (see
-      // TechTeamChevronTimeline's buildMonthBuckets), so the ref never
-      // attaches to a real <svg> element.
+      // Defense-in-depth: the `graphicUnavailable` toolbar-button disabled
+      // condition already covers this (no commits, or every filtered commit
+      // lacking a parseable date — see TechTeamChevronTimeline's
+      // buildMonthBuckets), so this branch shouldn't normally be reachable
+      // via the buttons. Kept as a guard against any other path that could
+      // call runExport before the <svg> ref attaches.
       setExportStatus("");
       setExportError("The timeline graphic isn't available to export right now.");
       return;
@@ -386,38 +459,21 @@ export default function TechTeamView() {
               grouping by construction (same svg node the chevron graphic
               below renders). */}
           <div role="group" aria-label="Export timeline graphic" className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => runExport("png")}
-              disabled={loading || exportFormat !== null || filteredCommits.length === 0}
-              aria-busy={exportFormat === "png"}
-              className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-cg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cg-green focus-visible:ring-offset-1"
-            >
-              {exportFormat === "png" ? (
-                <span
-                  className="w-4 h-4 rounded-full border-2 border-cg-dark border-t-transparent animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Download className="w-4 h-4 text-cg-dark" aria-hidden="true" />
-              )}
-              <span className="text-sm font-medium text-cg-dark">Export PNG</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => runExport("svg")}
-              disabled={loading || exportFormat !== null || filteredCommits.length === 0}
-              aria-busy={exportFormat === "svg"}
-              className="flex items-center gap-2 px-3 py-2 min-h-[44px] bg-transparent border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cg-green focus-visible:ring-offset-1"
-            >
-              {exportFormat === "svg" && (
-                <span
-                  className="w-4 h-4 rounded-full border-2 border-cg-dark border-t-transparent animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              )}
-              <span className="text-sm font-medium text-cg-dark">SVG</span>
-            </button>
+            <ExportButton
+              format="png"
+              label="Export PNG"
+              primary
+              busy={exportFormat === "png"}
+              onExport={runExport}
+              disabled={loading || exportFormat !== null || graphicUnavailable}
+            />
+            <ExportButton
+              format="svg"
+              label="SVG"
+              busy={exportFormat === "svg"}
+              onExport={runExport}
+              disabled={loading || exportFormat !== null || graphicUnavailable}
+            />
           </div>
         </div>
       </div>
@@ -629,21 +685,42 @@ export default function TechTeamView() {
           ) : (
             <>
               {/* Chevron timeline graphic — chronological month band with
-                  headline callouts; clicking a month jumps to it below. */}
+                  headline callouts; clicking a month jumps to it below. Always
+                  groups by month (it's inherently a chronology), regardless
+                  of the "By project" tree toggle above. */}
               <div className="cg-card p-4">
-                <TechTeamChevronTimeline
-                  commits={filteredCommits}
-                  repoLabel={repo}
-                  rangeLabel={dateRangeLabel}
-                  stats={{
-                    commitCount: summary.commitCount,
-                    authorCount: summary.authorCount,
-                    mergeCount: summary.merges,
-                  }}
-                  generatedAt={fetchedAt}
-                  onMonthActivate={handleMonthActivate}
-                  svgRef={timelineSvgRef}
-                />
+                {groupBy === "project" && (
+                  <p className="text-xs text-gray-700 mb-3">
+                    This graphic always plots commits chronologically by month — switch to “By month” above to browse it directly, or use the list below for the project breakdown.
+                  </p>
+                )}
+                {summary.minD === null ? (
+                  // buildMonthBuckets (TechTeamChevronTimeline) excludes any
+                  // commit without a parseable date, same as buildTree's
+                  // "Undated" bucket above — so if EVERY filtered commit is
+                  // undated, the graphic has nothing chronological to plot and
+                  // renders null. Without this fallback that's a blank,
+                  // unexplained bordered box (the disclosure tree below still
+                  // shows the "Undated" group, so nothing is lost — this just
+                  // explains why the graphic itself is empty).
+                  <p className="text-sm text-cg-dark text-center py-10">
+                    No dated commits to plot in this view — every commit here is missing a date. See the “Undated” group below for details.
+                  </p>
+                ) : (
+                  <TechTeamChevronTimeline
+                    commits={filteredCommits}
+                    repoLabel={repo}
+                    rangeLabel={dateRangeLabel}
+                    stats={{
+                      commitCount: summary.commitCount,
+                      authorCount: summary.authorCount,
+                      mergeCount: summary.merges,
+                    }}
+                    generatedAt={fetchedAt}
+                    onMonthActivate={handleMonthActivate}
+                    svgRef={timelineSvgRef}
+                  />
+                )}
               </div>
 
               {/* Expand/collapse all */}

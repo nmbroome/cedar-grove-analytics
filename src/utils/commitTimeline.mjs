@@ -4,19 +4,16 @@
  * tests/commit-timeline.test.mjs.
  *
  * Pure module — no React/Firebase imports.
- *
- * MONTH_NAMES_FULL/ABBR are defined here (not in constants.js) because
- * constants.js re-exports CHART_COLORS from './colors' without an explicit
- * extension, which plain Node ESM can't resolve — so constants.js itself
- * isn't Node-importable. This module IS, so it's the single source of truth
- * for the month-name arrays; constants.js re-exports them from here.
  */
 
-export const MONTH_NAMES_FULL = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-export const MONTH_NAMES_ABBR = MONTH_NAMES_FULL.map((m) => m.slice(0, 3));
+// constants.js is the single source of truth for the month-name arrays
+// (app-wide, not Tech-Team-specific) — this module both uses them internally
+// (buildTree below) and re-exports them for its own consumers'
+// (TechTeamChevronTimeline.jsx, tests/commit-timeline.test.mjs) convenience,
+// so nothing outside this file needs to know the arrays actually live
+// upstream in constants.js.
+import { MONTH_NAMES_FULL, MONTH_NAMES_ABBR } from './constants.js';
+export { MONTH_NAMES_FULL, MONTH_NAMES_ABBR };
 
 export const FEATURE_RE =
   /^(add|added|implement|introduce|create|build|new|redesign|replace|migrate|launch)\b/i;
@@ -35,7 +32,12 @@ export const FIX_RE = /^(fix|fixed|harden|secure|resolve|patch)\b/i;
 export const CATEGORY_RULES = [
   ["Practice & Roster", /\b(practice\s*composition|seniority|activation[ -]?date|roster)/i],
   ["Utilization & Targets", /\b(utiliz|target|ooo|holiday|pro[- ]?rat|capacity|quarterly|variance|business[- ]day|predictive|time[- ]?off|calendar)/i],
-  ["Clients", /\bclient|ideal|\bquiet/i],
+  // "ideal" is word-bounded on both sides (avoids matching e.g. "unidealistic"
+  // mid-word) EXCEPT for the literal compound "isIdeal" — the legacy
+  // Firestore field name for client ideal-fit rating (see CLAUDE.md's
+  // Firestore Data Model) — which has no word boundary before "ideal" but is
+  // a real, recurring, genuinely Clients-related identifier in this repo.
+  ["Clients", /\bclient|\bideal\b|isideal|\bquiet/i],
   ["Billing & Invoices", /\b(billing|invoice|payment|reminder|mercury|reconcil|revenue|mark[- ]paid|kpi|adjustment)/i],
   ["Document Downloads", /\b(download|drive|document|folder)/i],
   ["Matters", /\bmatter/i],
@@ -69,11 +71,28 @@ export function sortByDateDesc(a, b) {
   return new Date(b.date) - new Date(a.date);
 }
 
+// Classify a commit's category + type once. classify()/commitType() are pure
+// per-commit functions with no dependency on the rest of the commit list, so
+// callers that re-derive a filtered view of the SAME commits many times
+// (e.g. on every search keystroke) should call this once per commit — keyed
+// only on the raw, stable commit list — and reuse the result, rather than
+// re-running the classifier on every filter/render pass. buildTree() below
+// accepts either annotated or raw commits: it reuses `.category`/`.type` if
+// already present (via annotateCommit) and only falls back to classifying
+// on the spot for callers (e.g. tests) that pass raw commits directly.
+export function annotateCommit(c) {
+  return { ...c, category: classify(c), type: commitType(c) };
+}
+
 // Build a two-level grouped tree: primary -> secondary -> commits.
 export function buildTree(commits, groupBy) {
   const annotated = commits.map((c) => {
-    const d = new Date(c.date);
-    const valid = !Number.isNaN(d.getTime());
+    // new Date(null) is epoch (1970-01-01), not NaN — guard the null/falsy
+    // case explicitly so an undated commit lands in "Undated", not a bogus
+    // "January 1970" bucket. Mirrors the same guard in TechTeamView's summary
+    // useMemo and TechTeamChevronTimeline's buildMonthBuckets.
+    const d = c.date ? new Date(c.date) : null;
+    const valid = d !== null && !Number.isNaN(d.getTime());
     const monthKey = valid
       ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
       : "0000-00";
@@ -82,8 +101,11 @@ export function buildTree(commits, groupBy) {
       monthKey,
       monthLabel: valid ? `${MONTH_NAMES_FULL[d.getMonth()]} ${d.getFullYear()}` : "Undated",
       monthShort: valid ? `${MONTH_NAMES_ABBR[d.getMonth()]} '${String(d.getFullYear()).slice(2)}` : "—",
-      category: classify(c),
-      type: commitType(c), // classified once here; reused by featureCount + render
+      // Reuse pre-computed fields from annotateCommit() when present instead
+      // of reclassifying on every buildTree() call (e.g. every search
+      // keystroke re-derives `commits` upstream in TechTeamView).
+      category: c.category ?? classify(c),
+      type: c.type ?? commitType(c),
     };
   });
 

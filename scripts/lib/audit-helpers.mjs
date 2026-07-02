@@ -60,6 +60,23 @@ export function buildRatesMapFromUserDoc(userDocData) {
   const ratesMap = {};
   if (!Array.isArray(userDocData?.rates)) return ratesMap;
   userDocData.rates.forEach((rateEntry) => {
+    // getMonthNumber mirrors dateHelpers.js's fallback-to-January behavior for
+    // a non-matching month name — an existing app quirk this function must
+    // reproduce faithfully (see the file header), not silently diverge from.
+    // But absorbing a malformed `month` without a trace would defeat the
+    // whole point of an audit tool, so warn loudly on stdout (this is a CLI
+    // script; that's its actual output channel) while still computing the
+    // same value the live app would.
+    const isRecognized = MONTH_NAMES.some(
+      (m) => m.toLowerCase() === rateEntry.month?.toLowerCase()
+    );
+    if (!isRecognized) {
+      console.warn(
+        `  [WARN] rates[] entry has an unrecognized month ${JSON.stringify(rateEntry.month)} ` +
+        `(year ${rateEntry.year}) — falling back to January, mirroring the app's ` +
+        `dateHelpers.js behavior. This is almost certainly bad source data; fix it.`
+      );
+    }
     const monthNum = getMonthNumber(rateEntry.month);
     ratesMap[monthKeyOf(rateEntry.year, monthNum)] = {
       rate: rateEntry.rate || 0,

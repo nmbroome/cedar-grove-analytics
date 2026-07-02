@@ -237,6 +237,6 @@ Configured for Vercel. Push to `main` triggers deploy. Environment variables set
 
 - JSX components use `.jsx` extension; plain JS uses `.js`.
 - Tailwind utility classes for all styling. Custom brand colors defined in `tailwind.config.js` (`cg-black`, `cg-green`, `cg-dark`, `cg-background`).
-- Recharts for standard charts; D3 for the ops sunburst visualization.
+- Recharts for standard charts (bar/line/pie/area — anything with data-driven axes/scales); D3 for the ops sunburst visualization. Bespoke annotated infographics that aren't a standard chart type (e.g. `TechTeamChevronTimeline.jsx`'s chevron/callout timeline) use hand-built inline-styled SVG instead — neither library models that layout naturally, and the component still imports its colors from `utils/colors.js` (GRAY) rather than hardcoding hex.
 - Tables include client-side sorting and pagination.
 - Currency formatted via `Intl.NumberFormat` helpers in `formatters.js`.
