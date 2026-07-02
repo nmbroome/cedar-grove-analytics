@@ -63,7 +63,12 @@ const RoleManagementTab = ({ users, allUsers, refetch }) => {
       await waitForAuth();
 
       await updateDoc(doc(db, 'users', userId), {
-        email: edits.email,
+        // Lower-cased so it matches the AddUserTab convention and the
+        // exact-match `where('email', '==', ...)` query
+        // FirestoreDataContext uses to scope a plain user's own data —
+        // a mixed-case stored email would silently return zero results
+        // for that user (see SEC-008 fix).
+        email: edits.email.trim().toLowerCase(),
         role: edits.role,
         employmentType: edits.employmentType,
         active: edits.active,
