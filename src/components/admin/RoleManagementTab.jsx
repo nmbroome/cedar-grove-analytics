@@ -101,7 +101,11 @@ const RoleManagementTab = ({ users, allUsers, refetch }) => {
 
       for (const [userId, edits] of dirtyUsers) {
         await updateDoc(doc(db, 'users', userId), {
-          email: edits.email,
+          // Lower-cased for the same reason as handleSaveIndividual above —
+          // must match AddUserTab's convention and the scoped
+          // where('email', '==', ...) query FirestoreDataContext relies on
+          // (see SEC-008 fix).
+          email: edits.email.trim().toLowerCase(),
           role: edits.role,
           employmentType: edits.employmentType,
           active: edits.active,
